@@ -1,0 +1,33 @@
+{
+  "stats": {
+    "submitted": 1,
+    "finished": 0,
+    "running": 1
+  },
+  "data": [
+    {
+      "config_id": 1,
+      "instance": null,
+      "seed": 1608637542,
+      "budget": 0.3333333333333333,
+      "cost": 2147483647.0,
+      "time": 0.0,
+      "cpu_time": 0.0,
+      "status": 0,
+      "starttime": 0.0,
+      "endtime": 0.0,
+      "additional_info": {}
+    }
+  ],
+  "configs": {
+    "1": {
+      "alpha_viscosity": 1.76701694e-05,
+      "zone_1_Rc": 13.9609660183559,
+      "zone_1_gamma_exp": -1.9629479102676,
+      "zone_1_surface_density_exp": -0.9497864704397
+    }
+  },
+  "config_origins": {
+    "1": "Initial Design: Random"
+  }
+}
