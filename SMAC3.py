@@ -47,6 +47,15 @@ import distroi
 sys.path.append(os.path.abspath(".."))  # parent of current working dir
 import lib.Katya_func as kf
 
+import lib.obriy_general as obg
+import lib.obriy_sed as obs
+import lib.obriy_interferometry as obi
+import lib.obriy_polarimetry as obp
+import lib.obriy_mcfost as obm
+
+
+
+
 
 # -----------------------------------------------------------------------------
 # Cluster setup
