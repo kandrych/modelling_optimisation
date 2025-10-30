@@ -56,10 +56,10 @@ import shutil
 
 from pathlib import Path
 
-import obriy_general as obg
-import obriy_interferometry as obi
-import obriy_sed as obs
-import obriy_polarimetry as obp
+import lib.obriy_general as obg
+import lib.obriy_interferometry as obi
+import lib.obriy_sed as obs
+import lib.obriy_polarimetry as obp
 
 
 

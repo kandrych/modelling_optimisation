@@ -45,7 +45,7 @@ import pymcfost as mcfost  # MCFOST Python bindings
 import distroi
 
 sys.path.append(os.path.abspath(".."))  # parent of current working dir
-import lib.Katya_func as kf
+#import lib.Katya_func as kf
 
 import lib.obriy_general as obg
 import lib.obriy_sed as obs
@@ -206,7 +206,7 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
     
 
     # Load a base .para file template from parent folder to simulation
-    pf = kf.ParaFile(str(outdir.parent.parent/"simulation.para"))
+    pf = obm.ParaFile(str(outdir.parent.parent/"simulation.para"))
     for key in cfg.keys():
         if key in pf.params:
             pf.set_param(key, cfg[key])
@@ -237,7 +237,7 @@ def run_mcfost(fidelity: Dict[str, Any], param_path: Path, workdir: Path) -> Non
     workdir=str(workdir)+"/"
     param_path=str(param_path)
 
-    pf = kf.ParaFile(param_path)
+    pf = obm.ParaFile(param_path)
     
     os.makedirs(workdir, exist_ok=True)  # no error if it already exists
 
@@ -288,35 +288,35 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     simulation_name=workdir.name
 
 
-    chi2_sed, chi2_reduced_sed, loglike_sed= kf.chi2_SED_with_reddening(str(workdir.name), str(workdir.parent)+'/', data_wave=data_sed[0], data_flux=data_sed[1],data_err=data_sed[2],
+    chi2_sed, chi2_reduced_sed, loglike_sed= obs.chi2_SED_with_reddening(str(workdir.name), str(workdir.parent)+'/', data_wave=data_sed[0], data_flux=data_sed[1],data_err=data_sed[2],
                                        plot=True, description=simulation_name)
     
     if fidelity["stage"] in ["F1", "F2", "F3"]:
-        chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= kf.monochromatic_chi(str(workdir), img_dir="data_1.63/", container_data=container_data_pionier, vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.63", log_plotv=False)
-        chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= kf.monochromatic_chi(str(workdir), img_dir="data_2.2/", container_data=container_data_gravity, vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY 2.2", log_plotv=False)
-        chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= kf.monochromatic_chi(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
-        chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= kf.monochromatic_chi(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, vistype='vis', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
+        chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.monochromatic_chi(str(workdir), img_dir="data_1.63/", container_data=container_data_pionier, vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.63", log_plotv=False)
+        chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.monochromatic_chi(str(workdir), img_dir="data_2.2/", container_data=container_data_gravity, vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY 2.2", log_plotv=False)
+        chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
+        chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, vistype='vis', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
         
     if fidelity["stage"] in ['F2','F3']:
-        results_i=kf.polarimetric_analysis(str(workdir), 0.55, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'],psf_cut=100, 
+        results_i=obp.polarimetric_analysis(str(workdir), 0.55, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=150.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name)
-        chi2_sum_pdi_i, chi2_red_pdi_i, loglike_pdi_i, n_data_points_pdi_i= kf.profiles_chi2(pdi_data_i['pi'], results_i['pi_conv'], ps=3.6, profile_type='both', mode='sum', plot=True,
+        chi2_sum_pdi_i, chi2_red_pdi_i, loglike_pdi_i, n_data_points_pdi_i= obp.profiles_chi2(pdi_data_i['pi'], results_i['pi_conv'], ps=3.6, profile_type='both', mode='sum', plot=True,
                                                                                             save=str(workdir)+'figures/'+simulation_name, az_nbins=18)
         
-        results_v=kf.polarimetric_analysis(str(workdir), 0.82, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
+        results_v=obp.polarimetric_analysis(str(workdir), 0.82, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=150.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name)
-        chi2_sum_pdi_v, chi2_red_pdi_v, loglike_pdi_v, n_data_points_pdi_v= kf.profiles_chi2(pdi_data_v['pi'], results_v['pi_conv'], ps=3.6, profile_type='both', mode='sum', plot=True, 
+        chi2_sum_pdi_v, chi2_red_pdi_v, loglike_pdi_v, n_data_points_pdi_v= obp.profiles_chi2(pdi_data_v['pi'], results_v['pi_conv'], ps=3.6, profile_type='both', mode='sum', plot=True, 
                                                                                              save=str(workdir)+'/figures/'+simulation_name, az_nbins=18)
         
-        results_h=kf.polarimetric_analysis(str(workdir), 1.63, distance_pc= 1220.0, camera='sphere',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
+        results_h=obp.polarimetric_analysis(str(workdir), 1.63, distance_pc= 1220.0, camera='sphere',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=150.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name)
-        chi2_sum_pdi_h, chi2_red_pdi_h, loglike_pdi_h, n_data_points_pdi_h= kf.profiles_chi2(pdi_data_h['pi'], results_h['pi_conv'], ps=3.6, profile_type='both', mode='sum', plot=True, 
+        chi2_sum_pdi_h, chi2_red_pdi_h, loglike_pdi_h, n_data_points_pdi_h= obp.profiles_chi2(pdi_data_h['pi'], results_h['pi_conv'], ps=3.6, profile_type='both', mode='sum', plot=True, 
                                                                                              save=str(workdir)+'/figures/'+simulation_name, az_nbins=18)
 
 
@@ -351,7 +351,7 @@ def load_data(data_root: str) -> Dict[str, Any]:
     #filename of SED catalogue data file
     if data_root =='demo':
         data_filename = '/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
-        data_wave, data_flux, data_err = kf.load_sed_data(data_filename)
+        data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
             
         # PIONIER data
         data_dir_pionier, data_file_pionier = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
@@ -373,7 +373,7 @@ def load_data(data_root: str) -> Dict[str, Any]:
         star_psf='HD83878'
         figfolder_psf='/Users/katerynaandrych/Work/lin/PhD/SPHERE_reduction_data/paper2/mean_combined/'+star_psf+'/'
         file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
-        psf_v=kf.Loadimage(figfolder_psf,file_psf)
+        psf_v=obp.Loadimage(figfolder_psf,file_psf)
         
         
         pdi_data_v={'psf': psf_v}

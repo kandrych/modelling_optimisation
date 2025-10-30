@@ -1,62 +1,6 @@
-import distroi
-import numpy as np
-import pandas as pd
-from typing import Literal, Tuple, Dict, Optional, Union, Any, List
-
 from distroi.auxiliary import constants
-from distroi.data import image
-from distroi.data import sed
-from distroi.model.geom_comp import geom_comp
-from distroi.auxiliary import select_data_oifits
-from distroi.data.oi_container import OIContainer
-
-import os
-import matplotlib.pyplot as plt
-
-from astropy.io import fits
-import astropy.units as u
-from IPython.display import display
-import glob
-import subprocess
-from skimage.transform import rescale, resize, downscale_local_mean
-from astropy.convolution import Gaussian2DKernel, convolve, convolve_fft, AiryDisk2DKernel
-import fnmatch
-from scipy.optimize import minimize_scalar
-from scipy.optimize import minimize
-from scipy.optimize import curve_fit
-import random
-import pymcfost as mcfost
-
-import astropy
 from astropy import units as u
-import astropy.units.quantity
-from astropy.io import fits
-from skimage.measure import EllipseModel
-from matplotlib.patches import Ellipse
-from scipy import interpolate
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import math
-from textwrap import wrap
-import scipy.ndimage as ndimage
-from matplotlib.gridspec import GridSpec
-from matplotlib import colors
-
-
-from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from matplotlib.font_manager import FontProperties
-
-from matplotlib.ticker import MaxNLocator
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from scipy.interpolate import interp1d
 from functools import wraps
-import cv2
-
-import shutil
-
-from pathlib import Path
-
-
 
 
 

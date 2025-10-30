@@ -62,10 +62,10 @@ from pathlib import Path
 
 constants.set_matplotlib_params()  # set project matplotlib parameters
 
-import obriy_general as obg
-import obriy_sed as obs
-import obriy_mcfost as obm
-import obriy_polarimetry as obp
+import lib.obriy_general as obg
+import lib.obriy_sed as obs
+import lib.obriy_mcfost as obm
+import lib.obriy_polarimetry as obp
 
 
 
