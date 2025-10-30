@@ -436,7 +436,7 @@ def chi2_SED_with_reddening(
     star_sed_red = redden_flux(lam, star_sed, reddening_law_path, E_best)
 
     #calculate chi2 values
-    chi2, chi2_red, loglike=chi2reddened(data_wave, data_flux, lam, full_sed, data_err, reddening_law_path, E_best)
+    chi2_red,chi2, loglike=chi2reddened(data_wave, data_flux, lam, full_sed, data_err, reddening_law_path, E_best)
     #plotting
     if plot:
         fig, ax = plt.subplots(figsize=(7, 7))
