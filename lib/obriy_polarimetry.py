@@ -715,7 +715,7 @@ def plot_image_grid(
     titles: Optional[List[str]] = None,
     group_headers: Optional[List[Tuple[float, str]]] = None,
     scale: str = "linear",           # {"linear","log","asinh"}
-    roi_half_size: Optional[int] = 30,  # in pixels, for autoscaling window; None = full frame
+    roi_half_size: Optional[int] = 50,  # in pixels, for autoscaling window; None = full frame
     roi_center: Optional[Tuple[int, int]] = None,  # (y,x) in pixels; None = image center
     per_panel_autoscale: bool = True,    # vmin/vmax from roi per image
     cmap: str = "viridis",
@@ -1676,7 +1676,7 @@ def polarimetric_analysis(
     azimuthal_nbins: int = 18,
     theta0: float = 0.0,                        # radians; 0 along +X
     plot: bool = True,
-    roi_size_half: int = 30,
+    roi_size_half: int = 50,
     fig_dir: Optional[str] = None,
     extra_title: Optional[str] = None,          # if provided, used as prefix for saved figures and title additions
 ) -> Dict[str, Any]:
@@ -1738,7 +1738,7 @@ def polarimetric_analysis(
         elif camera is not None:
                 inst_ps_mas = CAMERA_PS_MAS[camera]
         else:
-                # default to native if nothing specified
+                 # default to native if nothing specified
                 inst_ps_mas = native_ps_mas
 
         # --- Load MCFOST images
@@ -1878,7 +1878,7 @@ def polarimetric_analysis(
                                 figsize=(12, 6),
                                 show=False
                                 )
-                fig.savefig(fig_dir+"mcfost_model_comparison.png", dpi=150, bbox_inches='tight')
+                fig.savefig(fig_dir+extra_title+"mcfost_model_comparison.png", dpi=150, bbox_inches='tight')
 
 
 
