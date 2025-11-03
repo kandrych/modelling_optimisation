@@ -42,6 +42,10 @@ from ConfigSpace import ConfigurationSpace
 from ConfigSpace import ConfigurationSpace, Float, Integer, Categorical
 from ConfigSpace.conditions import InCondition, EqualsCondition
 
+
+
+
+
 import distroi
 
 sys.path.append(os.path.abspath(".."))  # parent of current working dir
@@ -104,36 +108,42 @@ def start_cluster(n_workers: int, processes_per_worker: int, use_slurm: bool) ->
 # -----------------------------------------------------------------------------
 
 def build_configspace() -> ConfigurationSpace:
-    cs = ConfigurationSpace()
 
-    # --- Example core physical knobs (change here parameters) ---
-    alpha = Float("alpha_viscosity", (0.0000001, 0.1), default=0.01, log=True)
-    Rc = Float("zone_1_Rc", (7.3, 50.0), default=10.0)
-    surface_density_exp = Float("zone_1_surface_density_exp", (-1.5, 1.5), default=1.0)
-    gamma_exp = Float("zone_1_gamma_exp", (-2.0, -0.2), default=-1.0)   
+    cs = ConfigurationSpace.from_yaml("/Users/katerynaandrych/Work/lin/python scripts/modelling_optimisation/config/configuration.yaml")
 
-    # Flexible dust law choice unlocks different parameters
-    # dust_law = Categorical("dust_law", ["MRN", "powerlaw"], default="MRN")
+
+    # cs = ConfigurationSpace()
+
+    # # --- Example core physical knobs (change here parameters) ---
+    # alpha = Float("alpha_viscosity", (0.0000001, 0.1), default=0.01, log=True)
+    # Rc = Float("zone_1_Rc", (7.3, 50.0), default=10.0)
+    # surface_density_exp = Float("zone_1_surface_density_exp", (-1.5, 1.5), default=1.0)
+    # gamma_exp = Float("zone_1_gamma_exp", (-2.0, -0.2), default=-1.0)   
+
+    # # Flexible dust law choice unlocks different parameters
+    # # dust_law = Categorical("dust_law", ["MRN", "powerlaw"], default="MRN")
    
-    # q = Float("q", (-4.5, -2.0), default=-3.5)  # only if powerlaw
+    # # q = Float("q", (-4.5, -2.0), default=-3.5)  # only if powerlaw
 
-    cs.add([alpha, Rc, surface_density_exp, gamma_exp])
+    # cs.add([alpha, Rc, surface_density_exp, gamma_exp])
 
-    # --- Optional conditions (uncomment if you want them active) ---
-    # Only use a_min/a_max when dust_law == "MRN"
-    # Only use q when dust_law == "powerlaw"
-    # cs.add([
-    #     EqualsCondition(a_min, dust_law, "MRN"),
-    #     EqualsCondition(a_max, dust_law, "MRN"),
-    #     EqualsCondition(q,      dust_law, "powerlaw"),
-    # ])
 
-    # --- Optional forbiddens example ---
-    # forb = ForbiddenAndConjunction(
-    #     ForbiddenEqualsClause(dust_law, "powerlaw"),
-    #     ...
-    # )
-    # cs.add_forbidden_clause(forb)
+    # cs.to_yaml("/Users/katerynaandrych/Work/lin/python scripts/modelling_optimisation/config/space.yaml")
+    # # --- Optional conditions (uncomment if you want them active) ---
+    # # Only use a_min/a_max when dust_law == "MRN"
+    # # Only use q when dust_law == "powerlaw"
+    # # cs.add([
+    # #     EqualsCondition(a_min, dust_law, "MRN"),
+    # #     EqualsCondition(a_max, dust_law, "MRN"),
+    # #     EqualsCondition(q,      dust_law, "powerlaw"),
+    # # ])
+
+    # # --- Optional forbiddens example ---
+    # # forb = ForbiddenAndConjunction(
+    # #     ForbiddenEqualsClause(dust_law, "powerlaw"),
+    # #     ...
+    # # )
+    # # cs.add_forbidden_clause(forb)
 
     return cs
 
