@@ -372,7 +372,7 @@ def main():
     fidelity_result={}
     fidelity_result['stage']='F1'
     # Verify template parameter file for mcfost exists
-    template_para= str(results_dir.parent/"simulation.para")
+    template_para= Path(results_dir.parent/"simulation.para")
     assert template_para.exists(), f"Missing template .para at {template_para}"
 
     # Write param file and run MCFOST
