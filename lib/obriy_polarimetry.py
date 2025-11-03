@@ -395,7 +395,7 @@ def plot_polarimetric_image(
     image_scale: str = "linear",
     title: str = "",
     save: Optional[str] = None,
-    show: bool = True,
+    show: bool = False,
     roi_half_size: Optional[int] = None,
     roi_center: Optional[Tuple[int, int]] = None,
     cmap_image: str = "viridis",
@@ -727,7 +727,7 @@ def plot_image_grid(
     figsize: Tuple[float, float] = (12, 6),
     hide_axis_rules: Optional[callable] = None,  # function(ax, row, col) -> None to customise axis visibility
     tight: bool = True,
-    show: bool = True,
+    show: bool = False,
 ) -> Tuple[plt.Figure, np.ndarray]:
     """
     Status: not fully verified
@@ -1183,6 +1183,8 @@ def rotate_image(image, angle,xc,yc):
         2D ndarray
             Rotated image.
     """
+    if angle==0:
+        return image
     #angle in deg
     image_center = (xc,yc)
     (h, w) = image.shape[:2]
@@ -1424,7 +1426,7 @@ def radial_br_profile(
         
         plt.savefig(save+'radial_profile_log.jpeg',bbox_inches='tight', pad_inches=0.1) 
         #plt.show(block=True)
-        plt.close(fig)
+        plt.close()
     
     return profile
 
@@ -1568,6 +1570,7 @@ def azimuthal_profile(
     "stderr": stderr,
     "counts": counts,
     "theta_deg_edges": theta_deg_edges,
+    "r_out_mas": r_out_mas
     }
 
 
@@ -1635,7 +1638,7 @@ def azimuthal_profile(
         
         fig2.savefig(save + "azimuthal_profile_polar.jpeg", bbox_inches="tight", pad_inches=0.1)
         #plt.show()
-        plt.close(fig2)
+        plt.close()
  
 
 
@@ -1889,10 +1892,10 @@ def polarimetric_analysis(
 
 
 
-        radial_profile=radial_br_profile(PI_conv, inst_ps_mas,deprojection[0],deprojection[1], R_limit=radial_limit_mas/inst_ps_mas, mode='sum',save=fig_dir+"mcfost_", plot=True,background_annulus_mas=background_annulus_mas)
+        radial_profile=radial_br_profile(pi_corr_conv, inst_ps_mas,deprojection[0],deprojection[1], R_limit=radial_limit_mas/inst_ps_mas, mode='sum',save=fig_dir+"mcfost_", plot=True,background_annulus_mas=background_annulus_mas)
 
 
-        az_profile=azimuthal_profile(PI_conv, inst_ps_mas, r_in_mas=azimuthal_r_in_mas, r_out_mas=azimuthal_r_out_mas, plot=True,mode='sum', save=fig_dir+"mcfost_", nbins=azimuthal_nbins, theta0=theta0)
+        az_profile=azimuthal_profile(pi_corr_conv, inst_ps_mas, r_in_mas=azimuthal_r_in_mas, r_out_mas=azimuthal_r_out_mas, plot=True,mode='sum', save=fig_dir+"mcfost_", nbins=azimuthal_nbins, theta0=theta0)
 
         results['radial_profile']=radial_profile
         results['azimuthal_profile']=az_profile
@@ -1916,7 +1919,8 @@ def profiles_chi2(
     noise_level: Optional[float] = None,
     profile_type: Literal["radial", "azimuthal", "both"] = "radial",
     mode: Literal["mean", "median", "sum"] = "mean",
-    plot: bool = False,
+    radial_limit_mas: float = 500.0,
+    plot: bool = True,
     save: Optional[str] = '',
     deprojection_inc_pa_deg: Optional[Tuple[float, float]] = None,
     center: Optional[Tuple[float, float]] = None,
@@ -1954,7 +1958,8 @@ def profiles_chi2(
     -------
     Tuple containing (chi2, chi2_red, loglike, n_data_points)
      """
-    
+    plot_polarimetric_image(obs_data, ps, title='Observed Data check', save=save+'check.png', image_scale='asinh', roi_half_size=30)
+
     # Initialize chi2 accumulators
     chi2_sum = 0.0
     loglike_sum=0.0
@@ -1977,38 +1982,45 @@ def profiles_chi2(
     n_points_radial=0
     # Compute profiles
     if profile_type in ("radial", "both"):
-        prof_obs = radial_br_profile(obs_data, ps, inclination_deg=inc_deg, position_angle_deg=pa_deg,
+        prof_obs = radial_br_profile(obs_data, ps, inclination_deg=inc_deg, position_angle_deg=pa_deg, R_limit=radial_limit_mas,
                                      mode=mode, noise_map=obs_err, noise_level=noise_level,xc=xc,yc=yc,
                                      plot=plot, save=save+"obs_")
         R_limit= np.max(prof_obs["i_rad_mas"])
 
         prof_mod = radial_br_profile(model_data, ps, inclination_deg=inc_deg, position_angle_deg=pa_deg,
-                                     R_limit=R_limit,force_stop=True, mode=mode, xc=xc,yc=yc,
+                                     R_limit=R_limit, mode=mode, xc=xc,yc=yc,
                                      plot=plot, save=save+"model_")
         
+        max_i_rad_mas = min(np.max(prof_obs["i_rad_mas"]), np.max(prof_mod["i_rad_mas"]))
+        index_max = np.where(prof_obs["i_rad_mas"] <= max_i_rad_mas)[0][-1]
+        
+    
+
+
         if plot:
-            plt.errorbar(prof_obs["i_rad_mas"], prof_obs["signal"], yerr=prof_obs["error"], fmt='o', label='obs')
-            plt.errorbar(prof_mod["i_rad_mas"], prof_mod["signal"], yerr=prof_mod["error"], fmt='o', label='model')
+            plt.errorbar(prof_obs["i_rad_mas"][:index_max], prof_obs["signal"][:index_max], yerr=prof_obs["error"][:index_max], fmt='o', label='obs')
+            plt.errorbar(prof_mod["i_rad_mas"][:index_max], prof_mod["signal"][:index_max], yerr=prof_mod["error"][:index_max], fmt='o', label='model')
             plt.xlabel('Distance from the star (mas)')
             plt.ylabel('Normalised intensity')
             plt.legend()
             plt.savefig(save+'radial_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
             plt.close()
         
-        chi2_sum_radial= ((prof_obs["signal"] - prof_mod["signal"]) ** 2 / (prof_obs["error"] ** 2 + 1e-16)).sum()
-        loglike_sum_radial = np.nansum(((prof_obs["signal"] - prof_mod["signal"]) ** 2)/(prof_obs["error"] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs["std"] ** 2 + 1e-16)))
-        n_points_radial=len(prof_obs["signal"])
+        chi2_sum_radial= ((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2 / (prof_obs["error"][:index_max] ** 2 + 1e-16)).sum()
+        loglike_sum_radial = np.nansum(((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2)/(prof_obs["error"][:index_max] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs["error"][:index_max] ** 2 + 1e-16)))
+        n_points_radial=len(prof_obs["signal"][:index_max])
     
     if profile_type in ("azimuthal", "both"):
         r_in_mas = 0
         if profile_type=="azimuthal":
-            r_out_mas= 1000.0
+            r_out_mas= 500.0
         else:
             r_out_mas =R_limit
 
         prof_obs_az = azimuthal_profile(obs_data, ps, r_in_mas, r_out_mas,
                                        mode=mode, xc=xc, yc=yc, nbins=az_nbins,
                                        plot=plot, save=save+"obs_")
+        
         prof_mod_az = azimuthal_profile(model_data, ps, r_in_mas, r_out_mas,
                                        mode=mode, xc=xc, yc=yc, nbins=az_nbins,
                                        plot=plot, save=save+"model_")
