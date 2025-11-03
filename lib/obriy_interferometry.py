@@ -24,6 +24,7 @@ import fnmatch
 from scipy.optimize import minimize_scalar
 from scipy.optimize import minimize
 from scipy.optimize import curve_fit
+from scipy.stats import chisquare
 import random
 import pymcfost as mcfost
 
@@ -152,6 +153,8 @@ def oi_container_chi2(
     if n_data_points == 0:
         raise ValueError("No valid data points with positive error bars found for chi2 calculation.")
     chi2_red = chi2_sum / (n_data_points-1)
+    chi2_red_scipy=chisquare(visdata, f_exp=vismod, ddof=1, sum_check=False)[0]
+    print(f"Chi2_red calculation check: custom={chi2_red}, scipy={chi2_red_scipy}")
     loglike=-0.5*loglike_sum
     
     return chi2_sum, chi2_red, loglike, n_data_points

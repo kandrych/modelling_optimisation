@@ -1084,10 +1084,10 @@ def convolve_polarimetric_images(
     
     # --- Optional plots ---
     if plot:
-        plot_polarimetric_image(Q_conv,   ps, title="Q Conv",     roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=True)
-        plot_polarimetric_image(Q_phi_conv, ps, title="Q_phi Conv", roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=True)
-        plot_polarimetric_image(I_conv,   ps, title="I Conv",     roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=True)
-        plot_polarimetric_image(PI_conv,  ps, title="PI Conv",    roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=True)
+        plot_polarimetric_image(Q_conv,   ps, title="Q Conv",     roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
+        plot_polarimetric_image(Q_phi_conv, ps, title="Q_phi Conv", roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
+        plot_polarimetric_image(I_conv,   ps, title="I Conv",     roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
+        plot_polarimetric_image(PI_conv,  ps, title="PI Conv",    roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
 
     return kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv
         
@@ -1280,6 +1280,9 @@ def radial_br_profile(
 
     # Iterate over radii in pixels up to R_limit
     max_i = int(max(2, math.floor(R_limit / ps)))
+    if max_i> img.shape[0]//2:
+        max_i= img.shape[0]//2 -1
+
     used_r_px = []
     
     for i_r in range (2,max_i + 1,1):
@@ -1499,6 +1502,9 @@ def azimuthal_profile(
     # Map to [0, 2pi)
     theta = (theta + 2 * np.pi) % (2 * np.pi)
 
+    if r_out_mas> np.min(img.shape)*ps/2.0:
+        r_out_mas= np.min(img.shape)*ps/2.0 -1.0
+        print(f"Warning: r_out_mas is larger than image size, setting to {r_out_mas} mas")
 
     # Annulus selection
     sel_ann = (R >= r_in_mas/ps) & (R < r_out_mas/ps) & np.isfinite(img)
@@ -1800,12 +1806,12 @@ def polarimetric_analysis(
 
 
         if plot:
-                plot_polarimetric_image(img_q_rescaled, inst_ps_mas, title='Q Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=True)
-                plot_polarimetric_image(q_phi_rescaled, inst_ps_mas, title='Q_phi Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=True)
+                plot_polarimetric_image(img_q_rescaled, inst_ps_mas, title='Q Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+                plot_polarimetric_image(q_phi_rescaled, inst_ps_mas, title='Q_phi Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
 
                 plot_polarimetric_image(img_tot_original, native_ps_mas, title='I tot, original from mcfost', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
                 plot_polarimetric_image(img_total_rescaled, inst_ps_mas, title='I tot rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-                plot_polarimetric_image(I_conv, inst_ps_mas, title='I tot conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=True)
+                plot_polarimetric_image(I_conv, inst_ps_mas, title='I tot conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
 
         # Unresolved correction
         R_rescaled,_,_,_,_=compute_grid(img_q_rescaled)
@@ -1867,7 +1873,7 @@ def polarimetric_analysis(
                                 per_panel_autoscale=True,
                                 colorbar="individual",
                                 figsize=(12, 6),
-                                show=True
+                                show=False
                                 )
                 fig.savefig(fig_dir+"mcfost_model_comparison.png", dpi=150, bbox_inches='tight')
 
@@ -1980,6 +1986,15 @@ def profiles_chi2(
                                      R_limit=R_limit,force_stop=True, mode=mode, xc=xc,yc=yc,
                                      plot=plot, save=save+"model_")
         
+        if plot:
+            plt.errorbar(prof_obs["i_rad_mas"], prof_obs["signal"], yerr=prof_obs["error"], fmt='o', label='obs')
+            plt.errorbar(prof_mod["i_rad_mas"], prof_mod["signal"], yerr=prof_mod["error"], fmt='o', label='model')
+            plt.xlabel('Distance from the star (mas)')
+            plt.ylabel('Normalised intensity')
+            plt.legend()
+            plt.savefig(save+'radial_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
+            plt.close()
+        
         chi2_sum_radial= ((prof_obs["signal"] - prof_mod["signal"]) ** 2 / (prof_obs["error"] ** 2 + 1e-16)).sum()
         loglike_sum_radial = np.nansum(((prof_obs["signal"] - prof_mod["signal"]) ** 2)/(prof_obs["error"] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs["std"] ** 2 + 1e-16)))
         n_points_radial=len(prof_obs["signal"])
@@ -1997,8 +2012,16 @@ def profiles_chi2(
         prof_mod_az = azimuthal_profile(model_data, ps, r_in_mas, r_out_mas,
                                        mode=mode, xc=xc, yc=yc, nbins=az_nbins,
                                        plot=plot, save=save+"model_")
+        if plot:
+            plt.plot(prof_obs_az["theta_deg_centers"], prof_obs_az["value"], 'o', label='obs')
+            plt.plot(prof_mod_az["theta_deg_centers"], prof_mod_az["value"], 'o', label='model')
+            plt.xlabel('Position angle (deg)')
+            plt.ylabel('Normalised intensity')
+            plt.legend()
+            plt.savefig(save+'azimuthal_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
+            plt.close()
         
-        chi2_sum_az = ((prof_obs_az["value"] - prof_mod_az["value"]) ** 2 / (prof_obs_az["std"] ** 2 + 1e-16)).sum()
+        chi2_sum_az = ((prof_obs_az["value"] - prof_mod_az["value"]) ** 2 / (prof_obs_az["std"] ** 2 + 1e-16)).sum() #this is weighted least-squares χ²
         loglike_sum_az = np.nansum(((prof_obs_az["value"] - prof_mod_az["value"]) ** 2)/(prof_obs_az["std"] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs_az["std"] ** 2 + 1e-16)))
         n_points_az=len(prof_obs_az["value"])
        
@@ -2013,6 +2036,7 @@ def profiles_chi2(
         raise ValueError("No valid data points found for chi2 calculation.")
     chi2_red = chi2_sum / (n_data_points-1)
     loglike=-0.5*loglike_sum
+    print(f"Chi2: {chi2_sum}, Reduced Chi2: {chi2_red}, Log-Likelihood: {loglike}, Data points: {n_data_points}")
     
     return chi2_sum, chi2_red, loglike, n_data_points
 

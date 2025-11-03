@@ -205,8 +205,8 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
         json.dump({"cfg": cfg, "fidelity": fidelity}, f, indent=2)
     
 
-    # Load a base .para file template from parent folder to simulation
-    pf = obm.ParaFile(str(outdir.parent.parent/"simulation.para"))
+    # Load a base .para file template from folder that was passed as working root
+    pf = obm.ParaFile(str(outdir.parent/"simulation.para"))
     for key in cfg.keys():
         if key in pf.params:
             pf.set_param(key, cfg[key])
@@ -302,21 +302,21 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                                                                                     image_scale='asinh', radial_limit_mas=150.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name)
-        chi2_sum_pdi_i, chi2_red_pdi_i, loglike_pdi_i, n_data_points_pdi_i= obp.profiles_chi2(pdi_data_i['pi'], results_i['pi_conv'], ps=3.6, profile_type='both', mode='sum', plot=True,
-                                                                                            save=str(workdir)+'figures/'+simulation_name, az_nbins=18)
+        chi2_sum_pdi_i, chi2_red_pdi_i, loglike_pdi_i, n_data_points_pdi_i= obp.profiles_chi2(pdi_data_i['pi'], results_i['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True,
+                                                                                            save=str(workdir)+'/figures/'+simulation_name, az_nbins=18)
         
         results_v=obp.polarimetric_analysis(str(workdir), 0.82, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=150.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name)
-        chi2_sum_pdi_v, chi2_red_pdi_v, loglike_pdi_v, n_data_points_pdi_v= obp.profiles_chi2(pdi_data_v['pi'], results_v['pi_conv'], ps=3.6, profile_type='both', mode='sum', plot=True, 
+        chi2_sum_pdi_v, chi2_red_pdi_v, loglike_pdi_v, n_data_points_pdi_v= obp.profiles_chi2(pdi_data_v['pi'], results_v['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True, 
                                                                                              save=str(workdir)+'/figures/'+simulation_name, az_nbins=18)
         
-        results_h=obp.polarimetric_analysis(str(workdir), 1.63, distance_pc= 1220.0, camera='sphere',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
+        results_h=obp.polarimetric_analysis(str(workdir), 1.63, distance_pc= 1220.0, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=150.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name)
-        chi2_sum_pdi_h, chi2_red_pdi_h, loglike_pdi_h, n_data_points_pdi_h= obp.profiles_chi2(pdi_data_h['pi'], results_h['pi_conv'], ps=3.6, profile_type='both', mode='sum', plot=True, 
+        chi2_sum_pdi_h, chi2_red_pdi_h, loglike_pdi_h, n_data_points_pdi_h= obp.profiles_chi2(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi'], ps=12.27, profile_type='both', mode='sum', plot=True, 
                                                                                              save=str(workdir)+'/figures/'+simulation_name, az_nbins=18)
 
 
@@ -349,7 +349,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
 def load_data(data_root: str) -> Dict[str, Any]:
     #filename of SED catalogue data file
-    if data_root =='demo':
+    if data_root =='demo_mac':
         data_filename = '/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
         data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
             
@@ -374,11 +374,26 @@ def load_data(data_root: str) -> Dict[str, Any]:
         figfolder_psf='/Users/katerynaandrych/Work/lin/PhD/SPHERE_reduction_data/paper2/mean_combined/'+star_psf+'/'
         file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
         psf_v=obp.Loadimage(figfolder_psf,file_psf)
+        file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
+        psf_i=obp.Loadimage(figfolder_psf,file_psf)
+
+        #polarimetric observations
+        pdi_folder_v = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
+        pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
+        pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
+        pdi_folder_i = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
+        pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
+        pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
+        pdi_folder_h = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
+        pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
+        pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
+        file_psf='iras08544-4431_calib_H_I_meancombined.fits'
+        psf_h=obp.Loadimage(pdi_folder_h,file_psf)
+
         
-        
-        pdi_data_v={'psf': psf_v}
-        pdi_data_i={'psf': 'nothing yet'}  
-        pdi_data_h={'psf': 'nothing yet'}
+        pdi_data_v={'psf': psf_v, 'pi': pdi_v}
+        pdi_data_i={'psf': psf_i, 'pi': pdi_i}
+        pdi_data_h={'psf': psf_h, 'pi': pdi_h}
         data_sed = [data_wave, data_flux, data_err]
         data_arrays = [data_sed, container_data_pionier, container_data_gravity, container_data_matisse_l, container_data_matisse_n,pdi_data_v, pdi_data_i, pdi_data_h]
         print('data loaded')
