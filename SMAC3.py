@@ -69,7 +69,7 @@ def start_cluster(n_workers: int, processes_per_worker: int, use_slurm: bool) ->
     For SLURM, adjust walltime/cores/memory/partition/etc. 🔧
     """
     if not use_slurm:
-        client = Client()  # LocalCluster default
+        client = Client(n_workers=n_workers, threads_per_worker=1)  # LocalCluster default
         print("[cluster] Local Dask cluster started:", client)
         return client
 
@@ -227,45 +227,104 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
     return param_path
 
 
-def run_mcfost(fidelity: Dict[str, Any], param_path: Path, workdir: Path) -> None:
-    """
-    Execute MCFOST. 
-    If your cluster nodes have the binary on PATH, this will run inline
-    within the Dask worker. Otherwise, prepend module loads or call a wrapper script.
-    
-    """
-    workdir=str(workdir)+"/"
-    param_path=str(param_path)
 
-    pf = obm.ParaFile(param_path)
-    
-    os.makedirs(workdir, exist_ok=True)  # no error if it already exists
+from contextlib import contextmanager
 
-    # Save the modified file
-    pf.save(workdir+"simulation.para")
+@contextmanager
+def pushd(path: Path):
+    prev = Path.cwd()
+    os.chdir(path)
     try:
-        print('run mcfost in '+workdir)
-        os.chdir(workdir) #this is to change directory to where the simulation.para file is and then run mcfost there
-        mcfost.run(workdir+'/simulation.para', delete_previous=False, silent=True) #for all stages 
+        yield
+    finally:
+        os.chdir(prev)
 
-        if fidelity["stage"] in ["F1", "F2", "F3"]:
-            for wave in [1.63, 2.20, 3.50, 10.0]:
-                mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave), delete_previous=False, silent=True)
-        if fidelity["stage"] == "F2":
-            for wave in [0.55, 0.82]: #V and I bands for polarimetric images, H band is run above
-                mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave), delete_previous=False, silent=True)
-        if fidelity["stage"] == "F3":
-            for wave in [1.5, 1.55, 1.6,1.65,  1.7, 1.75,  1.8, 1.85, 1.9]: #spectral vis2 for PIONIER
-                mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave), delete_previous=False, silent=True)
-            for wave in [1.95, 2.0, 2.05, 2.1, 2.15, 2.2, 2.25, 2.3, 2.35, 2.4, 2.45, 2.5]: #spectral vis2 for GRAVITY
-                mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave), delete_previous=False, silent=True)
-            for wave in [2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4, 4.1, 4.2, 4.3]: #spectral vis2 for MATISSE L band
-                mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave), delete_previous=False, silent=True)
-            for wave in [7, 8, 9, 10, 11, 12, 13, 14]: #spectral vis2 for MATISSE N band
-                mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave), delete_previous=False, silent=True)
-    except:
-        print(f"MCFOST run failed for fidelity: {fidelity['stage']} and parameter file {param_path}")
-        raise RuntimeError(f"MCFOST run failed for fidelity: {fidelity['stage']} and parameter file {param_path}")
+def run_mcfost(fidelity: dict, param_path: Path, workdir: Path) -> None:
+    """
+    Run MCFOST in `workdir` reliably.
+    """
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+
+    # Prepare para
+    # pf = obm.ParaFile(str(param_path))
+    # sim_para = workdir / "simulation.para"
+    # pf.save(str(sim_para))
+
+    # Build options: quote the root dir once; no leading/trailing spaces
+    #options = f'-root_dir "{workdir}"'
+
+    try:
+        print(f"run mcfost in {workdir}")
+        # Ensure process CWD is workdir so date.tmp and outputs land here
+        with pushd(workdir):
+            # base RT run
+            mcfost.run(str(param_path), delete_previous=False, silent=False, logfile="mcfost_base.log")
+
+            # higher-fidelity products
+            if fidelity["stage"] in ("F1", "F2", "F3"):
+                for wave in [1.63, 2.20, 3.50, 10.0]:
+                    mcfost.run(str(param_path), options=f'-img {wave}', silent=True, logfile=f"mcfost_{wave:.2f}.log")
+
+            if fidelity["stage"] == "F2":
+                for wave in [0.55, 0.82]:
+                    mcfost.run(str(param_path), options=f'-img {wave}', silent=True, logfile=f"mcfost_{wave:.2f}.log")
+
+            if fidelity["stage"] == "F3":
+                for wave in [1.5, 1.55, 1.6, 1.65, 1.7, 1.75, 1.8, 1.85, 1.9]:
+                    mcfost.run(str(param_path), options=f'-img {wave}', silent=True, logfile=f"mcfost_{wave:.2f}.log")
+                for wave in [1.95, 2.0, 2.05, 2.1, 2.15, 2.2, 2.25, 2.3, 2.35, 2.4, 2.45, 2.5]:
+                    mcfost.run(str(param_path), options=f'-img {wave}', silent=True, logfile=f"mcfost_{wave:.2f}.log")
+                for wave in [2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.0, 4.1, 4.2, 4.3]:
+                    mcfost.run(str(param_path), options=f'-img {wave}', silent=True, logfile=f"mcfost_{wave:.2f}.log")
+                for wave in [7, 8, 9, 10, 11, 12, 13, 14]:
+                    mcfost.run(str(param_path), options=f'-img {wave}', silent=True, logfile=f"mcfost_{wave:.2f}.log")
+
+    except Exception as e:
+        # Surface the precise failure (don’t swallow stderr)
+        print(f"MCFOST run failed for {fidelity.get('stage')} in {workdir}: {e}")
+        raise
+
+
+# def run_mcfost(fidelity: Dict[str, Any], param_path: Path, workdir: Path) -> None:
+#     """
+#     Execute MCFOST. 
+#     If your cluster nodes have the binary on PATH, this will run inline
+#     within the Dask worker. Otherwise, prepend module loads or call a wrapper script.
+    
+#     """
+#     workdir=str(workdir)+"/"
+#     param_path=str(param_path)
+
+#     pf = obm.ParaFile(param_path)
+    
+#     os.makedirs(workdir, exist_ok=True)  # no error if it already exists
+
+#     # Save the modified file
+#     pf.save(workdir+"simulation.para")
+#     try:
+#         print('run mcfost in '+workdir)
+#         #os.chdir(workdir) #this is to change directory to where the simulation.para file is and then run mcfost there
+#         mcfost.run(workdir+"/simulation.para", options= " -root_dir "+workdir, delete_previous=False, silent=True) #for all stages
+
+#         if fidelity["stage"] in ["F1", "F2", "F3"]:
+#             for wave in [1.63, 2.20, 3.50, 10.0]:
+#                 mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave)+" -root_dir "+workdir, silent=True, logfile="mcfost"+str(wave)+".log")
+#         if fidelity["stage"] == "F2":
+#             for wave in [0.55, 0.82]: #V and I bands for polarimetric images, H band is run above
+#                 mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave)+" -root_dir "+workdir, silent=True, logfile="mcfost"+str(wave)+".log")
+#         if fidelity["stage"] == "F3":
+#             for wave in [1.5, 1.55, 1.6,1.65,  1.7, 1.75,  1.8, 1.85, 1.9]: #spectral vis2 for PIONIER
+#                 mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave)+" -root_dir "+workdir, silent=True, logfile="mcfost"+str(wave)+".log")
+#             for wave in [1.95, 2.0, 2.05, 2.1, 2.15, 2.2, 2.25, 2.3, 2.35, 2.4, 2.45, 2.5]: #spectral vis2 for GRAVITY
+#                 mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave)+" -root_dir "+workdir, silent=True, logfile="mcfost"+str(wave)+".log")
+#             for wave in [2.8, 2.9, 3.0, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4, 4.1, 4.2, 4.3]: #spectral vis2 for MATISSE L band
+#                 mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave)+" -root_dir "+workdir, silent=True, logfile="mcfost"+str(wave)+".log")
+#             for wave in [7, 8, 9, 10, 11, 12, 13, 14]: #spectral vis2 for MATISSE N band
+#                 mcfost.run(workdir+'/simulation.para',options = "-img "+str(wave)+" -root_dir "+workdir, silent=True, logfile="mcfost"+str(wave)+".log")
+#     except:
+#         print(f"MCFOST run failed for fidelity: {fidelity['stage']} and parameter file {param_path}")
+#         raise RuntimeError(f"MCFOST run failed for fidelity: {fidelity['stage']} and parameter file {param_path}")
 
 
 def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dict[str, Any]) -> float:
@@ -287,6 +346,10 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     pdi_data_h= data_arg[7]
     simulation_name=workdir.name
 
+    sed_path = workdir / "data_th" / "sed_rt.fits.gz"
+    if not sed_path.exists():
+        # trial ran but produced no SED -> invalid config or earlier failure
+        return 1e99
 
     chi2_sed, chi2_reduced_sed, loglike_sed= obs.chi2_SED_with_reddening(str(workdir.name), str(workdir.parent)+'/', data_wave=data_sed[0], data_flux=data_sed[1],data_err=data_sed[2],
                                        plot=True, description=simulation_name)
@@ -299,25 +362,28 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         
     if fidelity["stage"] in ['F2','F3']:
         results_i=obp.polarimetric_analysis(str(workdir), 0.55, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'],psf_cut=100, 
-                                                                                                    image_scale='asinh', radial_limit_mas=150.0,
+                                                                                                    image_scale='asinh', radial_limit_mas=1500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
-                                                                                                    theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name)
+                                                                                                    theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Iband')
         chi2_sum_pdi_i, chi2_red_pdi_i, loglike_pdi_i, n_data_points_pdi_i= obp.profiles_chi2(pdi_data_i['pi'], results_i['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True,
-                                                                                            save=str(workdir)+'/figures/'+simulation_name, az_nbins=18)
+                                                                                            save=str(workdir)+'/figures/'+simulation_name+'_Iband', az_nbins=18)
         
         results_v=obp.polarimetric_analysis(str(workdir), 0.82, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
-                                                                                                    image_scale='asinh', radial_limit_mas=150.0,
+                                                                                                    image_scale='asinh', radial_limit_mas=1500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
-                                                                                                    theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name)
+                                                                                                    theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Vband')
         chi2_sum_pdi_v, chi2_red_pdi_v, loglike_pdi_v, n_data_points_pdi_v= obp.profiles_chi2(pdi_data_v['pi'], results_v['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True, 
-                                                                                             save=str(workdir)+'/figures/'+simulation_name, az_nbins=18)
+                                                                                             save=str(workdir)+'/figures/'+simulation_name+'_Vband', az_nbins=18)
         
         results_h=obp.polarimetric_analysis(str(workdir), 1.63, distance_pc= 1220.0, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
-                                                                                                    image_scale='asinh', radial_limit_mas=150.0,
+                                                                                                    image_scale='asinh', radial_limit_mas=1500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
-                                                                                                    theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name)
+                                                                                                    theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Hband')
+        
+        obp.plot_polarimetric_image(pdi_data_h['pi'], 12.27, title='IRAS08544-4431 H-band PI_check', save=str(workdir)+'/pi_h_band_check.png', image_scale='asinh', roi_half_size=30)
+
         chi2_sum_pdi_h, chi2_red_pdi_h, loglike_pdi_h, n_data_points_pdi_h= obp.profiles_chi2(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi'], ps=12.27, profile_type='both', mode='sum', plot=True, 
-                                                                                             save=str(workdir)+'/figures/'+simulation_name, az_nbins=18)
+                                                                                             save=str(workdir)+'/figures/'+simulation_name+'_Hband', az_nbins=18)
 
 
     
@@ -347,7 +413,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 # -----------------------------------------------------------------------------
 
 
-def load_data(data_root: str) -> Dict[str, Any]:
+def load_data(data_root: str, work_root: str) -> Dict[str, Any]:
     #filename of SED catalogue data file
     if data_root =='demo_mac':
         data_filename = '/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
@@ -374,21 +440,32 @@ def load_data(data_root: str) -> Dict[str, Any]:
         figfolder_psf='/Users/katerynaandrych/Work/lin/PhD/SPHERE_reduction_data/paper2/mean_combined/'+star_psf+'/'
         file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
         psf_v=obp.Loadimage(figfolder_psf,file_psf)
+        obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
+
         file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
         psf_i=obp.Loadimage(figfolder_psf,file_psf)
+        obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
+
 
         #polarimetric observations
         pdi_folder_v = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
         pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
         pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
+        obp.plot_polarimetric_image(pdi_v, 3.6, title='IRAS08544-4431 V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=50)
+        
         pdi_folder_i = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
         pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
         pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
+        obp.plot_polarimetric_image(pdi_i, 3.6, title='IRAS08544-4431 I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=50)
+
         pdi_folder_h = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
         pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
         pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
+        obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=work_root+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
+
         file_psf='iras08544-4431_calib_H_I_meancombined.fits'
         psf_h=obp.Loadimage(pdi_folder_h,file_psf)
+        obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
 
         
         pdi_data_v={'psf': psf_v, 'pi': pdi_v}
@@ -434,7 +511,11 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
 
     # Write param file and run MCFOST
     par_path = write_mcfost_paramfile(cfg, fidelity, trial_dir)
-    run_mcfost(fidelity,par_path, trial_dir)
+    try:
+        run_mcfost(fidelity,par_path, trial_dir)
+    except Exception:
+        # Trial failed; return a high loss
+        return 1e99
 
     # Score outputs
 
@@ -475,8 +556,8 @@ def main():
         # You can also set output directories, logging, etc.
     )
     work_root = Path(args.working_root)
-    
-    data_arg = load_data(args.data_root)
+
+    data_arg = load_data(args.data_root, str(work_root))
     # SMAC Objective wrapper with extra kwargs via lambda/closure
     def smac_objective(cfg, seed: int, budget: float) -> float:
         return objective(cfg, seed, budget, data_arg=data_arg, scratch_root=work_root)
@@ -509,6 +590,10 @@ def main():
         incumbent = dict(incumbent)
     fidelity_result={}
     fidelity_result['stage']='F1'
+    # Verify template parameter file for mcfost exists
+    template_para= str(results_dir.parent/"simulation.para")
+    assert template_para.exists(), f"Missing template .para at {template_para}"
+
     # Write param file and run MCFOST
     par_path = write_mcfost_paramfile(incumbent, fidelity_result, results_dir)
     run_mcfost(fidelity_result,par_path, results_dir)
