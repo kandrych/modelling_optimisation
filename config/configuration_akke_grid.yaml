@@ -1,0 +1,115 @@
+hyperparameters:
+  - name: alpha_viscosity
+    type: uniform_float
+    log: true
+    lower: 1.0e-5
+    upper: 1.0e-1
+    default_value: 1.0e-2
+    meta: null
+
+  - name: zone_1_flaring_exp
+    type: uniform_float
+    lower: 1
+    upper: 1.6
+    default_value: 1.2
+    meta: null
+
+  - name: zone_1_species_1_amin
+    type: uniform_float
+    lower: 1.0e-2
+    upper: 1.0
+    default_value: 0.1
+    meta: null
+
+  - name: zone_1_gas_to_dust
+    type: categorical
+    choices: [50, 100, 200]
+    default_value: 100
+    meta: null
+
+  - name: zone_1_scale_height
+    type: uniform_float
+    lower: 0.93
+    upper: 1.87
+    default_value: 1.40
+    meta: null
+
+  - name: zone_1_dust_mass
+    type: categorical
+    choices: [1e-3, 2e-3, 4e-3]
+    default_value: 2e-3
+    meta: null
+
+  - name: zone_1_Rc
+    type: uniform_float
+    lower: 7.3
+    upper: 50.0
+    default_value: 10.0
+    meta: null
+
+  - name: zone_1_surface_density_exp
+    type: uniform_float
+    lower: -1.5
+    upper: 1.5
+    default_value: 1.0
+    meta: null
+
+  - name: zone_1_gamma_exp
+    type: uniform_float
+    lower: -2.0
+    upper: 2.0
+    default_value: -1.0
+    meta: null
+
+  - name: zone_1_species_1_porosity
+    type: uniform_float
+    lower: 0.0
+    upper: 0.8
+    default_value: 0.25
+    meta: null
+  
+  - name: zone_1_species_1_volume_fraction
+    type: categorical
+    choices: [0.7, 0.8]
+    default_value: 0.7
+    meta: null
+
+
+#Fixed parameters
+  - name: distance_pc
+    type: constant
+    value: 1220.0
+
+conditions: []
+forbiddens: []
+
+#  # extra categorical just to demo a forbidden combo
+#   - name: porosity_model
+#     type: categorical
+#     choices: ["compact", "porous"]
+#     default: "compact"
+
+# # --- CONDITIONS ---
+# # Activate a_min and a_max only when dust_law == "MRN"
+# # Activate q only when dust_law == "powerlaw"
+# conditions:
+#   - type: EqualsCondition
+#     child: a_min
+#     parent: dust_law
+#     value: MRN
+
+#   - type: EqualsCondition
+#     child: a_max
+#     parent: dust_law
+#     value: MRN
+
+#   - type: EqualsCondition
+#     child: q
+#     parent: dust_law
+#     value: powerlaw
+
+# # --- FORBIDDENS ---
+# # Example: forbid the combination dust_law == "MRN" AND porosity_model == "porous"
+# # (Forbiddens are conjunctions of equality clauses.)
+# forbiddens:
+#   - { dust_law: MRN, porosity_model: porous }
