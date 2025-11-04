@@ -18,9 +18,11 @@ import os
 os.environ["MPLBACKEND"] = "Agg"   # must be set before importing matplotlib
 import matplotlib
 matplotlib.use("Agg", force=True)
+
 import shutil
 import subprocess
 import sys
+import textwrap
 import tempfile
 import time
 from pathlib import Path
@@ -58,7 +60,14 @@ import lib.obriy_polarimetry as obp
 import lib.obriy_mcfost as obm
 
 
-
+matplotlib.rcParams["font.family"] = "serif"
+matplotlib.rcParams["font.serif"] = [
+    "DejaVu Serif",         # shipped with matplotlib
+    "Liberation Serif",
+    "Nimbus Roman",
+    "TeX Gyre Termes",
+    "Times",                # generic fallback
+]
 
 
 # -----------------------------------------------------------------------------
@@ -70,47 +79,76 @@ def start_cluster(n_workers: int, processes_per_worker: int, use_slurm: bool) ->
     Start a Dask cluster. For quick local testing, set use_slurm=False and
     rely on default LocalCluster via `Client()`.
 
-    For SLURM, adjust walltime/cores/memory/partition/etc. 🔧
+    Start a Dask cluster. For SLURM, we:
+      - load the same modules on the worker nodes
+      - activate the same venv
+      - export all runtime env vars (MCFOST, PATH, OMP, PYTHONPATH)
+      - write logs per-job so you can debug startup
     """
     if not use_slurm:
         client = Client()#(n_workers=n_workers, threads_per_worker=1)  # LocalCluster default
         print("[cluster] Local Dask cluster started:", client)
         return client
 
+    work_root = Path(os.environ.get("SMAC_WORK_ROOT", ".")).resolve()
+    # log_dir   = work_root / "dask-logs"
+    # tmp_dir   = work_root / "dask-tmp"
+    # log_dir.mkdir(parents=True, exist_ok=True)
+    # tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Bind scheduler to a host/interface visible to workers on the compute node
+    # (when driver runs under SLURM, hostname is the compute node)
+    scheduler_host = socket.gethostname()
+
     cluster = SLURMCluster(
-        queue="normal",  # partition
-        cores=processes_per_worker,
+        queue="normal",               # partition
         processes=1,
+        cores=processes_per_worker,   # cpu per worker process
         memory="10GB",
         walltime="02:00:00",
-        job_extra=[
-            "--export=ALL",
-            "--job-name=smac_postAGB",
-            "--cpus-per-task=8",
-            "--output=job.in.qout",
-            "--mail-type=BEGIN",
-            "--mail-type=END",
-            "--mail-type=FAIL",
-            "--mail-user=kateryna.andrych@mq.edu.au"
+        local_directory=str(tmp_dir),
+        job_extra_directives=[
+            "--account=oz061",
+            f"--output={log_dir}/dask.%x.%j.out",
+            f"--error={log_dir}/dask.%x.%j.err",
+            "--ntasks=1",
+            f"--cpus-per-task={processes_per_worker}",
+            "--mem=10G",
+            "--time=02:00:00",
         ],
-        interface=None,  # or e.g. "ib0" if needed
+        job_script_prologue=[
+            "set -euo pipefail",
+            "module --force purge",
+            "module load python-scientific/3.11.5-foss-2023b",
+            "source /home/kandrych/venvs/obriy311/bin/activate",
+            "export OMP_NUM_THREADS=1",
+            'echo "PYTHON = $(which python)"',
+        ],
         python=sys.executable,
-        job_script_prologue=['echo "HOSTNAME = $HOSTNAME"','echo "HOSTTYPE = $HOSTTYPE"', "echo Time is `date`", "echo Directory is `pwd`"]
+        scheduler_options={
+            "host": scheduler_host,        # avoid binding to an external/unroutable IP
+            "dashboard_address": ":0",     # disable dashboard port hard-coding
+        },
     )
 
-    cluster.adapt(minimum=n_workers, maximum=n_workers)
+    # Persist the exact worker script we’re submitting
+    (log_dir / "dask_worker_template.sh").write_text(cluster.job_script())
+
+    cluster.scale(n_workers)
     client = Client(cluster)
-    print("[cluster] SLURM Dask cluster started:", client)
+    client.wait_for_workers(n_workers, timeout="180s")
+    print("[cluster] up:", client)
+    
     return client
 
 # -----------------------------------------------------------------------------
 # ConfigSpace (flexible / conditional hyperparameters)
 # -----------------------------------------------------------------------------
 
-def build_configspace() -> ConfigurationSpace:
+def build_configspace(config_file: str) -> ConfigurationSpace:
 
-    cs = ConfigurationSpace.from_yaml('/fred/oz061/kandrych/modelling_optimisation/config/space.yaml')#("/Users/katerynaandrych/Work/lin/python scripts/modelling_optimisation/config/space.yaml")
-
+    #cs = ConfigurationSpace.from_yaml('/fred/oz061/kandrych/modelling_optimisation/config/space.yaml')#("/Users/katerynaandrych/Work/lin/python scripts/modelling_optimisation/config/space.yaml")
+    cs = ConfigurationSpace.from_yaml(config_file)
 
     # cs = ConfigurationSpace()
 
@@ -388,10 +426,25 @@ def main():
     p.add_argument("--n-trials", type=int, default=80)
     p.add_argument("--seed", type=int, default=42)
     args = p.parse_args()
+    
+    WORK_ROOT = Path(args.working_root).resolve()
+    os.environ["SMAC_WORK_ROOT"] = str(WORK_ROOT)
+    (WORK_ROOT / "dask-logs").mkdir(parents=True, exist_ok=True)
+    (WORK_ROOT / "dask-tmp").mkdir(parents=True, exist_ok=True)
+
+    print(f"[main] Working root: {WORK_ROOT}")
+
+
+    config_candidates = list(WORK_ROOT.rglob("*.yaml")) + list(WORK_ROOT.rglob("*.yml"))
+    if not config_candidates:
+        raise FileNotFoundError(f"No *.yaml found under {WORK_ROOT}")
+    config_file = sorted(config_candidates)[0]
+
+    print(f"[main] Using config space file: {config_file}")
 
     client = start_cluster(args.n_workers, args.procs_per_worker, args.use_slurm)
 
-    cs = build_configspace()
+    cs = build_configspace(config_file)
 
     scenario = Scenario(
         configspace=cs,
