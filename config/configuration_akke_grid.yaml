@@ -23,8 +23,8 @@ hyperparameters:
 
   - name: zone_1_gas_to_dust
     type: categorical
-    choices: [50, 100, 200]
-    default_value: 100
+    choices: [50.0, 100.0, 200.0]
+    default_value: 100.0
     meta: null
 
   - name: zone_1_scale_height
@@ -36,8 +36,8 @@ hyperparameters:
 
   - name: zone_1_dust_mass
     type: categorical
-    choices: [1e-3, 2e-3, 4e-3]
-    default_value: 2e-3
+    choices: [1.0e-3, 2.0e-3, 4.0e-3]
+    default_value: 2.0e-3
     meta: null
 
   - name: zone_1_Rc
