@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from typing import Literal, Tuple, Dict, Optional, Union, Any, List
 
-from distroi.auxiliary import constants
+#from distroi.auxiliary import constants
 from distroi.data import image
 from distroi.data import sed
 from distroi.model.geom_comp import geom_comp
@@ -64,7 +64,6 @@ import lib.obriy_interferometry as obi
 
 
 
-constants.set_matplotlib_params()  # set project matplotlib parameters
 
 
 

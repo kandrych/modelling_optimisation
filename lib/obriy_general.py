@@ -1,10 +1,6 @@
-from distroi.auxiliary import constants
+#from distroi.auxiliary import constants
 from astropy import units as u
 from functools import wraps
-
-
-
-constants.set_matplotlib_params()  # set project matplotlib parameters
 
 
 ###################################

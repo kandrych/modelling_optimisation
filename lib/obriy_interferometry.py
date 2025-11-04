@@ -57,15 +57,25 @@ import shutil
 from pathlib import Path
 
 
-
-
-
-constants.set_matplotlib_params()  # set project matplotlib parameters
-
 import lib.obriy_general as obg
 import lib.obriy_sed as obs
 import lib.obriy_mcfost as obm
 import lib.obriy_polarimetry as obp
+
+
+plt.rcParams["mathtext.fontset"] = "cm"
+plt.rcParams["legend.frameon"] = False
+plt.rcParams["legend.edgecolor"] = "grey"
+plt.rcParams["legend.framealpha"] = 0.5
+plt.rcParams["lines.markersize"] = 6.0
+plt.rcParams["lines.linewidth"] = 2.0
+
+plt.rc("font", size=16)  # controls default text sizes
+plt.rc("axes", titlesize=14)  # fontsize of the axes title
+plt.rc("xtick", labelsize=14)  # fontsize of the tick labels
+plt.rc("ytick", labelsize=14)  # fontsize of the tick labels
+plt.rc("legend", fontsize=14)  # legend fontsize
+plt.rc("figure", titlesize=14)  # fontsize of the figure title
 
 
 
@@ -152,8 +162,8 @@ def oi_container_chi2(
     if n_data_points == 0:
         raise ValueError("No valid data points with positive error bars found for chi2 calculation.")
     chi2_red = chi2_sum / (n_data_points-1)
-    chi2_red_scipy=chisquare(visdata, f_exp=vismod, ddof=1, sum_check=False)[0]
-    print(f"Chi2_red calculation check: custom={chi2_red}, scipy={chi2_red_scipy}")
+    #chi2_red_scipy=chisquare(visdata, f_exp=vismod, ddof=1, sum_check=False)[0]
+    #print(f"Chi2_red calculation check: custom={chi2_red}, scipy={chi2_red_scipy}")
     loglike=-0.5*loglike_sum
     
     return chi2_sum, chi2_red, loglike, n_data_points
