@@ -26,7 +26,6 @@ from scipy.optimize import minimize
 from scipy.optimize import curve_fit
 from scipy.stats import chisquare
 import random
-import pymcfost as mcfost
 
 import astropy
 from astropy import units as u

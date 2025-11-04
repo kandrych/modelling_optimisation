@@ -71,10 +71,12 @@ from pathlib import Path
 
 
 constants.set_matplotlib_params()  # set project matplotlib parameters
+os.environ.setdefault("MCFOST_NO_UPDATE", "1") # prevent MCFOST from checking for updates every time it is run within this script
 
-# Ensure MCFOST is found in PATH on Katya's Mac
-os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ["PATH"]
-os.environ["MCFOST_UTILS"] = os.path.expanduser("/Users/katerynaandrych/software/mcfost/utils")
+
+# # Ensure MCFOST is found in PATH on Katya's Mac
+# os.environ["PATH"] = "/opt/homebrew/bin:" + os.environ["PATH"]
+# os.environ["MCFOST_UTILS"] = os.path.expanduser("/Users/katerynaandrych/software/mcfost/utils")
 
 
 
@@ -253,6 +255,7 @@ class ParaFile:
 
 def run_mcfost_safe(param_path: Path, workdir: Path, options: list[str] = None,
                     logfile: str | None = None) -> None:
+    
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     exe = shutil.which("mcfost")
@@ -328,6 +331,7 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
 
 
 def run_mcfost(fidelity: dict, param_path: Path, workdir: Path) -> None:
+
     print(f"run mcfost in {workdir}")
     # base
 
@@ -374,7 +378,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     if not sed_path.exists():
         # trial ran but produced no SED -> invalid config or earlier failure
         return 1e99
-
+    
     chi2_sed, chi2_reduced_sed, loglike_sed= obs.chi2_SED_with_reddening(str(workdir.name), str(workdir.parent)+'/', data_wave=data_sed[0], data_flux=data_sed[1],data_err=data_sed[2],
                                        plot=True, description=simulation_name)
     

@@ -25,7 +25,7 @@ from scipy.optimize import minimize_scalar
 from scipy.optimize import minimize
 from scipy.optimize import curve_fit
 import random
-import pymcfost as mcfost
+
 
 import astropy
 from astropy import units as u
