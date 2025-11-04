@@ -429,8 +429,8 @@ def main():
     
     WORK_ROOT = Path(args.working_root).resolve()
     os.environ["SMAC_WORK_ROOT"] = str(WORK_ROOT)
-    (WORK_ROOT / "dask-logs").mkdir(parents=True, exist_ok=True)
-    (WORK_ROOT / "dask-tmp").mkdir(parents=True, exist_ok=True)
+    # (WORK_ROOT / "dask-logs").mkdir(parents=True, exist_ok=True)
+    # (WORK_ROOT / "dask-tmp").mkdir(parents=True, exist_ok=True)
 
     print(f"[main] Working root: {WORK_ROOT}")
 
