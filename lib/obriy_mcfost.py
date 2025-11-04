@@ -379,17 +379,21 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     """
 
     data_sed = data_arg[0]
-    container_data_pionier = data_arg[1]
-    container_data_gravity = data_arg[2]
-    container_data_matisse_l = data_arg[3]
-    container_data_matisse_n = data_arg[4]
-    pdi_data_v = data_arg[5] #each disc with data not deconvolved q_phi, u_phi, pi, and psf
-    pdi_data_i = data_arg[6] 
-    pdi_data_h= data_arg[7]
-    simulation_name=workdir.name
+    if fidelity["stage"] in ["F1", "F2", "F3"]:
+        container_data_pionier = data_arg[1]
+        container_data_gravity = data_arg[2]
+        container_data_matisse_l = data_arg[3]
+        container_data_matisse_n = data_arg[4]
+    if fidelity["stage"] in ['F2','F3']:
+        pdi_data_v = data_arg[5] #each disc with data not deconvolved q_phi, u_phi, pi, and psf
+        pdi_data_i = data_arg[6] 
+        pdi_data_h = data_arg[7]
+
+    simulation_name = workdir.name
 
     sed_path = workdir / "data_th" / "sed_rt.fits.gz"
     if not sed_path.exists():
+        print(f"SED file {sed_path} not found.")
         # trial ran but produced no SED -> invalid config or earlier failure
         return 1e99
     

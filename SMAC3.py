@@ -86,7 +86,7 @@ def start_cluster(n_workers: int, processes_per_worker: int, use_slurm: bool) ->
       - write logs per-job so you can debug startup
     """
     if not use_slurm:
-        client = Client()#(n_workers=n_workers, threads_per_worker=1)  # LocalCluster default
+        client = Client(n_workers=n_workers, threads_per_worker=processes_per_worker)  # LocalCluster default
         print("[cluster] Local Dask cluster started:", client)
         return client
 
@@ -402,6 +402,7 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
         obm.run_mcfost(fidelity,par_path, trial_dir)
     except Exception:
         # Trial failed; return a high loss
+        print(f"[objective] Trial failed for cfg={cfg}, dir={trial_dir}")
         return 1e99
 
     # Score outputs
@@ -424,7 +425,7 @@ def main():
     p.add_argument("--min-budget", type=float, default=0.25)
     p.add_argument("--max-budget", type=float, default=3.0)
     p.add_argument("--n-trials", type=int, default=80)
-    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--seed", type=int, default=-1)# Random seed for SMAC
     args = p.parse_args()
     
     WORK_ROOT = Path(args.working_root).resolve()
