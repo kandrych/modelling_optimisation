@@ -213,7 +213,7 @@ def chi2_SED_with_reddening(
         data_wave: np.ndarray,
         data_flux: np.ndarray,
         data_err: np.ndarray,
-        reddening_law_path: str = '/Users/katerynaandrych/Work/lin/Postdoc/Data/SED_reddening/ISMreddening_law_Cardelli1989.dat',
+        reddening_law_path: str | None = None,
         plot: bool = True,
         description: str = None
         ) -> Tuple[float,float, float]:
@@ -248,6 +248,21 @@ def chi2_SED_with_reddening(
     float
         Log-likelihood 
     """
+
+   # --- Resolve reddening law path if not provided ---
+    if reddening_law_path is None:
+        # folder_of_script = .../lib  (for example)
+        folder_of_script = Path(__file__).resolve().parent
+        # one above the folder of the script:
+        reddening_law_path = str(folder_of_script.parent / "utils"/"ISMreddening_law_Cardelli1989.dat")
+
+    # Optional: fail early with a clear message
+    rpath = Path(reddening_law_path)
+    if not rpath.is_file():
+        raise FileNotFoundError(
+            f"Reddening law not found at: {rpath}\n"
+        )
+
     simulation_dir = main_dir+folder_sim+"/"
     #### read in data
     #open the required ray-traced SED fits file
