@@ -109,7 +109,7 @@ def start_cluster(n_workers: int, processes_per_worker: int, use_slurm: bool) ->
 
 def build_configspace() -> ConfigurationSpace:
 
-    cs = ConfigurationSpace.from_yaml("/Users/katerynaandrych/Work/lin/python scripts/modelling_optimisation/config/configuration.yaml")
+    cs = ConfigurationSpace.from_yaml("/Users/katerynaandrych/Work/lin/python scripts/modelling_optimisation/config/space.yaml")
 
 
     # cs = ConfigurationSpace()
