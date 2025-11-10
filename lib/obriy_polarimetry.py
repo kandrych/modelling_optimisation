@@ -2067,4 +2067,136 @@ def profiles_chi2(
 
 
 
+#testing part 
+from skimage.metrics import structural_similarity as ssim
+
+def nan_safe(a: np.ndarray) -> np.ndarray:
+    """Replace NaNs/Infs with 0 to keep metrics stable."""
+    a = np.array(a, dtype=float, copy=True)
+    if not np.isfinite(a).all():
+        fin = np.isfinite(a)
+        replace = 0.0
+        a[~fin] = replace
+    return a
+
+def apply_mask(a: np.ndarray, mask: Optional[np.ndarray]) -> np.ndarray:
+    if mask is None:
+        return a
+    m = mask.astype(bool)
+    return np.where(m, a, np.nan)
+
+def norm_image(a: np.ndarray, mode: Literal["none","zscore","minmax","mean1"] = "zscore") -> np.ndarray:
+    """Lightweight normalization to remove flux/scale differences before morphology metrics."""
+    a = a.astype(float)
+    if mode == "none":
+        return a
+    if mode == "zscore":
+        mu = np.nanmean(a); sd = np.nanstd(a)
+        return (a - mu) / (sd if sd > 0 else 1.0)
+    if mode == "minmax":
+        amin = np.nanmin(a); amax = np.nanmax(a)
+        return (a - amin) / (amax - amin) if amax > amin else np.zeros_like(a)
+    if mode == "mean1":
+        mu = np.nanmean(np.abs(a))
+        return a / (mu if mu > 0 else 1.0)
+    raise ValueError(f"Unknown normalization mode: {mode}")
+
+def ncc(a: np.ndarray, b: np.ndarray) -> float:
+    """Normalized cross-correlation, NaN-safe, no registration."""
+    a = nan_safe(a); b = nan_safe(b)
+    a = a - np.nanmean(a); b = b - np.nanmean(b)
+    num = np.nansum(a * b)
+    den = np.sqrt(np.nansum(a * a) * np.nansum(b * b))
+    return float(num / den) if den > 0 else 0.0
+
+def full_image_metrics_noshift(
+    obs_data: np.ndarray,
+    model_data: np.ndarray,
+    *,
+    mask: Optional[np.ndarray] = None,        # e.g. valid FoV / SNR>threshold / coronagraph hole excluded
+    normalize: Literal["zscore","minmax","mean1","none"] = "zscore",
+    ssim_win: Optional[int] = 11,             # odd window size for SSIM local stats; None => auto
+    ssim_gaussian_weights: bool = True,       # closer to perceptual similarity
+    return_pixel_chi2: bool = True,           # χ² over pixels (optional)
+    pixel_sigma: Optional[float] = None,      # if None, uses robust σ from obs_data
+) -> Dict[str, Any]:
+    """
+    Compare morphology of two images with SSIM and NCC (no shifting/registration).
+    Returns a dict with 'ssim', 'ncc', and optional 'chi2','chi2_red','n' over the masked region.
+    """
+    # 1) Coerce shapes and mask
+    if obs_data.shape != model_data.shape:
+        raise ValueError(f"Shapes differ: obs {obs_data.shape} vs model {model_data.shape}")
+    if mask is not None and mask.shape != obs_data.shape:
+        raise ValueError(f"Mask shape {mask.shape} does not match image shape {obs_data.shape}")
+
+    A = apply_mask(obs_data, mask)
+    B = apply_mask(model_data, mask)
+
+    # 2) Normalization to remove scale/offset so morphology dominates
+    A = norm_image(A, normalize)
+    B = norm_image(B, normalize)
+
+    # 3) SSIM (structural similarity)
+    # skimage expects finite data; we’ll replace NaNs locally with the masked median.
+    A_ssim = nan_safe(A)
+    B_ssim = nan_safe(B)
+
+    # dynamic range for SSIM: use joint robust range to make it scale-invariant-ish
+    finite = np.isfinite(A_ssim) & np.isfinite(B_ssim)
+    if not finite.any():
+        raise ValueError("No finite pixels to compare after masking/normalizing.")
+    data_range = float(np.nanpercentile(np.concatenate([A_ssim[finite], B_ssim[finite]]), 99) -
+                       np.nanpercentile(np.concatenate([A_ssim[finite], B_ssim[finite]]), 1))
+    if data_range <= 0:
+        data_range = float(np.nanstd(np.concatenate([A_ssim[finite], B_ssim[finite]])) * 2 or 1.0)
+
+    ssim_score = ssim(
+        A_ssim, B_ssim,
+        data_range=data_range,
+        gaussian_weights=ssim_gaussian_weights,
+        win_size=ssim_win if ssim_win is not None else None,
+        channel_axis=None,  # grayscale 2D
+    )
+
+    # 4) NCC (global)
+    ncc_score = ncc(A, B)
+
+    result = {
+        "ssim": float(ssim_score),   # 1.0 is perfect; ~0 is dissimilar; can be negative
+        "ncc": float(ncc_score),     # 1.0 is perfect linear correlation; 0 none; -1 inverted
+    }
+
+    # 5) Optional: pixel χ² as a sanity check (NOT morphology-robust)
+    if return_pixel_chi2:
+        
+        resid = A - B
+
+        if pixel_sigma is None:
+            # robust sigma from obs (MAD ~ 1.4826 * median|x - median|)
+            med = np.nanmedian(A)
+            mad = np.nanmedian(np.abs(A - med))
+            sigma = 1.4826 * mad
+            if not np.isfinite(sigma) or sigma <= 0:
+                sigma = float(np.nanstd(A) or 1.0)
+        else:
+            sigma = float(pixel_sigma)
+
+        w = np.isfinite(resid)
+        n = int(np.sum(w))
+        if n == 0:
+            chi2 = np.nan; chi2_red = np.nan
+        else:
+            chi2 = float(np.nansum((resid[w] / sigma) ** 2))
+            dof = max(n - 1, 1)
+            chi2_red = float(chi2 / dof)
+
+        result.update({
+            "chi2": chi2,
+            "chi2_red": chi2_red,
+            "n": n,
+            "pixel_sigma_used": sigma,
+        })
+
+    return result
 
