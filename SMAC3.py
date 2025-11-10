@@ -463,9 +463,13 @@ def main():
     work_root = Path(args.working_root)
 
     data_arg = load_data(args.data_root, str(work_root))
+
+    trial_folder= work_root/"trials/"
+    trial_folder.mkdir(exist_ok=True)
+    
     # SMAC Objective wrapper with extra kwargs via lambda/closure
     def smac_objective(cfg, seed: int, budget: float) -> float:
-        return objective(cfg, seed, budget, data_arg=data_arg, scratch_root=work_root)
+        return objective(cfg, seed, budget, data_arg=data_arg, scratch_root=trial_folder)
 
     smac = MultiFidelityFacade(
         scenario=scenario,

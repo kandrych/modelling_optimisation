@@ -323,7 +323,7 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
     
 
     # Load a base .para file template from folder that was passed as working root
-    pf = ParaFile(str(outdir.parent/"simulation.para"))
+    pf = ParaFile(str(outdir.parent.parent/"simulation.para"))
     for key in cfg.keys():
         if key in pf.params:
             pf.set_param(key, cfg[key])
