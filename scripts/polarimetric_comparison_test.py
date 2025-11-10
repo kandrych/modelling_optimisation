@@ -75,3 +75,6 @@ metrics = obp.full_image_metrics_noshift(
     return_pixel_chi2=True
 )
 print(metrics)
+
+obp.plot_polarimetric_image(metrics["ssim_image"], 3.6, title='ssim', save=work_root+'/ssim_image.png', image_scale='linear', roi_half_size=50)
+

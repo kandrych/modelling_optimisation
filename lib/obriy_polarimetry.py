@@ -2151,12 +2151,13 @@ def full_image_metrics_noshift(
     if data_range <= 0:
         data_range = float(np.nanstd(np.concatenate([A_ssim[finite], B_ssim[finite]])) * 2 or 1.0)
 
-    ssim_score = ssim(
+    ssim_score, ssim_image = ssim(
         A_ssim, B_ssim,
         data_range=data_range,
         gaussian_weights=ssim_gaussian_weights,
         win_size=ssim_win if ssim_win is not None else None,
         channel_axis=None,  # grayscale 2D
+        full=True
     )
 
     # 4) NCC (global)
@@ -2164,6 +2165,7 @@ def full_image_metrics_noshift(
 
     result = {
         "ssim": float(ssim_score),   # 1.0 is perfect; ~0 is dissimilar; can be negative
+        "ssim_image": ssim_image,
         "ncc": float(ncc_score),     # 1.0 is perfect linear correlation; 0 none; -1 inverted
     }
 
