@@ -198,7 +198,7 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
     - Photon packets and image resolution scale with budget - TO DO
 
     """
-    # Example budget range: min=0.25, max=3.0 (F0=0.25, F1=1.0, F2=2.0, F3=3.0)
+    # Example budget range: min=0.25, max=3.0 (set in Scenario)
     stage = "F0"
     if budget >= 1.0:
         stage = "F1"
@@ -206,6 +206,10 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         stage = "F2"
     if budget >= 3.0:
         stage = "F3"
+    if budget >= 4.0:
+        stage = "F4"
+    if budget >= 5.0:
+        stage = "F5"
 
     # scale photons with budget
     # nbr_photons_eq_th = int(1.28e5 * (10**budget))
@@ -223,9 +227,17 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
     elif stage == "F2":
         img_res = 2
         products = ["sed", "vis2_1perband", "pdi_radial"]
-    else:  # F3
+    elif stage == "F3":
         img_res = 2
         products = ["sed", "vis2_chromatic", "pdi_radial", "pdi_colour"]
+    elif stage == "F4":
+        img_res = 2
+        products = ["sed", "vis2_chromatic", "pdi_radial", "pdi_colour", "alma"]
+    elif stage == "F5":
+        img_res = 2
+        products = ["pdi"]
+    else:
+        raise ValueError(f"Unknown stage for budget {budget}: {stage}")
 
     return {
         "stage": stage,
@@ -264,7 +276,7 @@ def load_data(data_root: str, work_root: str) -> Dict[str, Any]:
         data_dir_matisse_n, data_file_matisse_n = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
         container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(9.9, 10.10), fcorr=True)
 
-         #real PSF from observations
+        #real PSF from observations
         star_psf='HD83878'
         figfolder_psf='/Users/katerynaandrych/Work/lin/PhD/SPHERE_reduction_data/paper2/mean_combined/'+star_psf+'/'
         file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
@@ -297,58 +309,77 @@ def load_data(data_root: str, work_root: str) -> Dict[str, Any]:
         obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
 
     if data_root =='demo_ozstar':
-        data_filename = '/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
-        data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
-            
+        try:
+            data_filename = '/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
+            data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
+        except:
+            print("[main] SED data file not found. Please check the path if your budget expects SED.")
+            data_wave, data_flux, data_err=[],[],[]
         # PIONIER data
-        data_dir_pionier, data_file_pionier = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
-        container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier, wave_lims=(1.63, 1.64))
+        try:        
+            data_dir_pionier, data_file_pionier = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
+            container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier, wave_lims=(1.63, 1.64))
+        except:
+            print("[main] PIONIER data files not found. Please check the path if your budget expects PIONIER data.")
+            container_data_pionier=None
 
         # GRAVITY data
-        data_dir_gravity, data_file_gravity = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
-        container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity, wave_lims=(2.199, 2.201))
+        try:    
+            data_dir_gravity, data_file_gravity = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
+            container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity, wave_lims=(2.199, 2.201))
+        except:
+            print("[main] GRAVITY data files not found. Please check the path if your budget expects GRAVITY data.")
+            container_data_gravity=None
 
         # VLTI/MATISSE L-band data
-        data_dir_matisse_l, data_file_matisse_l = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
-        container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(3.48, 3.52))
+        try:
+            data_dir_matisse_l, data_file_matisse_l = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
+            container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(3.48, 3.52))
+        except:
+            print("[main] MATISSE L-band data files not found. Please check the path if your budget expects MATISSE L-band data.")
+            container_data_matisse_l=None
 
         # VLTI/MATISSE N-band data
-        data_dir_matisse_n, data_file_matisse_n = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
-        container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(9.9, 10.10), fcorr=True)
-
-        psf_v, psf_i, psf_h, pdi_v, pdi_i, pdi_h = None, None, None, None, None, None
-
-        #  #real PSF from observations
-        # star_psf='HD83878'
-        # figfolder_psf='/Users/katerynaandrych/Work/lin/PhD/SPHERE_reduction_data/paper2/mean_combined/'+star_psf+'/'
-        # file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
-        # psf_v=obp.Loadimage(figfolder_psf,file_psf)
-        # obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
-
-        # file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
-        # psf_i=obp.Loadimage(figfolder_psf,file_psf)
-        # obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
+        try:    
+            data_dir_matisse_n, data_file_matisse_n = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
+            container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(9.9, 10.10), fcorr=True)
+        except:
+            print("[main] MATISSE N-band data files not found. Please check the path if your budget expects MATISSE N-band data.")
+            container_data_matisse_n=None
 
 
-        # #polarimetric observations
-        # pdi_folder_v = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
-        # pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
-        # pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
-        # obp.plot_polarimetric_image(pdi_v, 3.6, title='IRAS08544-4431 V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=50)
+        #real PSF from observations
+        figfolder_psf='/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/psf/'
+        star_psf='HD83878'
+        file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
+        psf_v=obp.Loadimage(figfolder_psf,file_psf)
+        obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
+
+        file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
+        psf_i=obp.Loadimage(figfolder_psf,file_psf)
+        obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
+
+
+        #polarimetric observations
+        pdi_folder_v = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
+        pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
+        pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
+        obp.plot_polarimetric_image(pdi_v, 3.6, title='IRAS08544-4431 V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=50)
         
-        # pdi_folder_i = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
-        # pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
-        # pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
-        # obp.plot_polarimetric_image(pdi_i, 3.6, title='IRAS08544-4431 I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=50)
+        pdi_folder_i = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
+        pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
+        pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
+        obp.plot_polarimetric_image(pdi_i, 3.6, title='IRAS08544-4431 I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=50)
 
-        # pdi_folder_h = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
-        # pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
-        # pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
-        # obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=work_root+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
+        pdi_folder_h = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
+        pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
+        pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
+        obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=work_root+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
 
-        # file_psf='iras08544-4431_calib_H_I_meancombined.fits'
-        # psf_h=obp.Loadimage(pdi_folder_h,file_psf)
-        # obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
+        file_psf='iras08544-4431_calib_H_I_meancombined.fits'
+        psf_h=obp.Loadimage(pdi_folder_h,file_psf)
+        obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
+
     else:
         raise ValueError(f"Unknown data_root: {data_root}")
     
@@ -466,7 +497,7 @@ def main():
 
     trial_folder= work_root/"trials/"
     trial_folder.mkdir(exist_ok=True)
-    
+
     # SMAC Objective wrapper with extra kwargs via lambda/closure
     def smac_objective(cfg, seed: int, budget: float) -> float:
         return objective(cfg, seed, budget, data_arg=data_arg, scratch_root=trial_folder)
