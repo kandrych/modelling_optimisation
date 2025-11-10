@@ -91,10 +91,10 @@ def start_cluster(n_workers: int, processes_per_worker: int, use_slurm: bool) ->
         return client
 
     work_root = Path(os.environ.get("SMAC_WORK_ROOT", ".")).resolve()
-    # log_dir   = work_root / "dask-logs"
-    # tmp_dir   = work_root / "dask-tmp"
-    # log_dir.mkdir(parents=True, exist_ok=True)
-    # tmp_dir.mkdir(parents=True, exist_ok=True)
+    log_dir   = work_root / "dask-logs"
+    tmp_dir   = work_root / "dask-tmp"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
 
     # Bind scheduler to a host/interface visible to workers on the compute node
     # (when driver runs under SLURM, hostname is the compute node)
@@ -426,6 +426,8 @@ def main():
     p.add_argument("--max-budget", type=float, default=3.0)
     p.add_argument("--n-trials", type=int, default=80)
     p.add_argument("--seed", type=int, default=-1)# Random seed for SMAC
+
+
     args = p.parse_args()
     
     WORK_ROOT = Path(args.working_root).resolve()
