@@ -308,10 +308,19 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
     # Json dump of config + fidelity for record-keeping
     with open(outdir / "config_used.json", "w") as f:
         json.dump({"cfg": cfg, "fidelity": fidelity}, f, indent=2)
-    
-
     # Load a base .para file template from folder that was passed as working root
-    pf = ParaFile(str(outdir.parent.parent/"simulation.para"))
+    print(outdir.parent.name)
+    if outdir.parent.name != "trials":
+        try :
+            pf = ParaFile(str(outdir.parent/"simulation.para"))
+        except:
+            raise ValueError("Base MCFOST parameter file not found in the working directory. Please ensure 'simulation.para' exists.")
+    else:    
+        try:
+            pf = ParaFile(str(outdir.parent.parent/"simulation.para"))
+        except:
+            raise ValueError("Base MCFOST parameter file not found in the working directory. Please ensure 'simulation.para' exists.")
+    
     for key in cfg.keys():
         if key in pf.params:
             pf.set_param(key, cfg[key])
