@@ -474,7 +474,7 @@ def main():
 
     print(f"[main] Working root: {WORK_ROOT}")
 
-
+    #EXAMPLE OF VALID CONFIGURATION FILE IN config/configuration_grid.yaml
     config_candidates = list(WORK_ROOT.rglob("*.yaml")) + list(WORK_ROOT.rglob("*.yml"))
     if not config_candidates:
         raise FileNotFoundError(f"No *.yaml found under {WORK_ROOT}")
@@ -486,11 +486,8 @@ def main():
 
     cs = build_configspace(config_file)
    
-    # serial or light parallel (avoid big parallelism unless you tuned RAM!)
     for cfg in categorical_grid(cs, as_dict=True):
         # cfg contains only the variable keys from YAML.
-        # Merge with your external fixed params when writing model.para:
-        # full_cfg = {**fixed_params, **cfg}
         folder = folder_from_cfg(
                 cfg,
                 float_digits=3,          # tweak precision for floats
@@ -506,7 +503,7 @@ def main():
             #Or you can use run_mcfost_safe(param_path, workdir, options=[], logfile="mcfost_base.log") for tempereture structure and run_mcfost_image(wavelength, folder) for any wavelength you want.
             
         except Exception:
-            # Trial failed; return a high loss
+            # Trial failed;
             print(f"[objective] Trial failed for cfg={cfg}, dir={trial_dir}")
             continue
     
