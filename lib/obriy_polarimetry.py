@@ -1838,13 +1838,19 @@ def polarimetric_analysis(
                 PI_conv=pi_rescaled
                 Q_phi_conv=q_phi_rescaled
                 U_phi_conv=u_phi_rescaled
+
+        
+            
         if convolution_mode!='none':
+                pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=200, critlim=0.015, image_cut=0)
+
                 results['mcfost_convolved']={'img_q':Q_conv,
                                                 'img_u':U_conv,
                                                 'img_tot':I_conv,
                                                 'q_phi':Q_phi_conv,
                                                 'u_phi':U_phi_conv,
                                                 'pi':PI_conv,
+                                                'pi_deconvolved':pi_conv_decon,
                                                 'metrics':metrics_conv
                                                 }
 
@@ -1857,6 +1863,8 @@ def polarimetric_analysis(
                 plot_polarimetric_image(img_tot_original, native_ps_mas, title='I tot, original from mcfost', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
                 plot_polarimetric_image(img_total_rescaled, inst_ps_mas, title='I tot rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
                 plot_polarimetric_image(I_conv, inst_ps_mas, title='I tot conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+                plot_polarimetric_image(PI_conv, inst_ps_mas, title='I pol conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+                plot_polarimetric_image(pi_conv_decon, inst_ps_mas, title='I pol conv deconvolved', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
 
         # Unresolved correction
         R_rescaled,_,_,_,_=compute_grid(img_q_rescaled)
@@ -1885,6 +1893,17 @@ def polarimetric_analysis(
         metrics_corr_conv=polarimetric_metrics(I_conv,q_corr_conv, u_corr_conv, q_phi_corr_conv, u_phi_corr_conv,pi_corr_conv)
         metrics_corr_conv['dolp_unres']=dolp_unres_conv
         metrics_corr_conv['aolp_unres']=aolp_unres_conv
+
+
+
+        # Deconvolution of corrected images
+        if convolution_mode=='none':
+            print('No convolution, skipping deconvolution')
+        else:
+            print('Deconvolution of unresolved corrected images')
+            # Create PSF for deconvolution
+            pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=200, critlim=0.015, image_cut=0, plot_lim=100)
+
         
         results['mcfost_convolved_unresolved_corrected']={'img_q':q_corr_conv,
                                                 'img_u':u_corr_conv,
@@ -1893,6 +1912,7 @@ def polarimetric_analysis(
                                                 'pi':pi_corr_conv,
                                                 'aolp_corr':aolp_corr_conv,
                                                 'phi':phi,
+                                                'pi_deconvolved':pi_corr_conv_decon,
                                                 'metrics':metrics_corr_conv,
                                                 }
 
@@ -2302,3 +2322,99 @@ def save_band_metrics(
             "ssim_score": entry["ssim_score"],
             "ncc_score": entry["ncc_score"],
         })
+
+
+
+###########################################
+## Richardson-Lucy Deconvolution functions
+###########################################
+
+from astropy.convolution import convolve_fft
+
+
+def normalize(arr):
+    rng = arr.max()-arr.min()
+    amin = arr.min()
+    return (arr-amin)*1/rng #normalised to [0,1]
+
+def compare(img1, img2):
+    # normalize to compensate for exposure difference
+    
+    img1 = normalize(img1)
+    img2 = normalize(img2)
+    # calculate the difference and its norms
+    diff = img1 - img2  # elementwise for scipy arrays
+    m_norm = np.sum(abs(diff))/np.sum(img1)  
+
+    return m_norm
+
+def plotImage(image, lim):
+    n = image.shape[0]
+    
+    fig, ax = plt.subplots()
+    image = np.arcsinh(image)
+    max = np.max(image[int(n/2-lim/2):int(n/2+lim/2),int(n/2-lim/2):int(n/2+lim/2)])
+    min=np.min(image[int(n/2-lim/2):int(n/2+lim/2),int(n/2-lim/2):int(n/2+lim/2)])
+    ps = 3.6 #mas per pixel for IRDIS
+    d = n * ps / 2
+    plt.imshow(image, vmin=min, vmax=max, extent=(-d, d, d, -d))
+    #plt.plot(0, 0, "+", color="red")
+    plt.xlim(-lim * ps, lim * ps)
+    plt.ylim(-lim * ps, lim * ps)
+    plt.xlabel('mas')
+    plt.ylabel("mas")
+    plt.colorbar()
+    plt.tight_layout
+
+def deconvolution(image, psf, limit_N_decon=200, critlim=0.015,  image_cut=0,savefig=None, plot_lim=100):
+    """
+    Perform Richardson-Lucy deconvolution on the given image with the specified PSF.
+    
+    Parameters:
+    - image: 2D numpy array representing the image to be deconvolved.
+    - psf: 2D numpy array representing the point spread function.
+    - limit_N_decon: Number of iterations for deconvolution.
+    - critlim: Criterion limit for stopping the deconvolution, based on the normalised difference between iterations.
+    - image_cut: Amount to cut off the edges of the image for faster processing.
+    - savefig: If provided path, saves the deconvolved images at each iteration.
+    - plot_lim: Limit edges for plotting the image.
+    
+    Returns:
+    - deconvolved image after limit_N_decon iterations or when critlim is reached.
+    """
+    #cut of the image if your signal significantly smaller (takes shorter to deconvolve)
+    n = image.shape[0]
+    a = int(image_cut)  
+    b = int(n - image_cut) 
+    psf_fliped = np.flip(psf)
+
+    decon = np.copy(image)  # Create starting file for first iteration of deconvolution
+    for i in range(0, limit_N_decon):  
+        print('deconvolution step ' + str(i))  # just some control output
+
+        decon = decon * (convolve_fft(image / convolve_fft(decon, psf), psf_fliped))
+        if savefig!= None:
+            plotImage(decon, plot_lim)  # Adjust lim as needed
+            if i <= 9:
+                plt.savefig(savefig+f'decon_{i:02d}_image.png', bbox_inches='tight', pad_inches=0.1)
+            else:
+                plt.savefig(savefig+f'decon_{i}_image.png', bbox_inches='tight', pad_inches=0.1)
+            plt.close()
+
+        # Check convergence criterion
+        # For the first iteration, we use the original file as its own deconvolution
+        if i == 0:
+            deconvolved1 = decon
+            crit = 1
+
+        if i >= 1:
+            crit = compare(decon[a:b, a:b], deconvolved1[a:b, a:b])
+
+        print(crit)
+        deconvolved1 = decon # Update for next iteration
+
+        if (crit < critlim):
+            N_final = i
+            break
+
+    return decon

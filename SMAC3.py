@@ -210,6 +210,8 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         stage = "F4"
     if budget >= 5.0:
         stage = "F5"
+    if budget >= 6.0:
+        stage = "F6"
 
     # scale photons with budget
     # nbr_photons_eq_th = int(1.28e5 * (10**budget))
@@ -236,6 +238,9 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
     elif stage == "F5":
         img_res = 2
         products = ["sed","pdi"]
+    elif stage == "F6": #created for AR Pup test
+        img_res = 2
+        products = ["pdi"]
     else:
         raise ValueError(f"Unknown stage for budget {budget}: {stage}")
 
@@ -308,7 +313,7 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
         psf_h=obp.Loadimage(pdi_folder_h,file_psf)
         obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
 
-    if data_root =='demo_ozstar':
+    elif data_root =='demo_ozstar':
         if fidelity_stage in ['F0', 'F1', 'F2', 'F3', 'F4', 'F5']:
             try:
                 data_filename = '/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
@@ -400,6 +405,44 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
             pdi_v=None
             pdi_i=None
             pdi_h=None
+
+    elif data_root =='ar_pup_ozstar':
+        #real PSF from observations
+            figfolder_psf='/fred/oz061/kandrych/Data/polarimetry/AR_Pup_zimpol_2018/psf/'
+            star_psf='HD75885'
+            file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
+            psf_v=obp.Loadimage(figfolder_psf,file_psf)
+            obp.plot_polarimetric_image(psf_v, 3.6, title='AR_Pup V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=60)
+
+            file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
+            psf_i=obp.Loadimage(figfolder_psf,file_psf)
+            obp.plot_polarimetric_image(psf_i, 3.6, title='AR_Pup I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=60)
+
+            #polarimetric observations
+            pdi_folder_v = '/fred/oz061/kandrych/Data/polarimetry/AR_Pup_zimpol_2018/V_band/'
+            pdi_file_v = 'AR_Pup_dc_notnorm_V_PI_corr_tel+unres.fits'
+            pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
+            obp.plot_polarimetric_image(pdi_v, 3.6, title='AR_Pup V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=60)
+            # pdi_decon_v= obp.Loadimage(pdi_folder_v,'AR_Pup_dc_notnorm_V_decon.fits')
+            pdi_v=obp.center_crop(pdi_v, 150)
+
+            pdi_folder_i = '/fred/oz061/kandrych/Data/polarimetry/AR_Pup_zimpol_2018/I_band/'
+            pdi_file_i = 'AR_Pup_dc_notnorm_I_PI_corr_tel+unres.fits'
+            pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
+            pdi_i=obp.center_crop(pdi_i, 150)
+            
+            obp.plot_polarimetric_image(pdi_i, 3.6, title='AR Pup I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=60)
+            # pdi_decon_i= obp.Loadimage(pdi_folder_i,'AR_Pup_dc_notnorm_I_decon.fits')
+            
+            pdi_h=None
+            psf_h=None
+            container_data_pionier=None
+            container_data_gravity=None
+            container_data_matisse_l=None
+            container_data_matisse_n=None
+            data_wave, data_flux, data_err=[],[],[]
+
+
     else:
         raise ValueError(f"Unknown data_root: {data_root}")
     
