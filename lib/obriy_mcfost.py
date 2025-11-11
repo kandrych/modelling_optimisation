@@ -324,6 +324,11 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
     for key in cfg.keys():
         if key in pf.params:
             pf.set_param(key, cfg[key])
+        elif key=='inclination':
+            pf.set_param('imin', cfg[key])
+            pf.set_param('imax', cfg[key])
+        else:
+            print(f"Warning: parameter {key} not found in MCFOST parameter file.")
     # Set fidelity-related params
     # pf.set_param("nbr_photons_eq_th", fidelity["nbr_photons_eq_th"])
     # pf.set_param("nbr_photons_lambda", fidelity["nbr_photons_lambda"])
@@ -360,7 +365,9 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path) -> None:
                   2.8,2.9,3.0,3.1,3.2,3.3,3.4,3.5,3.6,3.7,3.8,3.9,4.0,4.1,4.2,4.3,
                   7,8,9,10,11,12,13,14]:
             run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
-
+    if fidelity["stage"]=="F5":
+        for w in [0.55, 0.82, 1.63]:
+            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")   
 
 
 
@@ -374,6 +381,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
     Return the likelihood (lower is better).
     """
+    print(f'[obriy_mcfost] fidelity["stage"] = {fidelity["stage"]}')
 
     data_sed = data_arg[0]
     if fidelity["stage"] in ["F1", "F2", "F3"]:
@@ -381,29 +389,33 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         container_data_gravity = data_arg[2]
         container_data_matisse_l = data_arg[3]
         container_data_matisse_n = data_arg[4]
-    if fidelity["stage"] in ['F2','F3']:
+    if fidelity["stage"] in ['F2','F3', "F4", "F5"]:
         pdi_data_v = data_arg[5] #each disc with data not deconvolved q_phi, u_phi, pi, and psf
         pdi_data_i = data_arg[6] 
         pdi_data_h = data_arg[7]
+        print('[obriy_mcfost] Data for scoring loaded successfully')
 
     simulation_name = workdir.name
 
     sed_path = workdir / "data_th" / "sed_rt.fits.gz"
     if not sed_path.exists():
-        print(f"SED file {sed_path} not found.")
+        print(f"Temperature file {sed_path} not found.")
         # trial ran but produced no SED -> invalid config or earlier failure
         return 1e99
     
     chi2_sed, chi2_reduced_sed, loglike_sed= obs.chi2_SED_with_reddening(str(workdir.name), str(workdir.parent)+'/', data_wave=data_sed[0], data_flux=data_sed[1],data_err=data_sed[2],
-                                       plot=True, description=simulation_name)
+                                            plot=True, description=simulation_name)
     
     if fidelity["stage"] in ["F1", "F2", "F3"]:
         chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.monochromatic_chi(str(workdir), img_dir="data_1.63/", container_data=container_data_pionier, vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.63", log_plotv=False)
         chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.monochromatic_chi(str(workdir), img_dir="data_2.2/", container_data=container_data_gravity, vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY 2.2", log_plotv=False)
         chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
         chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, vistype='vis', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
-        
+    
+
+
     if fidelity["stage"] in ['F2','F3', "F4", "F5"]:
+        print('[obriy_mcfost] Polarimetric analysis started')
         results_i=obp.polarimetric_analysis(str(workdir), 0.55, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
@@ -417,7 +429,17 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             return_pixel_chi2=True
         )
         
-        obp.plot_polarimetric_image(metrics_i["ssim_image"], 3.6, title='ssim', save=str(workdir)+'/figures'+'/ssim_image_I.png', image_scale='linear', roi_half_size=50)
+        obp.plot_polarimetric_image(metrics_i["ssim_image"], 3.6, title=f'ssim, score {metrics_i["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_I.png', image_scale='linear', roi_half_size=50)
+
+        obp.save_band_metrics(
+                    workdir,
+                    band="I",
+                    analysis_metrics=results_i['mcfost_convolved_unresolved_corrected']['metrics'],
+                    ssim_score=metrics_i.get("ssim"),
+                    ncc_score=metrics_i.get("ncc"),
+                    extras={"ps_mas": 3.6, "notes": "zscore"}
+                    )
+
 
         
         results_v=obp.polarimetric_analysis(str(workdir), 0.82, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
@@ -433,16 +455,23 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             return_pixel_chi2=True
         )
         
-        obp.plot_polarimetric_image(metrics_v["ssim_image"], 3.6, title='ssim', save=str(workdir)+'/figures'+'/ssim_image_V.png', image_scale='linear', roi_half_size=50)
+        obp.plot_polarimetric_image(metrics_v["ssim_image"], 3.6, title=f'ssim, score {metrics_v["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_V.png', image_scale='linear', roi_half_size=50)
 
-
+        obp.save_band_metrics(
+                    workdir,
+                    band="V",
+                    analysis_metrics=results_v['mcfost_convolved_unresolved_corrected']['metrics'],
+                    ssim_score=metrics_v.get("ssim"),
+                    ncc_score=metrics_v.get("ncc"),
+                    extras={"ps_mas": 3.6, "notes": "zscore"}
+                    )
+        
         results_h=obp.polarimetric_analysis(str(workdir), 1.63, distance_pc= 1220.0, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Hband')
         
-        obp.plot_polarimetric_image(pdi_data_h['pi'], 12.27, title='IRAS08544-4431 H-band PI_check', save=str(workdir)+'/pi_h_band_check.png', image_scale='asinh', roi_half_size=30)
-
+        
         data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi']) 
         
         metrics_h = obp.full_image_metrics_noshift(
@@ -452,14 +481,74 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             return_pixel_chi2=True
         )
         
-        obp.plot_polarimetric_image(metrics_h["ssim_image"], 12.27, title='ssim', save=str(workdir)+'/figures'+'/ssim_image_H.png', image_scale='linear', roi_half_size=30)
-        if fidelity["stage"] in ["F2", "F3" ]:
-            chi2_sum_pdi_h, chi2_red_pdi_h, loglike_pdi_h, n_data_points_pdi_h= obp.profiles_chi2(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi'], ps=12.27, profile_type='both', mode='sum', plot=True, 
-                                                                                                save=str(workdir)+'/figures/'+simulation_name+'_Hband', az_nbins=18)
-            chi2_sum_pdi_v, chi2_red_pdi_v, loglike_pdi_v, n_data_points_pdi_v= obp.profiles_chi2(pdi_data_v['pi'], results_v['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True, 
-                                                                                                save=str(workdir)+'/figures/'+simulation_name+'_Vband', az_nbins=18)
-            chi2_sum_pdi_i, chi2_red_pdi_i, loglike_pdi_i, n_data_points_pdi_i= obp.profiles_chi2(pdi_data_i['pi'], results_i['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True, 
-                                                                                                save=str(workdir)+'/figures/'+simulation_name+'_Iband', az_nbins=18)   
+        obp.plot_polarimetric_image(metrics_h["ssim_image"], 12.27, title=f'ssim, score {metrics_h["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_H.png', image_scale='linear', roi_half_size=30)
+        obp.save_band_metrics(
+                    workdir,
+                    band="H",
+                    analysis_metrics=results_h['mcfost_convolved_unresolved_corrected']['metrics'],
+                    ssim_score=metrics_h.get("ssim"),
+                    ncc_score=metrics_h.get("ncc"),
+                    extras={"ps_mas": 12.27, "notes": "zscore"}
+                    )
+
+
+        images_list = [data_cropped_v, model_cropped_v,
+                       data_cropped_i, model_cropped_i]
+                
+        titles = [
+                  'V-band data', 'V-band model',
+                  'I-band data', 'I-band model']
+        ps_list=[
+                 3.6, 3.6,
+                 3.6, 3.6]
+        fig, axs = obp.plot_image_grid(
+                        images=images_list,
+                        ps_mas=ps_list,
+                        nrows=2,
+                        ncols=2,
+                        titles=titles,
+                        group_headers=[(0.31, 'Data'), (0.72, 'Model')],
+                        scale="asinh",
+                        roi_half_size=50,          
+                        per_panel_autoscale=True,
+                        colorbar="individual",
+                        figsize=(12, 6),
+                        show=False
+                        )
+        fig.savefig(str(workdir)+'/figures'+'/v_i_data_model_comparison.png', dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        images_list = [data_cropped_h, model_cropped_h]
+        titles = [
+                  'H-band data', 'H-band model']
+        
+        fig, axs = obp.plot_image_grid(
+                        images=images_list,
+                        ps_mas=12.27,
+                        nrows=1,
+                        ncols=2,
+                        titles=titles,
+                        group_headers=[(0.31, 'Data'), (0.72, 'Model')],
+                        scale="asinh",
+                        roi_half_size=30,          
+                        per_panel_autoscale=True,
+                        colorbar="individual",
+                        figsize=(8, 4),
+                        show=False
+                        )
+        fig.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
+        plt.close(fig)  
+
+
+
+
+
+        # if fidelity["stage"] in ["F2", "F3" ]:
+        #     chi2_sum_pdi_h, chi2_red_pdi_h, loglike_pdi_h, n_data_points_pdi_h= obp.profiles_chi2(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi'], ps=12.27, profile_type='both', mode='sum', plot=True, 
+        #                                                                                         save=str(workdir)+'/figures/'+simulation_name+'_Hband', az_nbins=18)
+        #     chi2_sum_pdi_v, chi2_red_pdi_v, loglike_pdi_v, n_data_points_pdi_v= obp.profiles_chi2(pdi_data_v['pi'], results_v['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True, 
+        #                                                                                         save=str(workdir)+'/figures/'+simulation_name+'_Vband', az_nbins=18)
+        #     chi2_sum_pdi_i, chi2_red_pdi_i, loglike_pdi_i, n_data_points_pdi_i= obp.profiles_chi2(pdi_data_i['pi'], results_i['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True, 
+        #                                                                                         save=str(workdir)+'/figures/'+simulation_name+'_Iband', az_nbins=18)   
             
         
         loss_v=1-metrics_v['ssim']
@@ -477,17 +566,17 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         num_points_total+=num_points_pionier + num_points_gravity + num_points_matisse_l + num_points_matisse_n
         loglike_total+=loglike_pionier+loglike_gravity+loglike_matisse_l+loglike_matisse_n
         i_num+=4
-    if fidelity["stage"] in ['F2','F3']:
-        chi_total+= chi2_sum_pdi_i + chi2_sum_pdi_v + chi2_sum_pdi_h
-        num_points_total+= n_data_points_pdi_i + n_data_points_pdi_v + n_data_points_pdi_h
-        loglike_total+= loglike_pdi_i + loglike_pdi_v + loglike_pdi_h
-        i_num+=3
+    # if fidelity["stage"] in ['F2','F3']:
+    #     chi_total+= chi2_sum_pdi_i + chi2_sum_pdi_v + chi2_sum_pdi_h
+    #     num_points_total+= n_data_points_pdi_i + n_data_points_pdi_v + n_data_points_pdi_h
+    #     loglike_total+= loglike_pdi_i + loglike_pdi_v + loglike_pdi_h
+    #     i_num+=3
          
     
     chi2_red_total = chi_total/(num_points_total-i_num)  # reduced chi2 - not sure about number of free parameters here
     print(f"Total reduced chi2: {chi2_red_total}, loglike: {loglike_total}")
 
-    if fidelity["stage"] in ["F5"]:
+    if fidelity["stage"] in ['F2','F3',"F5"]:
         chi2_red_total+= (loss_h + loss_v + loss_i)*100  # weighting factor to bring SSIM losses to similar scale as chi2
    
     return chi2_red_total
