@@ -401,6 +401,30 @@ def compute_grid(img: np.ndarray,
     R = np.sqrt(X**2 + Y**2)
     return R, x, y, X, Y
 
+def center_crop(arr, half, center=None):
+        if half is None:
+            return arr
+        ny, nx = arr.shape
+        cy, cx = (ny // 2, nx // 2) if center is None else center
+        y0, y1 = cy - half, cy + half
+        x0, x1 = cx - half, cx + half
+        return arr[y0:y1, x0:x1]
+
+def crop_to_same_size(img1, img2):
+            min_size= min(img1.shape[0], img2.shape[0], img1.shape[1], img2.shape[1])
+            half_size= min_size//2
+            if max(img1.shape)!= min_size:
+                print(f"[obriy_mcfost] Cropping data to size: {min_size}x{min_size}")
+                img1_cropped= center_crop(img1, half_size)
+            else:
+                img1_cropped= img1
+            if max(img2.shape)!= min_size:
+                print(f"[obriy_mcfost] Cropping model to size: {min_size}x{min_size}")
+                img2_cropped= center_crop(img2, half_size)
+            else:
+                img2_cropped= img2 
+            return img1_cropped, img2_cropped
+
 def plot_polarimetric_image(
     image_to_plot: np.ndarray,
     ps_mas: Optional[float],
@@ -496,15 +520,7 @@ def plot_polarimetric_image(
     """
 
     # --- helpers ---
-    def _center_crop(arr, half, center=None):
-        if half is None:
-            return arr
-        ny, nx = arr.shape
-        cy, cx = (ny // 2, nx // 2) if center is None else center
-        y0, y1 = cy - half, cy + half
-        x0, x1 = cx - half, cx + half
-        return arr[y0:y1, x0:x1]
-
+    
     def _block_reduce_sum(a: np.ndarray, by: int, bx: int) -> np.ndarray:
         """Sum-reduce in (y,x) blocks of (by,bx). Assumes divisibility."""
         ny, nx = a.shape
@@ -530,11 +546,11 @@ def plot_polarimetric_image(
 
     # ---   p (optional) ---
     if roi_half_size is not None:
-        image_to_plot = _center_crop(image_to_plot, roi_half_size, roi_center)
+        image_to_plot = center_crop(image_to_plot, roi_half_size, roi_center)
         if aolp_quiver:
-            Q = _center_crop(Q, roi_half_size, roi_center)
-            U = _center_crop(U, roi_half_size, roi_center)
-            I = _center_crop(I, roi_half_size, roi_center)
+            Q = center_crop(Q, roi_half_size, roi_center)
+            U = center_crop(U, roi_half_size, roi_center)
+            I = center_crop(I, roi_half_size, roi_center)
 
 
 
@@ -1913,7 +1929,7 @@ def polarimetric_analysis(
         results['radial_profile']=radial_profile
         results['azimuthal_profile']=az_profile
 
-        return results
+        return results 
 
 
 

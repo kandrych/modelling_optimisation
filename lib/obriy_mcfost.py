@@ -403,21 +403,39 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
         chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, vistype='vis', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
         
-    if fidelity["stage"] in ['F2','F3']:
+    if fidelity["stage"] in ['F2','F3', "F4", "F5"]:
         results_i=obp.polarimetric_analysis(str(workdir), 0.55, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Iband')
-        chi2_sum_pdi_i, chi2_red_pdi_i, loglike_pdi_i, n_data_points_pdi_i= obp.profiles_chi2(pdi_data_i['pi'], results_i['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True,
-                                                                                            save=str(workdir)+'/figures/'+simulation_name+'_Iband', az_nbins=18)
+        data_cropped_i, model_cropped_i= obp.crop_to_same_size(pdi_data_i['pi'], results_i['mcfost_convolved_unresolved_corrected']['pi']) 
+        
+        metrics_i = obp.full_image_metrics_noshift(
+            data_cropped_i, model_cropped_i,
+            normalize="zscore",          # good default for morphology
+            ssim_win=11,                 # 7–15 is typical
+            return_pixel_chi2=True
+        )
+        
+        obp.plot_polarimetric_image(metrics_i["ssim_image"], 3.6, title='ssim', save=str(workdir)+'/figures'+'/ssim_image_I.png', image_scale='linear', roi_half_size=50)
+
         
         results_v=obp.polarimetric_analysis(str(workdir), 0.82, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Vband')
-        chi2_sum_pdi_v, chi2_red_pdi_v, loglike_pdi_v, n_data_points_pdi_v= obp.profiles_chi2(pdi_data_v['pi'], results_v['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True, 
-                                                                                             save=str(workdir)+'/figures/'+simulation_name+'_Vband', az_nbins=18)
+        data_cropped_v, model_cropped_v= obp.crop_to_same_size(pdi_data_v['pi'], results_v['mcfost_convolved_unresolved_corrected']['pi']) 
         
+        metrics_v = obp.full_image_metrics_noshift(
+            data_cropped_v, model_cropped_v,
+            normalize="zscore",          # good default for morphology
+            ssim_win=11,                 # 7–15 is typical
+            return_pixel_chi2=True
+        )
+        
+        obp.plot_polarimetric_image(metrics_v["ssim_image"], 3.6, title='ssim', save=str(workdir)+'/figures'+'/ssim_image_V.png', image_scale='linear', roi_half_size=50)
+
+
         results_h=obp.polarimetric_analysis(str(workdir), 1.63, distance_pc= 1220.0, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
@@ -425,11 +443,30 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         
         obp.plot_polarimetric_image(pdi_data_h['pi'], 12.27, title='IRAS08544-4431 H-band PI_check', save=str(workdir)+'/pi_h_band_check.png', image_scale='asinh', roi_half_size=30)
 
-        chi2_sum_pdi_h, chi2_red_pdi_h, loglike_pdi_h, n_data_points_pdi_h= obp.profiles_chi2(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi'], ps=12.27, profile_type='both', mode='sum', plot=True, 
-                                                                                             save=str(workdir)+'/figures/'+simulation_name+'_Hband', az_nbins=18)
+        data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi']) 
+        
+        metrics_h = obp.full_image_metrics_noshift(
+            data_cropped_h, model_cropped_h,
+            normalize="zscore",          # good default for morphology
+            ssim_win=11,                 # 7–15 is typical
+            return_pixel_chi2=True
+        )
+        
+        obp.plot_polarimetric_image(metrics_h["ssim_image"], 12.27, title='ssim', save=str(workdir)+'/figures'+'/ssim_image_H.png', image_scale='linear', roi_half_size=30)
+        if fidelity["stage"] in ["F2", "F3" ]:
+            chi2_sum_pdi_h, chi2_red_pdi_h, loglike_pdi_h, n_data_points_pdi_h= obp.profiles_chi2(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi'], ps=12.27, profile_type='both', mode='sum', plot=True, 
+                                                                                                save=str(workdir)+'/figures/'+simulation_name+'_Hband', az_nbins=18)
+            chi2_sum_pdi_v, chi2_red_pdi_v, loglike_pdi_v, n_data_points_pdi_v= obp.profiles_chi2(pdi_data_v['pi'], results_v['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True, 
+                                                                                                save=str(workdir)+'/figures/'+simulation_name+'_Vband', az_nbins=18)
+            chi2_sum_pdi_i, chi2_red_pdi_i, loglike_pdi_i, n_data_points_pdi_i= obp.profiles_chi2(pdi_data_i['pi'], results_i['mcfost_convolved_unresolved_corrected']['pi'], ps=3.6, profile_type='both', mode='sum', plot=True, 
+                                                                                                save=str(workdir)+'/figures/'+simulation_name+'_Iband', az_nbins=18)   
+            
+        
+        loss_v=1-metrics_v['ssim']
+        loss_i=1-metrics_i['ssim']
+        loss_h=1-metrics_h['ssim']
+        print(f"PDI SSIM losses: I-band: {loss_i}, V-band: {loss_v}, H-band: {loss_h}")
 
-
-    
 
     chi_total= chi2_sed 
     num_points_total= len(data_sed[0]) 
@@ -445,9 +482,12 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         num_points_total+= n_data_points_pdi_i + n_data_points_pdi_v + n_data_points_pdi_h
         loglike_total+= loglike_pdi_i + loglike_pdi_v + loglike_pdi_h
         i_num+=3
-    
+         
     
     chi2_red_total = chi_total/(num_points_total-i_num)  # reduced chi2 - not sure about number of free parameters here
     print(f"Total reduced chi2: {chi2_red_total}, loglike: {loglike_total}")
 
+    if fidelity["stage"] in ["F5"]:
+        chi2_red_total+= (loss_h + loss_v + loss_i)*100  # weighting factor to bring SSIM losses to similar scale as chi2
+   
     return chi2_red_total
