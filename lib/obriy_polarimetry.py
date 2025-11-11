@@ -1842,7 +1842,7 @@ def polarimetric_analysis(
         
             
         if convolution_mode!='none':
-                pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=200, critlim=0.015, image_cut=0)
+                pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0)
 
                 results['mcfost_convolved']={'img_q':Q_conv,
                                                 'img_u':U_conv,
@@ -1902,7 +1902,7 @@ def polarimetric_analysis(
         else:
             print('Deconvolution of unresolved corrected images')
             # Create PSF for deconvolution
-            pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=200, critlim=0.015, image_cut=0, plot_lim=100)
+            pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100)
 
         
         results['mcfost_convolved_unresolved_corrected']={'img_q':q_corr_conv,
