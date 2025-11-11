@@ -211,7 +211,7 @@ def load_mcfost_images_1wave(
             ax[1][3].imshow(img_disk_th_sct, color_map)
             ax[1][3].set_title('$I_{disk,scat,th}$')
             plt.suptitle(str(wave)+r' $\mu m$, '+title_addition)
-            plt.tight_layout()
+            #plt.tight_layout()
             #plt.show()
             #save the plots
             if save_plots:
@@ -677,7 +677,7 @@ def plot_polarimetric_image(
             pass
 
     ax.set_title(title, fontsize=16)
-    plt.tight_layout()
+    #plt.tight_layout()
 
     if save:
         plt.savefig(save, bbox_inches="tight", pad_inches=0.1)
@@ -949,7 +949,7 @@ def plot_image_grid(
             fig.text(x, 0.95 if colorbar == "shared" else 1.0, text, fontsize=fontsize_titles, ha='center', va='bottom')
 
     if tight and colorbar != "shared":
-        plt.tight_layout()
+        #plt.tight_layout()
         plt.subplots_adjust(wspace=0.25, hspace=0.01)
     if show:
         plt.show(fig)
@@ -1699,7 +1699,7 @@ def polarimetric_analysis(
     simulation_dir: str,
     wavelength: float,
     *,
-    distance_pc: float = 1220.0, #important only to plot size in au and mas
+    distance_pc: float = 1000.0, #important only to plot size in au and mas
     camera: Optional[Literal["zimpol", "irdis"]] = None,
     pixel_scale_mas: Optional[float] = None,
     convolution_mode: Literal["synthetic", "file", "none"] = "synthetic",

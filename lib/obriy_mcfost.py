@@ -424,7 +424,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     if fidelity["stage"] in ['F2','F3', "F4", "F5", "F6"]:
         print('[obriy_mcfost] Polarimetric analysis started')
 
-        results_i=obp.polarimetric_analysis(str(workdir), 0.55, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'], psf_cut=100, 
+        results_i=obp.polarimetric_analysis(str(workdir), 0.55, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'], psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Iband')
@@ -452,7 +452,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
 
         
-        results_v=obp.polarimetric_analysis(str(workdir), 0.82, distance_pc= 1220.0, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
+        results_v=obp.polarimetric_analysis(str(workdir), 0.82, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
                                                                                                     image_scale='asinh', radial_limit_mas=500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Vband')
@@ -480,7 +480,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                     extras={"ps_mas": 3.6, "notes": "zscore"}
                     )
         try:
-            results_h=obp.polarimetric_analysis(str(workdir), 1.63, distance_pc= 1220.0, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
+            results_h=obp.polarimetric_analysis(str(workdir), 1.63, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
                                                                                                         image_scale='asinh', radial_limit_mas=500.0,
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                         theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Hband')
@@ -511,15 +511,10 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             metrics_h={'ssim':-1.0,'ncc':-1.0} #
 
 
-        images_list = [data_cropped_v, model_cropped_v,
-                       data_cropped_i, model_cropped_i]
+        images_list = [data_cropped_v, model_cropped_v]
                 
-        titles = [
-                  'V-band data', 'V-band model',
-                  'I-band data', 'I-band model']
-        ps_list=[
-                 3.6, 3.6,
-                 3.6, 3.6]
+        titles = ['V-band data', 'V-band model']
+        ps_list=[3.6, 3.6]
         fig, axs = obp.plot_image_grid(
                         images=images_list,
                         ps_mas=ps_list,
@@ -534,7 +529,30 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                         figsize=(12, 6),
                         show=False
                         )
-        fig.savefig(str(workdir)+'/figures'+'/v_i_data_model_comparison.png', dpi=150, bbox_inches='tight')
+        fig.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
+        plt.close(fig)
+
+
+
+        images_list = [data_cropped_i, model_cropped_i]
+                
+        titles = ['I-band data', 'I-band model']
+        ps_list=[3.6, 3.6]
+        fig, axs = obp.plot_image_grid(
+                        images=images_list,
+                        ps_mas=ps_list,
+                        nrows=2,
+                        ncols=2,
+                        titles=titles,
+                        group_headers=[(0.31, 'Data'), (0.72, 'Model')],
+                        scale="asinh",
+                        roi_half_size=50,          
+                        per_panel_autoscale=True,
+                        colorbar="individual",
+                        figsize=(12, 6),
+                        show=False
+                        )
+        fig.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
         plt.close(fig)
 
         if fidelity["stage"] != "F6":
