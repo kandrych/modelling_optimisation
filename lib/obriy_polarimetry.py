@@ -53,7 +53,11 @@ import cv2
 
 import shutil
 
+
+import json, csv
+from datetime import datetime
 from pathlib import Path
+from typing import Sequence
 
 
 import lib.obriy_general as obg
@@ -401,26 +405,41 @@ def compute_grid(img: np.ndarray,
     R = np.sqrt(X**2 + Y**2)
     return R, x, y, X, Y
 
-def center_crop(arr, half, center=None):
-        if half is None:
-            return arr
-        ny, nx = arr.shape
-        cy, cx = (ny // 2, nx // 2) if center is None else center
-        y0, y1 = cy - half, cy + half
-        x0, x1 = cx - half, cx + half
-        return arr[y0:y1, x0:x1]
+def center_crop(arr, target_h, target_w=None, center=None):
+    if target_w is None:
+        target_w = target_h
+    H, W = arr.shape
+    if target_h > H or target_w > W:
+        raise ValueError("target size larger than array")
+
+    if center is None:
+        cy, cx = H / 2.0, W / 2.0
+    else:
+        cy, cx = center
+
+    # ensure exact size and preserve center even for odd/even combos
+    y0 = int(np.floor(cy - (target_h - 1) / 2.0))
+    x0 = int(np.floor(cx - (target_w - 1) / 2.0))
+    y1 = y0 + target_h
+    x1 = x0 + target_w
+
+    # # clamp to image bounds if the chosen center is near edges
+    # y0 = max(0, min(y0, H - target_h)); y1 = y0 + target_h
+    # x0 = max(0, min(x0, W - target_w)); x1 = x0 + target_w
+
+    return arr[y0:y1, x0:x1]
 
 def crop_to_same_size(img1, img2):
             min_size= min(img1.shape[0], img2.shape[0], img1.shape[1], img2.shape[1])
-            half_size= min_size//2
-            if max(img1.shape)!= min_size:
+            
+            if max(img1.shape)> min_size:
                 print(f"[obriy_mcfost] Cropping data to size: {min_size}x{min_size}")
-                img1_cropped= center_crop(img1, half_size)
+                img1_cropped= center_crop(img1, min_size)
             else:
                 img1_cropped= img1
-            if max(img2.shape)!= min_size:
+            if max(img2.shape)> min_size:
                 print(f"[obriy_mcfost] Cropping model to size: {min_size}x{min_size}")
-                img2_cropped= center_crop(img2, half_size)
+                img2_cropped= center_crop(img2, min_size)
             else:
                 img2_cropped= img2 
             return img1_cropped, img2_cropped
@@ -546,11 +565,15 @@ def plot_polarimetric_image(
 
     # ---   p (optional) ---
     if roi_half_size is not None:
-        image_to_plot = center_crop(image_to_plot, roi_half_size, roi_center)
-        if aolp_quiver:
-            Q = center_crop(Q, roi_half_size, roi_center)
-            U = center_crop(U, roi_half_size, roi_center)
-            I = center_crop(I, roi_half_size, roi_center)
+        if roi_half_size*2 < min(image_to_plot.shape):
+            image_to_plot = center_crop(image_to_plot, roi_half_size*2,center= roi_center)
+            if aolp_quiver:
+                Q = center_crop(Q, roi_half_size*2, center=roi_center)
+                U = center_crop(U, roi_half_size*2, center=roi_center)
+                I = center_crop(I, roi_half_size*2, center=roi_center)
+        else:
+            print(f"[obriy_polarimetry] ROI half size {roi_half_size} too large for image shape {image_to_plot.shape}. Disabling cropping for plot.")
+            roi_half_size= None  # disable cropping if too large
 
 
 
@@ -737,7 +760,7 @@ def compute_qphi_uphi_pi(q: np.ndarray, u: np.ndarray) -> Tuple[np.ndarray, np.n
 
 def plot_image_grid(
     images: List[np.ndarray],
-    ps_mas: float,
+    ps_mas: float | Sequence[float],
     *,
     nrows: int,
     ncols: int,
@@ -814,35 +837,35 @@ def plot_image_grid(
     shapes = {im.shape for im in images}
     if len(shapes) != 1:
         raise ValueError("All images must have the same shape.")
-    
-    
-    # --- choose transform
+
+    # normalize ps_mas
+    if isinstance(ps_mas, (int, float)):
+        ps_list = [float(ps_mas)] * len(images)
+    else:
+        ps_list = list(ps_mas)
+        if len(ps_list) != len(images):
+            raise ValueError(f"ps_mas must be a scalar or a sequence of length {len(images)}.")
+        ps_list = [float(x) for x in ps_list]
+
+    # choose transform
     allowed_scales = {"linear", "log", "asinh"}
     if scale not in allowed_scales:
         raise ValueError(f"scale must be one of {allowed_scales}, got '{scale}'.")
 
     def transform(img: np.ndarray) -> np.ndarray:
         if scale == "log":
-            # mask non-positive values for log display
             with np.errstate(divide="ignore", invalid="ignore"):
                 out = np.full_like(img, np.nan, dtype=float)
                 pos = img > 0
                 out[pos] = np.log10(img[pos])
             return out
         if scale == "asinh":
-             return np.arcsinh(img)
+            return np.arcsinh(img)
         return img
 
-    # --- extent in mas (keep your original orientation: extent=(-d, d, d, -d))
     ny, nx = images[0].shape
-    if roi_half_size:
-        d=roi_half_size * ps_mas
-    else:
-        d = (np.max([nx, ny]) - 1) * ps_mas / 2.0
 
-    extent = (-d, d, d, -d)
-
-    # --- helper for central crop min/max
+    # helper for central crop min/max (still in pixels; angular extent handled per-panel)
     def crop_minmax(img_t: np.ndarray) -> Tuple[float, float]:
         if roi_half_size is None:
             sub = img_t
@@ -851,13 +874,12 @@ def plot_image_grid(
                 cy, cx = roi_center
             else:
                 cy, cx = ny // 2, nx // 2
-            y0, y1 = int(cy - roi_half_size/2), int(cy + roi_half_size/2)
-            x0, x1 = int(cx - roi_half_size/2), int(cx + roi_half_size/2)
+            hh = int(roi_half_size)
+            y0, y1 = int(cy - hh), int(cy + hh)
+            x0, x1 = int(cx - hh), int(cx + hh)
             sub = img_t[y0:y1, x0:x1]
-        # robust min/max even if NaNs present
         return (np.nanmin(sub), np.nanmax(sub))
-    
-    # --- precompute transforms and min/max
+
     images_t = [transform(im) for im in images]
 
     if per_panel_autoscale:
@@ -868,24 +890,31 @@ def plot_image_grid(
         global_vmax = np.max([mx for (mn, mx) in rois])
         minmax = [(global_vmin, global_vmax) for _ in images_t]
 
-    # --- plot
     fig, axs = plt.subplots(nrows, ncols, figsize=figsize)
     axs = np.atleast_2d(axs)
 
     if hide_axis_rules is None:
         def hide_axis_rules(ax, r, c):
-            # Example: hide x labels on top row; hide y labels on right 3 panels per row
             if r == 0:
                 ax.get_xaxis().set_visible(False)
             if c > 0:
                 ax.get_yaxis().set_visible(False)
 
-    im_handles = []  # store imshow handles for colorbars
-    for idx, (ax, imt, (vmin, vmax)) in enumerate(zip(axs.flat, images_t, minmax)):
+    # per-panel extent and axes limits using each image's ps
+    def panel_extent(ps_val: float) -> Tuple[float, float, float, float]:
+        if roi_half_size:
+            d = roi_half_size * ps_val
+        else:
+            d = (max(nx, ny) - 1) * ps_val / 2.0
+        return (-d, d, d, -d), d
+
+    im_handles = []
+    for idx, (ax, imt, (vmin, vmax), ps_val) in enumerate(zip(axs.flat, images_t, minmax, ps_list)):
+        extent, d = panel_extent(ps_val)
         im = ax.imshow(imt, vmin=vmin, vmax=vmax, extent=extent, cmap=cmap)
         im_handles.append(im)
-        ax.set_xlim(-d,d)
-        ax.set_ylim( d, -d)  
+        ax.set_xlim(-d, d)
+        ax.set_ylim( d, -d)
         ax.set_xlabel("mas", fontsize=fontsize_axes)
         ax.set_ylabel("mas", fontsize=fontsize_axes)
         ax.tick_params(axis='both', labelsize=fontsize_axes)
@@ -893,47 +922,31 @@ def plot_image_grid(
         hide_axis_rules(ax, r, c)
         if titles and idx < len(titles) and titles[idx]:
             ax.set_title(titles[idx], fontsize=fontsize_titles)
-        
-    # --- colorbars
+
+    # colorbars
     cbar_kwargs = cbar_kwargs or {}
     if colorbar == "shared":
         if per_panel_autoscale:
             print("Warning: shared colorbar with per_panel_autoscale=True corresponds only to last image.")
-        # compute the tight bounding box of all subplots
         boxes = np.array([ax.get_position().extents for ax in axs.ravel()])
         left, bottom = boxes[:, 0].min(), boxes[:, 1].min()
         right, top   = boxes[:, 2].max(), boxes[:, 3].max()
-
-        # space for colorbar to the right of the whole grid
-        cbar_pad   = 0.01   # gap between grid and colorbar (figure coords)
-        cbar_width = 0.02   # colorbar width (figure coords)
-        cbar_ax = fig.add_axes([right + cbar_pad, bottom, cbar_width, top - bottom])
-
-        # one shared colorbar (use any image handle; they share the same cmap & norm if global scale is used)
-        im_ref = im_handles[-1]
-        cbar = fig.colorbar(im_ref, cax=cbar_ax) 
+        cbar_ax = fig.add_axes([right + 0.01, bottom, 0.02, top - bottom])
+        cbar = fig.colorbar(im_handles[-1], cax=cbar_ax)
         if cbar_label:
             cbar.set_label(cbar_label, fontsize=fontsize_axes)
         cbar.ax.tick_params(labelsize=fontsize_axes)
-        
     elif colorbar == "individual":
-        # one colorbar per axes
         for ax, im in zip(axs.flat, im_handles):
             cbar = plt.colorbar(im, ax=ax, **({"orientation": "vertical", "fraction": 0.046, "pad": 0.04} | cbar_kwargs))
             if cbar_label: cbar.set_label(cbar_label, fontsize=fontsize_axes-2)
             cbar.ax.tick_params(labelsize=fontsize_axes-2)
-    elif colorbar == "none":
-        pass
-    else:
+    elif colorbar != "none":
         raise ValueError("colorbar must be one of {'shared','individual','none'}")
 
-    # group headers at top (figure coords)
     if group_headers:
         for x, text in group_headers:
-            if colorbar == "shared":
-                fig.text(x, .95, text, fontsize=fontsize_titles, ha='center', va='bottom')
-            else:
-                fig.text(x, 1.0, text, fontsize=fontsize_titles, ha='center', va='bottom')
+            fig.text(x, 0.95 if colorbar == "shared" else 1.0, text, fontsize=fontsize_titles, ha='center', va='bottom')
 
     if tight and colorbar != "shared":
         plt.tight_layout()
@@ -941,8 +954,8 @@ def plot_image_grid(
     if show:
         plt.show(fig)
     plt.close(fig)
-
     return fig, axs
+
 
 def rescale_and_recalculate_all_polarim_img(
     img_q: np.ndarray,
@@ -1868,6 +1881,10 @@ def polarimetric_analysis(
         q_phi_corr_conv, u_phi_corr_conv, pi_corr_conv, phi =compute_qphi_uphi_pi(q_corr_conv, u_corr_conv)
 
         aolp_corr_conv=0.5*np.arctan2(u_corr_conv, q_corr_conv)
+
+        metrics_corr_conv=polarimetric_metrics(I_conv,q_corr_conv, u_corr_conv, q_phi_corr_conv, u_phi_corr_conv,pi_corr_conv)
+        metrics_corr_conv['dolp_unres']=dolp_unres_conv
+        metrics_corr_conv['aolp_unres']=aolp_unres_conv
         
         results['mcfost_convolved_unresolved_corrected']={'img_q':q_corr_conv,
                                                 'img_u':u_corr_conv,
@@ -1875,9 +1892,8 @@ def polarimetric_analysis(
                                                 'u_phi':u_phi_corr_conv,
                                                 'pi':pi_corr_conv,
                                                 'aolp_corr':aolp_corr_conv,
-                                                'dolp_unres':dolp_unres_conv,
-                                                'aolp_unres':aolp_unres_conv,
-                                                'phi':phi
+                                                'phi':phi,
+                                                'metrics':metrics_corr_conv,
                                                 }
 
         # print(f'Unresolved pol: {dolp_unres*100} %, angle: {aolp_unres} deg')
@@ -1921,13 +1937,13 @@ def polarimetric_analysis(
 
 
 
-        radial_profile=radial_br_profile(pi_corr_conv, inst_ps_mas,deprojection[0],deprojection[1], R_limit=radial_limit_mas/inst_ps_mas, mode='sum',save=fig_dir+"mcfost_", plot=True,background_annulus_mas=background_annulus_mas)
+        # radial_profile=radial_br_profile(pi_corr_conv, inst_ps_mas,deprojection[0],deprojection[1], R_limit=radial_limit_mas/inst_ps_mas, mode='sum',save=fig_dir+"mcfost_", plot=True,background_annulus_mas=background_annulus_mas)
 
 
-        az_profile=azimuthal_profile(pi_corr_conv, inst_ps_mas, r_in_mas=azimuthal_r_in_mas, r_out_mas=azimuthal_r_out_mas, plot=True,mode='sum', save=fig_dir+"mcfost_", nbins=azimuthal_nbins, theta0=theta0)
+        # az_profile=azimuthal_profile(pi_corr_conv, inst_ps_mas, r_in_mas=azimuthal_r_in_mas, r_out_mas=azimuthal_r_out_mas, plot=True,mode='sum', save=fig_dir+"mcfost_", nbins=azimuthal_nbins, theta0=theta0)
 
-        results['radial_profile']=radial_profile
-        results['azimuthal_profile']=az_profile
+        # results['radial_profile']=radial_profile
+        # results['azimuthal_profile']=az_profile
 
         return results 
 
@@ -2218,3 +2234,71 @@ def full_image_metrics_noshift(
 
     return result
 
+
+
+
+
+def _to_py(obj):
+    """Make nested metrics JSON-serialisable (handles NumPy types/arrays)."""
+
+    if isinstance(obj, dict):
+        return {k: _to_py(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_py(v) for v in obj]
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if hasattr(obj, "tolist"):
+        return obj.tolist()
+    return obj
+
+def save_band_metrics(
+    workdir: Path,
+    *,
+    band: str,
+    analysis_metrics: dict | None,   # e.g. metrics_h from full_image_metrics_noshift
+    ssim_score: float | None,        # e.g. metrics_h["ssim_score"]
+    ncc_score: float | None,         # e.g. metrics_h["ncc"]
+    extras: dict | None = None
+) -> None:
+    """
+    Append one JSON line with both pipeline and analysis metrics.
+    Also append/update a tiny CSV summary for quick skims.
+    """
+    workdir = Path(workdir)
+    (workdir / "figures").mkdir(parents=True, exist_ok=True)
+
+    entry = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "simulation": workdir.name,
+        "band": band,
+        "analysis_metrics": _to_py(analysis_metrics) if analysis_metrics is not None else None,
+        "ssim_score": float(ssim_score) if ssim_score is not None else None,
+        "ncc_score": float(ncc_score) if ncc_score is not None else None,
+    }
+    if extras:
+        entry["extra"] = _to_py(extras)
+
+    # JSONL (append-only, safe for concurrent runs)
+    jsonl_path = workdir / "figures" / "pdi_metrics.jsonl"
+    with open(jsonl_path, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+    # Per-band latest JSON snapshot
+    latest_path = workdir / "figures" / f"pdi_metrics_{band}_latest.json"
+    with open(latest_path, "w") as f:
+        json.dump(entry, f, indent=2)
+
+    # Append a simple CSV summary (simulation, band, ssim_score)
+    csv_path = workdir / "figures" / "pdi_metrics_summary.csv"
+    exists = csv_path.exists()
+    with open(csv_path, "a", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["timestamp", "simulation", "band", "ssim_score", "ncc_score"])
+        if not exists:
+            w.writeheader()
+        w.writerow({
+            "timestamp": entry["timestamp"],
+            "simulation": entry["simulation"],
+            "band": band,
+            "ssim_score": entry["ssim_score"],
+            "ncc_score": entry["ncc_score"],
+        })

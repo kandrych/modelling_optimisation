@@ -327,6 +327,7 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
         elif key=='inclination':
             pf.set_param('imin', cfg[key])
             pf.set_param('imax', cfg[key])
+        
         else:
             print(f"Warning: parameter {key} not found in MCFOST parameter file.")
     # Set fidelity-related params

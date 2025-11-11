@@ -226,16 +226,16 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         products = ["sed", "vis2_1perband"]
     elif stage == "F2":
         img_res = 2
-        products = ["sed", "vis2_1perband", "pdi_radial"]
+        products = ["sed", "vis2_1perband", "pdi"]
     elif stage == "F3":
         img_res = 2
-        products = ["sed", "vis2_chromatic", "pdi_radial", "pdi_colour"]
+        products = ["sed", "vis2_chromatic", "pdi"]
     elif stage == "F4":
         img_res = 2
-        products = ["sed", "vis2_chromatic", "pdi_radial", "pdi_colour", "alma"]
+        products = ["sed", "vis2_chromatic", "pdi", "pdi", "alma"]
     elif stage == "F5":
         img_res = 2
-        products = ["pdi"]
+        products = ["sed","pdi"]
     else:
         raise ValueError(f"Unknown stage for budget {budget}: {stage}")
 
@@ -313,6 +313,7 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
             try:
                 data_filename = '/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
                 data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
+                print('SED data loaded')
             except:
                 print("[main] SED data file not found. Please check the path if your budget expects SED.")
                 data_wave, data_flux, data_err=[],[],[]
@@ -357,7 +358,7 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
             container_data_matisse_l=None
             container_data_matisse_n=None
 
-        if fidelity_stage in ['F3', 'F4', 'F5']:
+        if fidelity_stage in ['F2','F3', 'F4', 'F5']:
             
             #real PSF from observations
             figfolder_psf='/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/psf/'
@@ -390,6 +391,8 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
             file_psf='iras08544-4431_calib_H_I_meancombined.fits'
             psf_h=obp.Loadimage(pdi_folder_h,file_psf)
             obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
+
+            print('Polarimetric data loaded')
         else:
             psf_v=None
             psf_i=None
@@ -509,8 +512,8 @@ def main():
         # You can also set output directories, logging, etc.
     )
     work_root = Path(args.working_root)
-
-    data_arg = load_data(args.data_root, str(work_root),args.max_budget)
+    max_fidelity = map_budget_to_fidelity(args.max_budget)
+    data_arg = load_data(args.data_root, str(work_root),max_fidelity["stage"])
 
     trial_folder= work_root/"trials/"
     trial_folder.mkdir(exist_ok=True)
