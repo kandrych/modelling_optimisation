@@ -327,6 +327,8 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
     for key in cfg.keys():
         if key in pf.params:
             pf.set_param(key, cfg[key])
+            if key=='zone_1_Rin':
+                pf.set_param('zone_1_Rref', cfg[key]) #scale-height is setted up at the inner rim.
         elif key=='inclination':
             pf.set_param('imin', cfg[key])
             pf.set_param('imax', cfg[key])
@@ -379,7 +381,7 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path) -> None:
 
 
 
-def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dict[str, Any]) -> float:
+def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dict[str, Any], args) -> float:
     """
     Read MCFOST outputs and compute a single scalar loss.
     Recommended: Gaussian-error negative log-likelihood combining SED/vis2/PDI.
@@ -428,10 +430,16 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                                                                                     image_scale='asinh', radial_limit_mas=500.0,
                                                                                                     deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                     theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Iband')
-        data_cropped_i, model_cropped_i= obp.crop_to_same_size(pdi_data_i['pi'], results_i['mcfost_convolved_unresolved_corrected']['pi']) 
         
+        if args.correct_unresolved_polarimetry:
+            print('[obriy_mcfost] Applying unresolved polarization correction for I band')
+            data_cropped_i, model_cropped_i= obp.crop_to_same_size(pdi_data_i['pi'], results_i['mcfost_convolved_unresolved_corrected']['pi']) 
+        else:
+            print('[obriy_mcfost] No unresolved polarization correction applied for I band')
+            data_cropped_i, model_cropped_i= obp.crop_to_same_size(pdi_data_i['pi'], results_i['mcfost_convolved']['pi'])   
+        # Calculate metrics for arcsinh-scaled images to highlight morphology
         metrics_i = obp.full_image_metrics_noshift(
-            data_cropped_i, model_cropped_i,
+            np.arcsinh(data_cropped_i), np.arcsinh(model_cropped_i),
             normalize="zscore",          # good default for morphology
             ssim_win=11,                 # 7–15 is typical
             return_pixel_chi2=True
@@ -459,11 +467,16 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         
         obp.plot_polarimetric_image(results_v['mcfost_convolved_unresolved_corrected']['pi_deconvolved'], 3.6, title=f'Model PI, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_pi_corr_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
         obp.plot_polarimetric_image(results_v['mcfost_convolved']['pi_deconvolved'], 3.6, title=f'Model PI, conv, decon', save=str(workdir)+'/figures'+'/model_pi_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
-
-        data_cropped_v, model_cropped_v= obp.crop_to_same_size(pdi_data_v['pi'], results_v['mcfost_convolved_unresolved_corrected']['pi']) 
+        
+        if args.correct_unresolved_polarimetry:
+            print('[obriy_mcfost] Applying unresolved polarization correction for I band')
+            data_cropped_v, model_cropped_v= obp.crop_to_same_size(pdi_data_v['pi'], results_v['mcfost_convolved_unresolved_corrected']['pi']) 
+        else:
+            print('[obriy_mcfost] No unresolved polarization correction applied for I band')
+            data_cropped_v, model_cropped_v= obp.crop_to_same_size(pdi_data_v['pi'], results_v['mcfost_convolved']['pi'])   
         
         metrics_v = obp.full_image_metrics_noshift(
-            data_cropped_v, model_cropped_v,
+            np.arcsinh(data_cropped_v), np.arcsinh(model_cropped_v),
             normalize="zscore",          # good default for morphology
             ssim_win=11,                 # 7–15 is typical
             return_pixel_chi2=True
@@ -485,11 +498,16 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                         theta0=0.0, plot=True, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Hband')
             
-            
-            data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi']) 
+           
+            if args.correct_unresolved_polarimetry:
+                print('[obriy_mcfost] Applying unresolved polarization correction for H band')
+                data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi']) 
+            else:
+                print('[obriy_mcfost] No unresolved polarization correction applied for H band')
+                data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pi'], results_h['mcfost_convolved']['pi']) 
             
             metrics_h = obp.full_image_metrics_noshift(
-                data_cropped_h, model_cropped_h,
+                np.arcsinh(data_cropped_h), np.arcsinh(model_cropped_h),
                 normalize="zscore",          # good default for morphology
                 ssim_win=11,                 # 7–15 is typical
                 return_pixel_chi2=True
@@ -518,18 +536,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         fig, axs = obp.plot_image_grid(
                         images=images_list,
                         ps_mas=ps_list,
-                        nrows=2,
+                        nrows=1,
                         ncols=2,
                         titles=titles,
                         group_headers=[(0.31, 'Data'), (0.72, 'Model')],
-                        scale="asinh",
-                        roi_half_size=50,          
+                        scale="linear",
+                        roi_half_size=60,          
                         per_panel_autoscale=True,
                         colorbar="individual",
                         figsize=(12, 6),
                         show=False
                         )
-        fig.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
+        plt.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
         plt.close(fig)
 
 
@@ -541,18 +559,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         fig, axs = obp.plot_image_grid(
                         images=images_list,
                         ps_mas=ps_list,
-                        nrows=2,
+                        nrows=1,
                         ncols=2,
                         titles=titles,
                         group_headers=[(0.31, 'Data'), (0.72, 'Model')],
-                        scale="asinh",
-                        roi_half_size=50,          
+                        scale="linear",
+                        roi_half_size=60,          
                         per_panel_autoscale=True,
                         colorbar="individual",
                         figsize=(12, 6),
                         show=False
                         )
-        fig.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
+        plt.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
         plt.close(fig)
 
         if fidelity["stage"] != "F6":
@@ -567,14 +585,14 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                             ncols=2,
                             titles=titles,
                             group_headers=[(0.31, 'Data'), (0.72, 'Model')],
-                            scale="asinh",
-                            roi_half_size=30,          
+                            scale="linear",
+                            roi_half_size=40,          
                             per_panel_autoscale=True,
                             colorbar="individual",
                             figsize=(8, 4),
                             show=False
                             )
-            fig.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
+            plt.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
             plt.close(fig)  
 
 

@@ -478,7 +478,7 @@ def make_unique_trial_dir(scratch_root: Path, seed: int, budget: float) -> Path:
             idx += 1
             trial_dir = base.with_name(f"{base.name}_{idx:03d}")
 
-def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str, Any], scratch_root: str) -> float:
+def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str, Any], scratch_root: str, args) -> float:
     fidelity = map_budget_to_fidelity(budget)
 
     # Each trial gets a private scratch dir
@@ -501,7 +501,7 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
 
     # Score outputs
 
-    loss = obm.load_and_score_outputs(fidelity, trial_dir, data_arg)
+    loss = obm.load_and_score_outputs(fidelity, trial_dir, data_arg, args)
 
     return float(loss)
 
@@ -520,6 +520,7 @@ def main():
     p.add_argument("--max-budget", type=float, default=3.0)
     p.add_argument("--n-trials", type=int, default=80)
     p.add_argument("--seed", type=int, default=-1)# Random seed for SMAC
+    p.add_argument("--correct-unresolved-polarimetry", action="store_true", help="Apply correction for unresolved central source polarimetry")
 
 
     args = p.parse_args()
@@ -563,7 +564,7 @@ def main():
 
     # SMAC Objective wrapper with extra kwargs via lambda/closure
     def smac_objective(cfg, seed: int, budget: float) -> float:
-        return objective(cfg, seed, budget, data_arg=data_arg, scratch_root=trial_folder)
+        return objective(cfg, seed, budget, data_arg=data_arg, scratch_root=trial_folder, args=args)
 
     smac = MultiFidelityFacade(
         scenario=scenario,
@@ -602,7 +603,7 @@ def main():
     par_path = obm.write_mcfost_paramfile(incumbent, fidelity_result, results_dir)
     obm.run_mcfost(fidelity_result,par_path, results_dir)
     # Score outputs
-    loss = obm.load_and_score_outputs(fidelity_result, results_dir, data_arg)
+    loss = obm.load_and_score_outputs(fidelity_result, results_dir, data_arg, args)
 
 
 

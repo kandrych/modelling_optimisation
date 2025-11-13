@@ -193,24 +193,24 @@ def load_mcfost_images_1wave(
             fig, ax = plt.subplots(2, 4, figsize=(14,7))
             color_map = 'viridis' #'afmhot'
             ax[0][0].imshow(img_tot, color_map, extent=[+img_tot.shape[0]/2, -img_tot.shape[0]/2, -img_tot.shape[1]/2, img_tot.shape[1]/2])
-            ax[0][0].set_title('$I_{tot}$')
+            ax[0][0].set_title("I$_{tot}$")
             ax[0][1].imshow(img_q, color_map)
-            ax[0][1].set_title('$Q$')
+            ax[0][1].set_title('Q')
             ax[0][2].imshow(img_u, color_map)
-            ax[0][2].set_title('$U$')
+            ax[0][2].set_title('U')
             ax[0][3].imshow(img_v, color_map)
-            ax[0][3].set_title('$V$')
+            ax[0][3].set_title('V')
             ax[1][0].imshow(img_tot-img_star, color_map,extent=[+img_tot.shape[0]/2, -img_tot.shape[0]/2, -img_tot.shape[1]/2, img_tot.shape[1]/2])
-            ax[1][0].set_title('$I_{disk}$')
+            ax[1][0].set_title("I$_{disk}$")
             #ax[1][0].set_xlim([-img_tot.shape[0]/6, img_tot.shape[0]/6])
             #ax[1][0].set_ylim([-img_tot.shape[1]/6, img_tot.shape[1]/6])
             ax[1][1].imshow(img_disk_th, color_map)
-            ax[1][1].set_title('$I_{disk,th}$')
+            ax[1][1].set_title("I$_{disk,th}$")
             ax[1][2].imshow(img_star_sct, color_map)
-            ax[1][2].set_title('$I_{disk,scat,*}$')
+            ax[1][2].set_title("I$_{disk,scat,*}$")
             ax[1][3].imshow(img_disk_th_sct, color_map)
-            ax[1][3].set_title('$I_{disk,scat,th}$')
-            plt.suptitle(str(wave)+r' $\mu m$, '+title_addition)
+            ax[1][3].set_title("I$_{disk,scat,th}$")
+            plt.suptitle(str(wave)+"$\mu m$, "+title_addition)
             #plt.tight_layout()
             #plt.show()
             #save the plots
@@ -873,8 +873,9 @@ def plot_image_grid(
             if roi_center is not None:
                 cy, cx = roi_center
             else:
+                ny, nx = img_t.shape
                 cy, cx = ny // 2, nx // 2
-            hh = int(roi_half_size)
+            hh = int(roi_half_size)+5  # extra padding to avoid edge effects
             y0, y1 = int(cy - hh), int(cy + hh)
             x0, x1 = int(cx - hh), int(cx + hh)
             sub = img_t[y0:y1, x0:x1]
@@ -914,7 +915,7 @@ def plot_image_grid(
         im = ax.imshow(imt, vmin=vmin, vmax=vmax, extent=extent, cmap=cmap)
         im_handles.append(im)
         ax.set_xlim(-d, d)
-        ax.set_ylim( d, -d)
+        ax.set_ylim(-d, d)
         ax.set_xlabel("mas", fontsize=fontsize_axes)
         ax.set_ylabel("mas", fontsize=fontsize_axes)
         ax.tick_params(axis='both', labelsize=fontsize_axes)
