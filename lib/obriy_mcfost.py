@@ -547,8 +547,8 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                         figsize=(12, 6),
                         show=False
                         )
-        plt.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
-        plt.close(fig)
+        fig.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
+        plt.close()
 
 
 
@@ -570,8 +570,8 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                         figsize=(12, 6),
                         show=False
                         )
-        plt.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
-        plt.close(fig)
+        fig.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
+        plt.close()
 
         if fidelity["stage"] != "F6":
             images_list = [data_cropped_h, model_cropped_h]
@@ -592,8 +592,8 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                             figsize=(8, 4),
                             show=False
                             )
-            plt.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
-            plt.close(fig)  
+            fig.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
+            plt.close()  
 
 
 
