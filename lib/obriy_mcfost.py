@@ -359,17 +359,17 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path) -> None:
 
     run_mcfost_safe(param_path, workdir, options=[], logfile="mcfost_base.log")
 
-    if fidelity["stage"] in ("F1", "F2", "F3"):
+    if fidelity["stage"] in ("F1", "F2"):
         for w in [1.63, 2.20, 3.50, 10.0]:
             run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
     if fidelity["stage"] == "F2":
         for w in [0.55, 0.82]:
             run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
     if fidelity["stage"] == "F3": # all wavelengths for chromatic visibilities (PIONIER, MATISSE, GRAVITY) + full PDI
-        for w in [1.5,1.55,1.6,1.65,1.7,1.75,1.8,1.85,1.9,
+        for w in [0.55, 0.82, 1.5,1.55,1.6,1.63,1.65,1.7,1.75,1.8,1.85,1.9,
                   1.95,2.0,2.05,2.1,2.15,2.2,2.25,2.3,2.35,2.4,2.45,2.5,
                   2.8,2.9,3.0,3.1,3.2,3.3,3.4,3.5,3.6,3.7,3.8,3.9,4.0,4.1,4.2,4.3,
-                  7,8,9,10,11,12,13,14]:
+                  7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0]:
             run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
     if fidelity["stage"]=="F5":
         for w in [0.55, 0.82, 1.63]:
@@ -415,13 +415,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         chi2_sed, chi2_reduced_sed, loglike_sed= obs.chi2_SED_with_reddening(str(workdir.name), str(workdir.parent)+'/', data_wave=data_sed[0], data_flux=data_sed[1],data_err=data_sed[2],
                                                 plot=True, description=simulation_name)
     
-    if fidelity["stage"] in ["F1", "F2", "F3"]:
+    if fidelity["stage"] in ["F1", "F2"]:
         chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.monochromatic_chi(str(workdir), img_dir="data_1.63/", container_data=container_data_pionier, vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.63", log_plotv=False)
         chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.monochromatic_chi(str(workdir), img_dir="data_2.2/", container_data=container_data_gravity, vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY 2.2", log_plotv=False)
         chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
         chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, vistype='vis', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
     
-
+    if fidelity["stage"] in ["F3"]:
+        chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.monochromatic_chi(str(workdir), img_dir="", container_data=container_data_pionier, vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER", log_plotv=False)
+        chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.monochromatic_chi(str(workdir), img_dir="", container_data=container_data_gravity, vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY", log_plotv=False)
+        chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="", container_data=container_data_matisse_l,vistype='vis2', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L", log_plotv=True)
+        chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="", container_data=container_data_matisse_n, vistype='vis', plot=True, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N", log_plotv=False)
+    
 
     if fidelity["stage"] in ['F2','F3', "F4", "F5", "F6"]:
         print('[obriy_mcfost] Polarimetric analysis started')
@@ -531,43 +536,45 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
         images_list = [data_cropped_v, model_cropped_v]
                 
-        titles = ['V-band data', 'V-band model']
-        ps_list=[3.6, 3.6]
+        titles = ['Data', 'Model']
+        
         fig, axs = obp.plot_image_grid(
                         images=images_list,
-                        ps_mas=ps_list,
+                        ps_mas=3.6,
                         nrows=1,
                         ncols=2,
                         titles=titles,
-                        group_headers=[(0.31, 'Data'), (0.72, 'Model')],
+                        group_headers=[(0.5, 'V-band')],
                         scale="linear",
-                        roi_half_size=60,          
+                        roi_half_size=30,          
                         per_panel_autoscale=True,
+                        normalize_image=True,
                         colorbar="individual",
-                        figsize=(12, 6),
+                        figsize=(8, 4),
                         show=False
                         )
         fig.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
         plt.close()
 
-
+        
 
         images_list = [data_cropped_i, model_cropped_i]
                 
-        titles = ['I-band data', 'I-band model']
-        ps_list=[3.6, 3.6]
+        titles = ['Data', 'Model']
+        
         fig, axs = obp.plot_image_grid(
                         images=images_list,
-                        ps_mas=ps_list,
+                        ps_mas=3.6,
                         nrows=1,
                         ncols=2,
                         titles=titles,
-                        group_headers=[(0.31, 'Data'), (0.72, 'Model')],
+                        group_headers=[(0.5, 'I-band')],
                         scale="linear",
-                        roi_half_size=60,          
+                        roi_half_size=30,          
                         per_panel_autoscale=True,
+                        normalize_image=True,
                         colorbar="individual",
-                        figsize=(12, 6),
+                        figsize=(8, 4),
                         show=False
                         )
         fig.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
@@ -576,7 +583,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         if fidelity["stage"] != "F6":
             images_list = [data_cropped_h, model_cropped_h]
             titles = [
-                    'H-band data', 'H-band model']
+                    'Data', 'Model']
             
             fig, axs = obp.plot_image_grid(
                             images=images_list,
@@ -584,10 +591,11 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                             nrows=1,
                             ncols=2,
                             titles=titles,
-                            group_headers=[(0.31, 'Data'), (0.72, 'Model')],
+                            group_headers=[(0.5, 'H-band')],
                             scale="linear",
-                            roi_half_size=40,          
+                            roi_half_size=50,          
                             per_panel_autoscale=True,
+                            normalize_image=True,
                             colorbar="individual",
                             figsize=(8, 4),
                             show=False

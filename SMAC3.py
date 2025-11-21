@@ -264,22 +264,40 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
     if data_root =='demo_mac':
         data_filename = '/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
         data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
-            
-        # PIONIER data
-        data_dir_pionier, data_file_pionier = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
-        container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier, wave_lims=(1.63, 1.64))
 
-        # GRAVITY data
-        data_dir_gravity, data_file_gravity = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
-        container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity, wave_lims=(2.199, 2.201))
+        if fidelity_stage in ['F1', 'F2']:
+            # PIONIER data
+            data_dir_pionier, data_file_pionier = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
+            container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier, wave_lims=(1.63, 1.64))
 
-        # VLTI/MATISSE L-band data
-        data_dir_matisse_l, data_file_matisse_l = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
-        container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(3.48, 3.52))
+            # GRAVITY data
+            data_dir_gravity, data_file_gravity = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
+            container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity, wave_lims=(2.199, 2.201))
 
-        # VLTI/MATISSE N-band data
-        data_dir_matisse_n, data_file_matisse_n = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
-        container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(9.9, 10.10), fcorr=True)
+            # VLTI/MATISSE L-band data
+            data_dir_matisse_l, data_file_matisse_l = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
+            container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(3.48, 3.52))
+
+            # VLTI/MATISSE N-band data
+            data_dir_matisse_n, data_file_matisse_n = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
+            container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(9.9, 10.10), fcorr=True)
+        if fidelity_stage in ['F3']:
+            # PIONIER data
+            data_dir_pionier, data_file_pionier = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
+            container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier)
+
+            # GRAVITY data
+            data_dir_gravity, data_file_gravity = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
+            container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity)
+
+            # VLTI/MATISSE L-band data
+            data_dir_matisse_l, data_file_matisse_l = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
+            container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(2.95, 3.95), v2lim=1e-8)
+
+            # VLTI/MATISSE N-band data
+            data_dir_matisse_n, data_file_matisse_n = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
+            container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, fcorr=True, wave_lims=(8.0, 13.0), v2lim=1e-8)
+
 
         #real PSF from observations
         star_psf='HD83878'

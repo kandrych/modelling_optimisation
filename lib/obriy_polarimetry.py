@@ -780,6 +780,7 @@ def plot_image_grid(
     hide_axis_rules: Optional[callable] = None,  # function(ax, row, col) -> None to customise axis visibility
     tight: bool = True,
     show: bool = False,
+    normalize_image: bool = False,
 ) -> Tuple[plt.Figure, np.ndarray]:
     """
     Status: not fully verified
@@ -838,6 +839,14 @@ def plot_image_grid(
     if len(shapes) != 1:
         raise ValueError("All images must have the same shape.")
 
+    image_shape_min = np.min(np.minimum(images[0].shape, images[1].shape)) #element wise min
+
+    print('Shape_test',image_shape_min)
+
+    if roi_half_size> image_shape_min // 2:
+        print(f"[obriy_polarimetry] roi_half_size {roi_half_size} too large for image shape {images[0].shape}. Setting cropping to the size of image")
+        roi_half_size= image_shape_min // 2 -1  
+
     # normalize ps_mas
     if isinstance(ps_mas, (int, float)):
         ps_list = [float(ps_mas)] * len(images)
@@ -875,11 +884,11 @@ def plot_image_grid(
             else:
                 ny, nx = img_t.shape
                 cy, cx = ny // 2, nx // 2
-            hh = int(roi_half_size)+5  # extra padding to avoid edge effects
+            hh = int(roi_half_size)  # extra padding to avoid edge effects
             y0, y1 = int(cy - hh), int(cy + hh)
             x0, x1 = int(cx - hh), int(cx + hh)
             sub = img_t[y0:y1, x0:x1]
-        return (np.nanmin(sub), np.nanmax(sub))
+        return (np.nanmin(sub), np.nanmax(sub), sub)
 
     images_t = [transform(im) for im in images]
 
@@ -887,9 +896,9 @@ def plot_image_grid(
         minmax = [crop_minmax(imt) for imt in images_t]
     else:
         rois = [crop_minmax(imt) for imt in images_t]
-        global_vmin = np.min([mn for (mn, mx) in rois])
-        global_vmax = np.max([mx for (mn, mx) in rois])
-        minmax = [(global_vmin, global_vmax) for _ in images_t]
+        global_vmin = np.min([mn for (mn, mx,_) in rois])
+        global_vmax = np.max([mx for (mn, mx,_) in rois])
+        minmax = [(global_vmin, global_vmax, image) for image in images_t]
 
     fig, axs = plt.subplots(nrows, ncols, figsize=figsize)
     axs = np.atleast_2d(axs)
@@ -910,9 +919,15 @@ def plot_image_grid(
         return (-d, d, d, -d), d
 
     im_handles = []
-    for idx, (ax, imt, (vmin, vmax), ps_val) in enumerate(zip(axs.flat, images_t, minmax, ps_list)):
+    for idx, (ax, imt,(vmin, vmax, imt_cropped), ps_val) in enumerate(zip(axs.flat,images_t, minmax, ps_list)):
+        nx, ny = imt_cropped.shape
         extent, d = panel_extent(ps_val)
-        im = ax.imshow(imt, vmin=vmin, vmax=vmax, extent=extent, cmap=cmap)
+        if normalize_image:
+            rng = imt_cropped.max()
+            imt = (imt_cropped)*1/rng
+            im = ax.imshow(imt, extent=extent, cmap=cmap)
+        else:
+            im = ax.imshow(imt_cropped, vmin=vmin, vmax=vmax, extent=extent, cmap=cmap)
         im_handles.append(im)
         ax.set_xlim(-d, d)
         ax.set_ylim(-d, d)
@@ -947,7 +962,7 @@ def plot_image_grid(
 
     if group_headers:
         for x, text in group_headers:
-            fig.text(x, 0.95 if colorbar == "shared" else 1.0, text, fontsize=fontsize_titles, ha='center', va='bottom')
+            fig.text(x, 0.9 if colorbar == "shared" else .9, text, fontsize=fontsize_titles, ha='center', va='bottom')
 
     if tight and colorbar != "shared":
         #plt.tight_layout()

@@ -339,9 +339,9 @@ def chi2_SED_with_reddening(
         fig, ax = plt.subplots(figsize=(7, 7))
         ax.errorbar(data_wave, data_flux, data_err, label='data', fmt='bd', mfc='white', capsize=5, zorder=1000)
         ax.plot(lam, full_sed_red, ls='-', c='r', label='MCFOST SED reddened', zorder=1)
-        ax.plot(lam, full_sed, ls='--', c='r', label='MCFOST SED no reddening', zorder=0, alpha=0.4)
-        ax.plot(lam, star_sed_red, ls='-', c='k', label='STAR reddened', zorder=0)
-        ax.plot(lam, star_sed, ls='--', c='k', label='STAR no reddening', alpha=0.4, zorder=0)
+        #ax.plot(lam, full_sed, ls='--', c='r', label='MCFOST SED no reddening', zorder=0, alpha=0.4) #commented for plottinh for the conference
+        #ax.plot(lam, star_sed_red, ls='-', c='k', label='STAR reddened', zorder=0)
+        #ax.plot(lam, star_sed, ls='--', c='k', label='STAR no reddening', alpha=0.4, zorder=0)
         ax.set_xlabel(r"$\lambda \, \mathrm{[\mu m]}$")
         ax.set_ylabel(r"$\lambda F_{\lambda} \, \mathrm{[erg \, cm^{-2} \, s^{-1}]}$")
         ax.set_xlim(np.min(lam), np.max(lam))

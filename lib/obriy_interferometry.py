@@ -606,3 +606,71 @@ def monochromatic_chi_with_background(
         )
 
     return chi2, chi2_red, loglike, num_points
+
+
+
+
+
+def chromatic_chi(
+        simulation_dir: str,
+        img_dir: str,
+        container_data: OIContainer,
+        vistype: str='vis2',
+        plot: bool=False,
+        fig_dir: str=None,
+        extra_title: str=None,
+        log_plotv: bool=False
+) -> Tuple[float, float,float, int]:
+    """
+    Wrapper to calculate chi2 and reduced chi2 for a chromatic model without background.
+
+    ----------
+    Parameters
+    
+    simulation_dir : str
+        Directory where the MCFOST simulation is located.
+    img_dir : str
+        Directory where the MCFOST image for specific wavelength is located.
+    container_data : OIContainer
+        Container with data observables.
+    vistype : {'vis2', 'vis', 'fcorr'}, optional
+        Type of visibility to be used in the chi2 calculation. Default is 'vis2'.
+    plot : bool, optional
+        If True, plots data vs model. Default is False.
+    fig_dir : str, optional
+        Directory to save plots if plot is True. Default is None.
+    extra_title : str, optional
+        Extra title to add to the plots if plot is True. Default is None.
+    log_plotv : bool, optional
+        If True, plots visibility in logarithmic scale. Default is False.
+
+    -------
+    Returns
+    
+    chi2 : float
+        Chi2 value.
+    chi2_red : float
+        Reduced chi2 value.
+    likelihood : float
+        Log-likelihood value for optimisation.
+    num_points : int
+        Number of data points used in the chi2 calculation.
+    """
+    
+    img_ffts = distroi.read_image_list(simulation_dir, img_dir)
+    container_model = distroi.oi_container_calc_image_fft_observables(container_data, img_ffts)
+    chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
+
+    if plot:    
+        oi_container_plot_data_vs_model(
+            container_data,
+            container_model,
+            fig_dir=fig_dir,
+            log_plotv=log_plotv,
+            plot_vistype=vistype,
+            show_plots=False,
+            chi_plot=chi2_red,
+            extra_title=extra_title)
+
+    return chi2, chi2_red, likelihood, num_points
+
