@@ -302,6 +302,7 @@ def run_mcfost_image(wavelength, folder):
 
 def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir: Path) -> Path:
     """
+    test
     Materialize an MCFOST parameter file in `outdir` from the sampled configuration.
     Returns the path to the written .para file.
     """
