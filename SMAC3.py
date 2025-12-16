@@ -228,19 +228,19 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         products = ["sed", "vis2_1perband"]
     elif stage == "F2":
         img_res = 2
-        products = ["sed", "vis2_1perband", "pdi"]
+        products = ["sed", "vis2_1perband", "pdi_V", "pdi_I", "pdi_H"]
     elif stage == "F3":
         img_res = 2
-        products = ["sed", "vis2_chromatic", "pdi"]
+        products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
     elif stage == "F4":
         img_res = 2
-        products = ["sed", "vis2_chromatic", "pdi", "pdi", "alma"]
+        products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
     elif stage == "F5":
         img_res = 2
-        products = ["sed","pdi"]
+        products = ["sed","pdi_V", "pdi_I", "pdi_H"]
     elif stage == "F6": #created for AR Pup test
         img_res = 2
-        products = ["pdi"]
+        products = ["pdi_V", "pdi_I", "pdi_H"]
     else:
         raise ValueError(f"Unknown stage for budget {budget}: {stage}")
 
@@ -259,13 +259,15 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
 # -----------------------------------------------------------------------------
 
 
-def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, Any]:
+def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[str, Any]:
+    
     #filename of SED catalogue data file
     if data_root =='demo_mac':
-        data_filename = '/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
-        data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
+        if  any(v in fidelity_products for v in ["sed"]): 
+            data_filename = '/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
+            data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
 
-        if fidelity_stage in ['F1', 'F2']:
+        if  any(v in fidelity_products for v in ["vis2_1perband"]):
             # PIONIER data
             data_dir_pionier, data_file_pionier = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
             container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier, wave_lims=(1.63, 1.64))
@@ -281,7 +283,8 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
             # VLTI/MATISSE N-band data
             data_dir_matisse_n, data_file_matisse_n = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
             container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(9.9, 10.10), fcorr=True)
-        if fidelity_stage in ['F3']:
+        
+        if  any(v in fidelity_products for v in ["vis2_chromatic"]):
             # PIONIER data
             data_dir_pionier, data_file_pionier = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
             container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier)
@@ -298,41 +301,45 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
             data_dir_matisse_n, data_file_matisse_n = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
             container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, fcorr=True, wave_lims=(8.0, 13.0), v2lim=1e-8)
 
+        if  any(v in fidelity_products for v in ["pdi_V", "pdi_I", "pdi_H"]):
+            #real PSF from observations
+            star_psf='HD83878'
+            figfolder_psf='/Users/katerynaandrych/Work/lin/PhD/SPHERE_reduction_data/paper2/mean_combined/'+star_psf+'/'
+        if  any(v in fidelity_products for v in ["pdi_V"]):    
+            file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
+            psf_v=obp.Loadimage(figfolder_psf,file_psf)
+            obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
+        if  any(v in fidelity_products for v in ["pdi_I"]): 
+            file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
+            psf_i=obp.Loadimage(figfolder_psf,file_psf)
+            obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
 
-        #real PSF from observations
-        star_psf='HD83878'
-        figfolder_psf='/Users/katerynaandrych/Work/lin/PhD/SPHERE_reduction_data/paper2/mean_combined/'+star_psf+'/'
-        file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
-        psf_v=obp.Loadimage(figfolder_psf,file_psf)
-        obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
-
-        file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
-        psf_i=obp.Loadimage(figfolder_psf,file_psf)
-        obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
-
-
-        #polarimetric observations
-        pdi_folder_v = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
-        pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
-        pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
-        obp.plot_polarimetric_image(pdi_v, 3.6, title='IRAS08544-4431 V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=50)
+        if  any(v in fidelity_products for v in ["pdi_V"]): 
+            #polarimetric observations
+            pdi_folder_v = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
+            pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
+            pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
+            obp.plot_polarimetric_image(pdi_v, 3.6, title='IRAS08544-4431 V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=50)
         
-        pdi_folder_i = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
-        pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
-        pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
-        obp.plot_polarimetric_image(pdi_i, 3.6, title='IRAS08544-4431 I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=50)
+        if  any(v in fidelity_products for v in ["pdi_I"]):    
+            pdi_folder_i = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
+            pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
+            pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
+            obp.plot_polarimetric_image(pdi_i, 3.6, title='IRAS08544-4431 I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=50)
 
-        pdi_folder_h = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
-        pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
-        pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
-        obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=work_root+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
-
-        file_psf='iras08544-4431_calib_H_I_meancombined.fits'
-        psf_h=obp.Loadimage(pdi_folder_h,file_psf)
-        obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
+        if  any(v in fidelity_products for v in ["pdi_H"]): 
+            pdi_folder_h = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
+            pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
+            pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
+            obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=work_root+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
+        
+        if  any(v in fidelity_products for v in ["pdi_H"]): 
+            file_psf='iras08544-4431_calib_H_I_meancombined.fits'
+            psf_h=obp.Loadimage(pdi_folder_h,file_psf)
+            obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
 
     elif data_root =='demo_ozstar':
-        if fidelity_stage in ['F0', 'F1', 'F2', 'F3', 'F4', 'F5']:
+        if  any(v in fidelity_products for v in ["sed"]): 
             try:
                 data_filename = '/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
                 data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
@@ -343,7 +350,7 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
         else:
             data_wave, data_flux, data_err=[],[],[]
 
-        if fidelity_stage in ['F1', 'F2', 'F3', 'F4']:
+        if  any(v in fidelity_products for v in ["vis2_1perband"]): 
             # PIONIER data
             try:        
                 data_dir_pionier, data_file_pionier = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
@@ -381,39 +388,40 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
             container_data_matisse_l=None
             container_data_matisse_n=None
 
-        if fidelity_stage in ['F2','F3', 'F4', 'F5']:
+        if  any(v in fidelity_products for v in ["pdi_V", "pdi_I", "pdi_H"]):
             
             #real PSF from observations
             figfolder_psf='/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/psf/'
             star_psf='HD83878'
-            file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
-            psf_v=obp.Loadimage(figfolder_psf,file_psf)
-            obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
+            if  any(v in fidelity_products for v in ["pdi_V"]):
+                file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
+                psf_v=obp.Loadimage(figfolder_psf,file_psf)
+                obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
+            if  any(v in fidelity_products for v in ["pdi_I"]):
+                file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
+                psf_i=obp.Loadimage(figfolder_psf,file_psf)
+                obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
 
-            file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
-            psf_i=obp.Loadimage(figfolder_psf,file_psf)
-            obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
+            if  any(v in fidelity_products for v in ["pdi_V"]):
+                #polarimetric observations
+                pdi_folder_v = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
+                pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
+                pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
+                obp.plot_polarimetric_image(pdi_v, 3.6, title='IRAS08544-4431 V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=50)
+            if  any(v in fidelity_products for v in ["pdi_I"]):
+                pdi_folder_i = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
+                pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
+                pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
+                obp.plot_polarimetric_image(pdi_i, 3.6, title='IRAS08544-4431 I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=50)
+            if  any(v in fidelity_products for v in ["pdi_H"]):
+                pdi_folder_h = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
+                pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
+                pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
+                obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=work_root+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
 
-
-            #polarimetric observations
-            pdi_folder_v = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
-            pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
-            pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
-            obp.plot_polarimetric_image(pdi_v, 3.6, title='IRAS08544-4431 V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=50)
-            
-            pdi_folder_i = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
-            pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
-            pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
-            obp.plot_polarimetric_image(pdi_i, 3.6, title='IRAS08544-4431 I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=50)
-
-            pdi_folder_h = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
-            pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
-            pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
-            obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=work_root+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
-
-            file_psf='iras08544-4431_calib_H_I_meancombined.fits'
-            psf_h=obp.Loadimage(pdi_folder_h,file_psf)
-            obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
+                file_psf='iras08544-4431_calib_H_I_meancombined.fits'
+                psf_h=obp.Loadimage(pdi_folder_h,file_psf)
+                obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
 
             print('Polarimetric data loaded')
         else:
@@ -426,39 +434,42 @@ def load_data(data_root: str, work_root: str, fidelity_stage: str) -> Dict[str, 
 
     elif data_root =='ar_pup_ozstar':
         #real PSF from observations
+        if  any(v in fidelity_products for v in ["pdi_V", "pdi_I"]):
             figfolder_psf='/fred/oz061/kandrych/Data/polarimetry/AR_Pup_zimpol_2018/psf/'
             star_psf='HD75885'
+        if  any(v in fidelity_products for v in ["pdi_V"]):
             file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
             psf_v=obp.Loadimage(figfolder_psf,file_psf)
             obp.plot_polarimetric_image(psf_v, 3.6, title='AR_Pup V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=60)
-
-            file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
-            psf_i=obp.Loadimage(figfolder_psf,file_psf)
-            obp.plot_polarimetric_image(psf_i, 3.6, title='AR_Pup I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=60)
-
             #polarimetric observations
             pdi_folder_v = '/fred/oz061/kandrych/Data/polarimetry/AR_Pup_zimpol_2018/V_band/'
-            pdi_file_v = 'AR_Pup_dc_notnorm_V_PI_corr_tel+unres.fits'
+            pdi_file_v = 'AR_Pup_dc_notnorm_V_decon.fits'
+            #pdi_file_v = 'AR_Pup_dc_notnorm_V_PI_corr_tel+unres.fits'
             pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
             obp.plot_polarimetric_image(pdi_v, 3.6, title='AR_Pup V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=60)
             # pdi_decon_v= obp.Loadimage(pdi_folder_v,'AR_Pup_dc_notnorm_V_decon.fits')
             pdi_v=obp.center_crop(pdi_v, 150)
 
+        if  any(v in fidelity_products for v in ["pdi_I"]):
+            file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
+            psf_i=obp.Loadimage(figfolder_psf,file_psf)
+            obp.plot_polarimetric_image(psf_i, 3.6, title='AR_Pup I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=60)
             pdi_folder_i = '/fred/oz061/kandrych/Data/polarimetry/AR_Pup_zimpol_2018/I_band/'
-            pdi_file_i = 'AR_Pup_dc_notnorm_I_PI_corr_tel+unres.fits'
+            #pdi_file_i = 'AR_Pup_dc_notnorm_I_PI_corr_tel+unres.fits'
+            pdi_file_i = 'AR_Pup_dc_notnorm_I_decon.fits'
             pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
             pdi_i=obp.center_crop(pdi_i, 150)
             
             obp.plot_polarimetric_image(pdi_i, 3.6, title='AR Pup I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=60)
             # pdi_decon_i= obp.Loadimage(pdi_folder_i,'AR_Pup_dc_notnorm_I_decon.fits')
             
-            pdi_h=None
-            psf_h=None
-            container_data_pionier=None
-            container_data_gravity=None
-            container_data_matisse_l=None
-            container_data_matisse_n=None
-            data_wave, data_flux, data_err=[],[],[]
+        pdi_h=None
+        psf_h=None
+        container_data_pionier=None
+        container_data_gravity=None
+        container_data_matisse_l=None
+        container_data_matisse_n=None
+        data_wave, data_flux, data_err=[],[],[]
 
 
     else:
@@ -575,7 +586,7 @@ def main():
     )
     work_root = Path(args.working_root)
     max_fidelity = map_budget_to_fidelity(args.max_budget)
-    data_arg = load_data(args.data_root, str(work_root),max_fidelity["stage"])
+    data_arg = load_data(args.data_root, str(work_root),max_fidelity["products"])
 
     trial_folder= work_root/"trials/"
     trial_folder.mkdir(exist_ok=True)
@@ -612,7 +623,7 @@ def main():
         incumbent = dict(incumbent)
     fidelity_result={}
     
-    fidelity_result['stage']=map_budget_to_fidelity(args.max_budget)["stage"]
+    fidelity_result=map_budget_to_fidelity(args.max_budget)
     # Verify template parameter file for mcfost exists
     template_para= Path(results_dir.parent/"simulation.para")
     assert template_para.exists(), f"Missing template .para at {template_para}"
