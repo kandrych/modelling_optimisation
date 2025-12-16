@@ -44,25 +44,23 @@ p.add_argument("--seed", type=int, default=-1)# Random seed for SMAC
 p.add_argument("--correct-unresolved-polarimetry", action="store_true", help="Apply correction for unresolved central source polarimetry")
 
 args = p.parse_args()
-for folder_sim in ['test43572231' ]:#['distance_sublimationF', 'distance660', 'original']:  'distance200_sublF','inner_rim'
-    print(f"================ Running for folder: {folder_sim} ================")
-    work_root=f'/fred/oz061/kandrych/Aksita/AR_Pup/just_grid/{folder_sim}/' #distance_sublimationF #distance660  #original
-    fidelity={}
-    fidelity["stage"]='F6'
-
-    
-    WORK_ROOT = Path(work_root).resolve()
-    os.environ["SMAC_WORK_ROOT"] = str(WORK_ROOT)
-    print(f"[main] Working root: {WORK_ROOT}")
+work_root=f'/fred/oz061/kandrych/smac/polarimetry_sed/full_chromatic_for_best/' #distance_sublimationF #distance660  #original
+fidelity={}
+fidelity["stage"]='F3'
 
 
-    results_dir = Path(work_root)
-    results_dir.mkdir(exist_ok=True)
-    obm.run_mcfost(fidelity, WORK_ROOT/'model.para', results_dir)
+WORK_ROOT = Path(work_root).resolve()
+os.environ["SMAC_WORK_ROOT"] = str(WORK_ROOT)
+print(f"[main] Working root: {WORK_ROOT}")
 
-    # Score outputs
 
-    data_arg = obriy_smac.load_data('ar_pup_ozstar', str(work_root),fidelity["stage"])
+results_dir = Path(work_root)
+results_dir.mkdir(exist_ok=True)
+obm.run_mcfost(fidelity, WORK_ROOT/'model.para', results_dir)
 
-    loss = obm.load_and_score_outputs(fidelity, results_dir, data_arg, args)
+# Score outputs
+
+data_arg = obriy_smac.load_data('demo_ozstar', str(work_root),fidelity["stage"])
+
+loss = obm.load_and_score_outputs(fidelity, results_dir, data_arg, args)
 
