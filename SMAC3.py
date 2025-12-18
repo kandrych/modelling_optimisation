@@ -40,10 +40,11 @@ from smac.facade.multi_fidelity_facade import MultiFidelityFacade
 from smac.runhistory import TrialValue
 from smac import HyperparameterOptimizationFacade as HPO  # for callbacks, utils
 
-from ConfigSpace import ConfigurationSpace
-from ConfigSpace import ConfigurationSpace, Float, Integer, Categorical
+from ConfigSpace import ConfigurationSpace, Float, Integer, Categorical, Configuration
 from ConfigSpace.conditions import InCondition, EqualsCondition
 
+from smac.runhistory.runhistory import RunHistory
+from smac.runhistory.dataclasses import TrialInfo, TrialValue
 
 
 
@@ -534,6 +535,105 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
 
     return float(loss)
 
+
+def warmstart_from_runhistory_json(
+    smac,
+    cs,
+    warmstart_path: str,
+    *,
+    only_finished: bool = True,
+    max_trials: int | None = None,
+) -> int:
+    """
+    Warmstart SMAC by reading a SMAC runhistory.json and calling smac.tell(...).
+    This is robust across SMAC versions.
+
+    warmstart_path may be:
+      - directory containing runhistory.json
+      - direct path to runhistory.json
+    """
+    p = Path(warmstart_path).expanduser().resolve()
+    rh_path = (p / "runhistory.json") if p.is_dir() else p
+    if not rh_path.exists():
+        raise FileNotFoundError(f"[warmstart] runhistory.json not found at {rh_path}")
+
+    payload = json.loads(rh_path.read_text())
+
+    # SMAC runhistory.json typically contains:
+    #  - payload["configs"]: mapping config_id -> dict of hyperparams
+    #  - payload["data"]: list of trials, each referencing config_id
+    cfg_table = payload.get("configs", {})
+    data = payload.get("data", [])
+
+    if not cfg_table or not data:
+        print(f"[warmstart] Nothing to load from {rh_path} (missing 'configs' or 'data').")
+        return 0
+
+    told = 0
+
+    # Optionally: feed only the best few (by cost) to reduce noisy history
+    trials = []
+    for row in data:
+        # Status: in many SMAC JSONs, SUCCESS is 1. (You showed status=1.)
+        status = row.get("status", None)
+        if only_finished and status != 1:
+            continue
+
+        cost = row.get("cost", None)
+        if cost is None:
+            continue
+
+        config_id = row.get("config_id", None)
+        if config_id is None:
+            continue
+
+        # Keys might be str or int in configs dict
+        cfg_dict = cfg_table.get(str(config_id), cfg_table.get(config_id, None))
+        if cfg_dict is None:
+            continue
+
+        trials.append((cost, row, cfg_dict))
+
+    if not trials:
+        print(f"[warmstart] No eligible trials found in {rh_path}.")
+        return 0
+
+    # Sort by best cost first
+    trials.sort(key=lambda t: t[0])
+
+    if max_trials is not None:
+        trials = trials[:max_trials]
+
+    for _, row, cfg_dict in trials:
+        # Build Configuration from dict (must be compatible with current cs)
+        try:
+            cfg = Configuration(cs, values=cfg_dict)
+        except Exception as e:
+            # Typically means configspace changed; skip incompatible configs
+            print(f"[warmstart] Skipping incompatible config_id={row.get('config_id')} ({e})")
+            continue
+
+        seed = int(row.get("seed", 0) or 0)
+        budget = row.get("budget", None)
+
+        # TrialInfo: include budget for multi-fidelity
+        # (instance is usually None in your setup)
+        info_kwargs = dict(config=cfg, seed=seed)
+        if budget is not None:
+            info_kwargs["budget"] = float(budget)
+
+        info = TrialInfo(**info_kwargs)
+
+        # TrialValue: cost is required. You can also pass time/cpu_time, but not necessary.
+        value = TrialValue(cost=float(row["cost"]))
+
+        smac.tell(info, value)
+        told += 1
+
+    print(f"[warmstart] Told SMAC about {told} previous trials from {rh_path}")
+    return told
+
+
 # -----------------------------------------------------------------------------
 # Main orchestration
 # -----------------------------------------------------------------------------
@@ -550,7 +650,7 @@ def main():
     p.add_argument("--n-trials", type=int, default=80)
     p.add_argument("--seed", type=int, default=-1)# Random seed for SMAC
     p.add_argument("--correct-unresolved-polarimetry", action="store_true", help="Apply correction for unresolved central source polarimetry")
-
+    p.add_argument("--warmstart", type=str, default=None, help="Path to previous SMAC run directory to warmstart from")
 
     args = p.parse_args()
     
@@ -569,12 +669,13 @@ def main():
 
     print(f"[main] Using config space file: {config_file}")
 
-    client = start_cluster(args.n_workers, args.procs_per_worker, args.use_slurm)
+    #client = start_cluster(args.n_workers, args.procs_per_worker, args.use_slurm)
 
     cs = build_configspace(config_file)
 
     scenario = Scenario(
         configspace=cs,
+        name="optimization",
         n_trials=args.n_trials,
         output_directory=args.working_root,
         n_workers=args.n_workers,           # enables parallel evaluations
@@ -594,14 +695,28 @@ def main():
     # SMAC Objective wrapper with extra kwargs via lambda/closure
     def smac_objective(cfg, seed: int, budget: float) -> float:
         return objective(cfg, seed, budget, data_arg=data_arg, scratch_root=trial_folder, args=args)
+    
 
-    smac = MultiFidelityFacade(
+    
+    
+    smac_kwargs = dict(
         scenario=scenario,
         target_function=smac_objective,
-        # intensifier defaults to Hyperband; override via intensifier if desired
         overwrite=False,
-        client=client,
+        initial_design=None
+        #dask_client=client,   
     )
+
+    smac = MultiFidelityFacade(**smac_kwargs)
+
+    if args.warmstart is not None:
+        warmstart_from_runhistory_json(
+            smac=smac,
+            cs=cs,
+            warmstart_path=args.warmstart,
+            only_finished=True,
+            max_trials=None,  # or set e.g. 50
+        )
 
     # Optional: callbacks (e.g., log incumbent every K trials)
     # smac.register_callback(HPO.LoggingCallback())
