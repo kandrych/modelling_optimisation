@@ -232,7 +232,7 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         products = ["sed", "vis2_1perband", "pdi_V", "pdi_I", "pdi_H"]
     elif stage == "F3":
         img_res = 2
-        products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
+        products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H"]
     elif stage == "F4":
         img_res = 2
         products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
@@ -759,7 +759,7 @@ def main():
     
     df = oao.runhistory_to_df(smac, cs)
     df.to_csv(results_dir / "trials.csv", index=False)
-    print(df.head())
+ 
 
     # Persist runhistory in JSON for later analysis
     try:
