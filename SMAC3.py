@@ -43,7 +43,6 @@ from smac import HyperparameterOptimizationFacade as HPO  # for callbacks, utils
 from ConfigSpace import ConfigurationSpace, Float, Integer, Categorical, Configuration
 from ConfigSpace.conditions import InCondition, EqualsCondition
 
-from smac.runhistory.runhistory import RunHistory
 from smac.runhistory.dataclasses import TrialInfo, TrialValue
 
 
@@ -59,6 +58,7 @@ import lib.obriy_sed as obs
 import lib.obriy_interferometry as obi
 import lib.obriy_polarimetry as obp
 import lib.obriy_mcfost as obm
+import lib.obriy_after_optimisation as oao
 
 
 matplotlib.rcParams["font.family"] = "serif"
@@ -756,6 +756,10 @@ def main():
     runhistory = smac.runhistory
     traj = smac.intensifier.trajectory
     print(f"Trials run: {len(runhistory)}")
+    
+    df = oao.runhistory_to_df(smac, cs)
+    df.to_csv(results_dir / "trials.csv", index=False)
+    print(df.head())
 
     # Persist runhistory in JSON for later analysis
     try:
