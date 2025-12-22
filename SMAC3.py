@@ -351,11 +351,12 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         else:
             data_wave, data_flux, data_err=[],[],[]
 
-        if  "vis2_1perband" in fidelity_products: 
+        if  "vis2_1perband" in fidelity_products:
             # PIONIER data
             try:        
                 data_dir_pionier, data_file_pionier = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
                 container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier, wave_lims=(1.63, 1.64))
+                print('PIONIER data loaded')
             except:
                 print("[main] PIONIER data files not found. Please check the path if your budget expects PIONIER data.")
                 container_data_pionier=None
@@ -364,6 +365,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             try:    
                 data_dir_gravity, data_file_gravity = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
                 container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity, wave_lims=(2.199, 2.201))
+                print('GRAVITY data loaded')
             except:
                 print("[main] GRAVITY data files not found. Please check the path if your budget expects GRAVITY data.")
                 container_data_gravity=None
@@ -372,6 +374,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             try:
                 data_dir_matisse_l, data_file_matisse_l = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
                 container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(3.48, 3.52))
+                print('MATISSE L-band data loaded')
             except:
                 print("[main] MATISSE L-band data files not found. Please check the path if your budget expects MATISSE L-band data.")
                 container_data_matisse_l=None
@@ -380,6 +383,43 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             try:    
                 data_dir_matisse_n, data_file_matisse_n = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
                 container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(9.9, 10.10), fcorr=True)
+                print('MATISSE N-band data loaded')
+            except:
+                print("[main] MATISSE N-band data files not found. Please check the path if your budget expects MATISSE N-band data.")
+                container_data_matisse_n=None
+        elif  ("vis2_chromatic" in fidelity_products):
+            # PIONIER data
+            try:        
+                data_dir_pionier, data_file_pionier = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
+                container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier)
+                print('PIONIER data loaded')
+            except:
+                print("[main] PIONIER data files not found. Please check the path if your budget expects PIONIER data.")
+                container_data_pionier=None
+
+            # GRAVITY data
+            try:    
+                data_dir_gravity, data_file_gravity = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
+                container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity)
+                print('GRAVITY data loaded')
+            except:
+                print("[main] GRAVITY data files not found. Please check the path if your budget expects GRAVITY data.")
+                container_data_gravity=None
+
+            # VLTI/MATISSE L-band data
+            try:
+                data_dir_matisse_l, data_file_matisse_l = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
+                container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(2.95, 3.95), v2lim=1e-8)
+                print('MATISSE L-band data loaded')
+            except:
+                print("[main] MATISSE L-band data files not found. Please check the path if your budget expects MATISSE L-band data.")
+                container_data_matisse_l=None
+
+            # VLTI/MATISSE N-band data
+            try:    
+                data_dir_matisse_n, data_file_matisse_n = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
+                container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(8.0, 13.0), v2lim=1e-8, fcorr=True)
+                print('MATISSE N-band data loaded')
             except:
                 print("[main] MATISSE N-band data files not found. Please check the path if your budget expects MATISSE N-band data.")
                 container_data_matisse_n=None
