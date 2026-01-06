@@ -51,6 +51,8 @@ from scipy.interpolate import interp1d
 from functools import wraps
 import cv2
 
+from matplotlib.patches import Circle
+
 import shutil
 
 
@@ -1487,8 +1489,6 @@ def radial_br_profile(
         plt.close()
     
     return profile
-
-from matplotlib.patches import Circle
    
 def azimuthal_profile(
     img: np.ndarray,
@@ -1738,275 +1738,382 @@ def polarimetric_analysis(
     fig_dir: Optional[str] = None,
     extra_title: Optional[str] = None,          # if provided, used as prefix for saved figures and title additions
 ) -> Dict[str, Any]:
-        """
-        Wrapper to produce polarimetric outputs from MCFOST model
-        ----------
-        Parameters
+    """
+    Wrapper to produce polarimetric outputs from MCFOST model
+    ----------
+    Parameters
 
-        """
-        ### Safety checks
-        wave_strs = str(wavelength)
-        # locate RT.fits.gz 
-        cand = simulation_dir +'/'+ f"data_{wave_strs}" +'/'+ "RT.fits.gz"
-        rt_path = None
-        if os.path.exists(cand):
-                rt_path = cand
-        if rt_path is None:
-                raise FileNotFoundError("Could not find RT.fits.gz under in: "+ cand)
+    """
+    ### Safety checks
+    wave_strs = str(wavelength)
+    # locate RT.fits.gz 
+    cand = simulation_dir +'/'+ f"data_{wave_strs}" +'/'+ "RT.fits.gz"
+    rt_path = None
+    if os.path.exists(cand):
+            rt_path = cand
+    if rt_path is None:
+            raise FileNotFoundError("Could not find RT.fits.gz under in: "+ cand)
 
-        # Output folder
-        if fig_dir is None:
-                fig_dir = str(simulation_dir +"/polarimetric")
-        Path(fig_dir).mkdir(parents=True, exist_ok=True)
+    # Output folder
+    if fig_dir is None:
+            fig_dir = str(simulation_dir +"/polarimetric")
+    Path(fig_dir).mkdir(parents=True, exist_ok=True)
 
 
-        if convolution_mode=='no':
-                print('No convolution selected')
-        elif convolution_mode=='synthetic':
-                print('Synthetic PSF convolution selected')
-                if psf_fwhm_mas is None:
-                        if camera=='zimpol':
-                                print ('PSF FWHM is 30 mas')
-                                psf_fwhm_mas=30 #mas
-                        elif camera=='irdis':
-                                print ('PSF FWHM is 40 mas')
-                                psf_fwhm_mas=40
-                else:
-                        print (f'PSF FWHM is {psf_fwhm_mas} mas')
-        elif convolution_mode=='real':
-                print('Real PSF convolution selected')
-                if psf_file is None and psf_array is None:
-                        raise ValueError('Please provide psf_file or psf_array for real PSF convolution')
-                
-        results = {}
-        # --- Read header to get native angular pixel scale & FoV
-        with fits.open(rt_path) as hdul:
-                hdr = hdul[0].header
-
-        # CDELT2 in degrees/pixel to mas/pixel
-        native_ps_mas = float(hdr["CDELT2"]) * u.deg.to(u.arcsec) * 1000.0
-        n_pix = int(hdr["NAXIS1"])
-        fov_mas = n_pix * native_ps_mas
-        fov_au=obg.mas2au(fov_mas, distance_pc)
-        
-        
-        # --- Choose instrument pixel scale
-        if pixel_scale_mas is not None:
-                inst_ps_mas = float(pixel_scale_mas)
-        elif camera is not None:
-                inst_ps_mas = CAMERA_PS_MAS[camera]
-        else:
-                 # default to native if nothing specified
-                inst_ps_mas = native_ps_mas
-
-        # --- Load MCFOST images
-        img_array_original, header_original, img_tot_original, img_q_original, img_u_original, img_v_original, img_star_original, img_star_sct_original, img_disk_th_original, img_disk_th_sct_original = load_mcfost_images_1wave(simulation_dir, wavelength, ploting=plot, save_plots=fig_dir, title_addition=extra_title)
-        q_phi_original, u_phi_original, pi_original, phi_mcfost_original=compute_qphi_uphi_pi(img_q_original, img_u_original)
-        metrics_original=polarimetric_metrics(img_tot_original,img_q_original, img_u_original, q_phi_original, u_phi_original,pi_original)
-
-       
-        results['mcfost_original']={'img_array':img_array_original, 
-                                    'header':header_original, 
-                                    'img_tot':img_tot_original, 
-                                    'img_q':img_q_original, 
-                                    'img_u':img_u_original, 
-                                    'img_v':img_v_original, 
-                                    'img_star':img_star_original, 
-                                    'img_star_sct':img_star_sct_original, 
-                                    'img_disk_th':img_disk_th_original, 
-                                    'img_disk_th_sct':img_disk_th_sct_original,
-                                    'q_phi':q_phi_original, 
-                                    'u_phi':u_phi_original, 
-                                    'pi':pi_original, 
-                                    'phi':phi_mcfost_original,
-                                    'metrics':metrics_original
-                                    }
-
-        # Rescaling to instrument pixel scale
-
-        img_q_rescaled, img_u_rescaled, img_total_rescaled, q_phi_rescaled, u_phi_rescaled, pi_rescaled, phi_rescaled=rescale_and_recalculate_all_polarim_img(img_q_original, img_u_original, img_tot_original, native_ps_mas, new_pix_scale=inst_ps_mas, conserve='sum')
-        metrics_rescaled=polarimetric_metrics(img_total_rescaled,img_q_rescaled, img_u_rescaled, q_phi_rescaled, u_phi_rescaled,pi_rescaled)
-
-        results['mcfost_rescaled']={'img_q':img_q_rescaled,
-                                        'img_u':img_u_rescaled,
-                                        'img_tot':img_total_rescaled,
-                                        'q_phi':q_phi_rescaled,
-                                        'u_phi':u_phi_rescaled,
-                                        'pi':pi_rescaled,
-                                        'phi':phi_rescaled,
-                                        'metrics':metrics_rescaled
-                                        }
-
-       
-
-        # Convolving with synthetic PSF
-        if convolution_mode=='synthetic':
-                kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas,psf_source='synthetic', psf_fwhm_mas=psf_fwhm_mas)
-                metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
-
-        if convolution_mode=='file':
-                kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas, psf_source='file', psf_file=psf_file, folder_psf=folder_psf,psf_array=psf_array, psf_cut=psf_cut )
-                metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
-        if convolution_mode=='none':
-                Q_conv=img_q_rescaled
-                U_conv=img_u_rescaled
-                I_conv=img_total_rescaled
-                PI_conv=pi_rescaled
-                Q_phi_conv=q_phi_rescaled
-                U_phi_conv=u_phi_rescaled
-
-        
+    if convolution_mode=='no':
+            print('No convolution selected')
+    elif convolution_mode=='synthetic':
+            print('Synthetic PSF convolution selected')
+            if psf_fwhm_mas is None:
+                    if camera=='zimpol':
+                            print ('PSF FWHM is 30 mas')
+                            psf_fwhm_mas=30 #mas
+                    elif camera=='irdis':
+                            print ('PSF FWHM is 40 mas')
+                            psf_fwhm_mas=40
+            else:
+                    print (f'PSF FWHM is {psf_fwhm_mas} mas')
+    elif convolution_mode=='real':
+            print('Real PSF convolution selected')
+            if psf_file is None and psf_array is None:
+                    raise ValueError('Please provide psf_file or psf_array for real PSF convolution')
             
-        if convolution_mode!='none':
-                pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0)
+    results = {}
+    # --- Read header to get native angular pixel scale & FoV
+    with fits.open(rt_path) as hdul:
+            hdr = hdul[0].header
 
-                results['mcfost_convolved']={'img_q':Q_conv,
-                                                'img_u':U_conv,
-                                                'img_tot':I_conv,
-                                                'q_phi':Q_phi_conv,
-                                                'u_phi':U_phi_conv,
-                                                'pi':PI_conv,
-                                                'pi_deconvolved':pi_conv_decon,
-                                                'metrics':metrics_conv
-                                                }
+    # CDELT2 in degrees/pixel to mas/pixel
+    native_ps_mas = float(hdr["CDELT2"]) * u.deg.to(u.arcsec) * 1000.0
+    n_pix = int(hdr["NAXIS1"])
+    fov_mas = n_pix * native_ps_mas
+    fov_au=obg.mas2au(fov_mas, distance_pc)
+    
+    
+    # --- Choose instrument pixel scale
+    if pixel_scale_mas is not None:
+            inst_ps_mas = float(pixel_scale_mas)
+    elif camera is not None:
+            inst_ps_mas = CAMERA_PS_MAS[camera]
+    else:
+                # default to native if nothing specified
+            inst_ps_mas = native_ps_mas
 
+    # --- Load MCFOST images
+    img_array_original, header_original, img_tot_original, img_q_original, img_u_original, img_v_original, img_star_original, img_star_sct_original, img_disk_th_original, img_disk_th_sct_original = load_mcfost_images_1wave(simulation_dir, wavelength, ploting=plot, save_plots=fig_dir, title_addition=extra_title)
+    q_phi_original, u_phi_original, pi_original, phi_mcfost_original=compute_qphi_uphi_pi(img_q_original, img_u_original)
+    metrics_original=polarimetric_metrics(img_tot_original,img_q_original, img_u_original, q_phi_original, u_phi_original,pi_original)
 
+    
+    results['mcfost_original']={'img_array':img_array_original, 
+                                'header':header_original, 
+                                'img_tot':img_tot_original, 
+                                'img_q':img_q_original, 
+                                'img_u':img_u_original, 
+                                'img_v':img_v_original, 
+                                'img_star':img_star_original, 
+                                'img_star_sct':img_star_sct_original, 
+                                'img_disk_th':img_disk_th_original, 
+                                'img_disk_th_sct':img_disk_th_sct_original,
+                                'q_phi':q_phi_original, 
+                                'u_phi':u_phi_original, 
+                                'pi':pi_original, 
+                                'phi':phi_mcfost_original,
+                                'metrics':metrics_original
+                                }
+    rad_prof_pi, az_prof_pi = profiles(pi_original, inst_ps_mas, 
+                                            profile_type="both",
+                                            mode="sum",
+                                            radial_limit_mas=radial_limit_mas,
+                                            plot=plot,
+                                            save_prefix=fig_dir + extra_title + "mcfost_original_",
+                                            deprojection_inc_pa_deg=deprojection,
+                                            center=None,
+                                            az_nbins=azimuthal_nbins,
+                                            azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                            azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                            theta0=theta0
+                                            )
+    results['mcfost_rescaled']['radial_profile_pi']=rad_prof_pi
+    results['mcfost_rescaled']['azimuthal_profile_pi']=az_prof_pi
+          
+    
 
-        if plot:
-                plot_polarimetric_image(img_q_rescaled, inst_ps_mas, title='Q Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-                plot_polarimetric_image(q_phi_rescaled, inst_ps_mas, title='Q_phi Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+    # Rescaling to instrument pixel scale
 
-                plot_polarimetric_image(img_tot_original, native_ps_mas, title='I tot, original from mcfost', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-                plot_polarimetric_image(img_total_rescaled, inst_ps_mas, title='I tot rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-                plot_polarimetric_image(I_conv, inst_ps_mas, title='I tot conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-                plot_polarimetric_image(PI_conv, inst_ps_mas, title='I pol conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-                plot_polarimetric_image(pi_conv_decon, inst_ps_mas, title='I pol conv deconvolved', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+    img_q_rescaled, img_u_rescaled, img_total_rescaled, q_phi_rescaled, u_phi_rescaled, pi_rescaled, phi_rescaled=rescale_and_recalculate_all_polarim_img(img_q_original, img_u_original, img_tot_original, native_ps_mas, new_pix_scale=inst_ps_mas, conserve='sum')
+    metrics_rescaled=polarimetric_metrics(img_total_rescaled,img_q_rescaled, img_u_rescaled, q_phi_rescaled, u_phi_rescaled,pi_rescaled)
 
-        # Unresolved correction
-        R_rescaled,_,_,_,_=compute_grid(img_q_rescaled)
+    results['mcfost_rescaled']={'img_q':img_q_rescaled,
+                                    'img_u':img_u_rescaled,
+                                    'img_tot':img_total_rescaled,
+                                    'q_phi':q_phi_rescaled,
+                                    'u_phi':u_phi_rescaled,
+                                    'pi':pi_rescaled,
+                                    'phi':phi_rescaled,
+                                    'metrics':metrics_rescaled
+                                    }
+    rad_prof_pi, az_prof_pi = profiles(pi_rescaled, inst_ps_mas, 
+                                            profile_type="both",
+                                            mode="sum",
+                                            radial_limit_mas=radial_limit_mas,
+                                            plot=plot,
+                                            save_prefix=fig_dir + extra_title + "mcfost_rescaled_",
+                                            deprojection_inc_pa_deg=deprojection,
+                                            center=None,
+                                            az_nbins=azimuthal_nbins,
+                                            azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                            azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                            theta0=theta0
+                                            )
+    results['mcfost_rescaled']['radial_profile_pi']=rad_prof_pi
+    results['mcfost_rescaled']['azimuthal_profile_pi']=az_prof_pi
+          
 
-        dolp_unres, aolp_unres,q_corr,u_corr=calculate_unresolved(unresolved_correction_radius_px, img_q_rescaled, img_u_rescaled,img_total_rescaled,inst_ps_mas,R_rescaled,100)
-        q_phi_corr, u_phi_corr, pi_corr, phi =compute_qphi_uphi_pi(q_corr, u_corr)
-        aolp_corr=0.5*np.arctan2(u_corr, q_corr)
+    
 
-        results['mcfost_not_convolved_unresolved_corrected']={'img_q':q_corr,
-                                                'img_u':u_corr,
-                                                'q_phi':q_phi_corr,
-                                                'u_phi':u_phi_corr,
-                                                'pi':pi_corr,
-                                                'aolp_corr':aolp_corr,
-                                                'dolp_unres':dolp_unres,
-                                                'aolp_unres':aolp_unres,
-                                                'phi':phi
-                                                }
+    # Convolving with synthetic PSF
+    if convolution_mode=='synthetic':
+            kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas,psf_source='synthetic', psf_fwhm_mas=psf_fwhm_mas)
+            metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
+
+    if convolution_mode=='file':
+            kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas, psf_source='file', psf_file=psf_file, folder_psf=folder_psf,psf_array=psf_array, psf_cut=psf_cut )
+            metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
+    if convolution_mode=='none':
+            Q_conv=img_q_rescaled
+            U_conv=img_u_rescaled
+            I_conv=img_total_rescaled
+            PI_conv=pi_rescaled
+            Q_phi_conv=q_phi_rescaled
+            U_phi_conv=u_phi_rescaled
+
+    
         
-        # unresolved polarisation correction after convolution
-        dolp_unres_conv, aolp_unres_conv,q_corr_conv,u_corr_conv=calculate_unresolved(unresolved_correction_radius_px, Q_conv, U_conv,I_conv,inst_ps_mas,R_rescaled,100)
-        q_phi_corr_conv, u_phi_corr_conv, pi_corr_conv, phi =compute_qphi_uphi_pi(q_corr_conv, u_corr_conv)
+    if convolution_mode!='none':
+            pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
 
-        aolp_corr_conv=0.5*np.arctan2(u_corr_conv, q_corr_conv)
+            results['mcfost_convolved']={'img_q':Q_conv,
+                                            'img_u':U_conv,
+                                            'img_tot':I_conv,
+                                            'q_phi':Q_phi_conv,
+                                            'u_phi':U_phi_conv,
+                                            'pi':PI_conv,
+                                            'pi_deconvolved':pi_conv_decon,
+                                            'metrics':metrics_conv
+                                            }
+            rad_prof_pi, az_prof_pi = profiles(PI_conv, inst_ps_mas, 
+                                            profile_type="both",
+                                            mode="sum",
+                                            radial_limit_mas=radial_limit_mas,
+                                            plot=plot,
+                                            save_prefix=fig_dir + extra_title + "mcfost_convolved_",
+                                            deprojection_inc_pa_deg=deprojection,
+                                            center=None,
+                                            az_nbins=azimuthal_nbins,
+                                            azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                            azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                            theta0=theta0
+                                            )
+            results['mcfost_convolved']['radial_profile_pi']=rad_prof_pi
+            results['mcfost_convolved']['azimuthal_profile_pi']=az_prof_pi
+            
 
-        metrics_corr_conv=polarimetric_metrics(I_conv,q_corr_conv, u_corr_conv, q_phi_corr_conv, u_phi_corr_conv,pi_corr_conv)
-        metrics_corr_conv['dolp_unres']=dolp_unres_conv
-        metrics_corr_conv['aolp_unres']=aolp_unres_conv
 
 
 
-        # Deconvolution of corrected images
-        if convolution_mode=='none':
-            print('No convolution, skipping deconvolution')
-        else:
-            print('Deconvolution of unresolved corrected images')
-            # Create PSF for deconvolution
-            pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100)
+    if plot:
+            plot_polarimetric_image(img_q_rescaled, inst_ps_mas, title='Q Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+            plot_polarimetric_image(q_phi_rescaled, inst_ps_mas, title='Q_phi Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
 
+            plot_polarimetric_image(img_tot_original, native_ps_mas, title='I tot, original from mcfost', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+            plot_polarimetric_image(img_total_rescaled, inst_ps_mas, title='I tot rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+            plot_polarimetric_image(I_conv, inst_ps_mas, title='I tot conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+            plot_polarimetric_image(PI_conv, inst_ps_mas, title='I pol conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+            plot_polarimetric_image(pi_conv_decon, inst_ps_mas, title='I pol conv deconvolved', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+
+    # Unresolved correction
+    R_rescaled,_,_,_,_=compute_grid(img_q_rescaled)
+
+    dolp_unres, aolp_unres,q_corr,u_corr=calculate_unresolved(unresolved_correction_radius_px, img_q_rescaled, img_u_rescaled,img_total_rescaled,inst_ps_mas,R_rescaled,100)
+    q_phi_corr, u_phi_corr, pi_corr, phi =compute_qphi_uphi_pi(q_corr, u_corr)
+    aolp_corr=0.5*np.arctan2(u_corr, q_corr)
+
+    results['mcfost_not_convolved_unresolved_corrected']={'img_q':q_corr,
+                                            'img_u':u_corr,
+                                            'q_phi':q_phi_corr,
+                                            'u_phi':u_phi_corr,
+                                            'pi':pi_corr,
+                                            'aolp_corr':aolp_corr,
+                                            'dolp_unres':dolp_unres,
+                                            'aolp_unres':aolp_unres,
+                                            'phi':phi
+                                            }
+    
+    rad_prof_pi, az_prof_pi = profiles(pi_corr, inst_ps_mas, 
+                                            profile_type="both",
+                                            mode="sum",
+                                            radial_limit_mas=radial_limit_mas,
+                                            plot=plot,
+                                            save_prefix=fig_dir + extra_title + "mcfost_not_convolved_unresolved_corrected_",
+                                            deprojection_inc_pa_deg=deprojection,
+                                            center=None,
+                                            az_nbins=azimuthal_nbins,
+                                            azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                            azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                            theta0=theta0
+                                            )
+    results['mcfost_not_convolved_unresolved_corrected']['radial_profile_pi']=rad_prof_pi
+    results['mcfost_not_convolved_unresolved_corrected']['azimuthal_profile_pi']=az_prof_pi
+    
+
+    
+    # unresolved polarisation correction after convolution
+    dolp_unres_conv, aolp_unres_conv,q_corr_conv,u_corr_conv=calculate_unresolved(unresolved_correction_radius_px, Q_conv, U_conv,I_conv,inst_ps_mas,R_rescaled,100)
+    q_phi_corr_conv, u_phi_corr_conv, pi_corr_conv, phi =compute_qphi_uphi_pi(q_corr_conv, u_corr_conv)
+
+    aolp_corr_conv=0.5*np.arctan2(u_corr_conv, q_corr_conv)
+
+    metrics_corr_conv=polarimetric_metrics(I_conv,q_corr_conv, u_corr_conv, q_phi_corr_conv, u_phi_corr_conv,pi_corr_conv)
+    metrics_corr_conv['dolp_unres']=dolp_unres_conv
+    metrics_corr_conv['aolp_unres']=aolp_unres_conv
+
+
+
+    # Deconvolution of corrected images
+    if convolution_mode=='none':
+        print('No convolution, skipping deconvolution')
+    else:
+        print('Deconvolution of unresolved corrected images')
+        # Create PSF for deconvolution
+        pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
+
+    
+    results['mcfost_convolved_unresolved_corrected']={'img_q':q_corr_conv,
+                                            'img_u':u_corr_conv,
+                                            'q_phi':q_phi_corr_conv,
+                                            'u_phi':u_phi_corr_conv,
+                                            'pi':pi_corr_conv,
+                                            'aolp_corr':aolp_corr_conv,
+                                            'phi':phi,
+                                            'pi_deconvolved':pi_corr_conv_decon,
+                                            'metrics':metrics_corr_conv,
+                                            }
+    
+    rad_prof_pi, az_prof_pi = profiles(pi_corr_conv, inst_ps_mas, 
+                                            profile_type="both",
+                                            mode="sum",
+                                            radial_limit_mas=radial_limit_mas,
+                                            plot=plot,
+                                            save_prefix=fig_dir + extra_title + "mcfost_convolved_unresolved_corrected_",
+                                            deprojection_inc_pa_deg=deprojection,
+                                            center=None,
+                                            az_nbins=azimuthal_nbins,
+                                            azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                            azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                            theta0=theta0
+                                            )
+    results['mcfost_convolved_unresolved_corrected']['radial_profile_pi']=rad_prof_pi
+    results['mcfost_convolved_unresolved_corrected']['azimuthal_profile_pi']=az_prof_pi
+    
+
+
+    # print(f'Unresolved pol: {dolp_unres*100} %, angle: {aolp_unres} deg')
+
+    # print(f'Unresolved pol after conv: {dolp_unres_conv*100} %, angle: {aolp_unres_conv} deg')
+    if plot:
+        images_list = [q_phi_rescaled, pi_rescaled, q_phi_corr, pi_corr,
+                Q_phi_conv, PI_conv, q_phi_corr_conv, pi_corr_conv
+                ]
         
-        results['mcfost_convolved_unresolved_corrected']={'img_q':q_corr_conv,
-                                                'img_u':u_corr_conv,
-                                                'q_phi':q_phi_corr_conv,
-                                                'u_phi':u_phi_corr_conv,
-                                                'pi':pi_corr_conv,
-                                                'aolp_corr':aolp_corr_conv,
-                                                'phi':phi,
-                                                'pi_deconvolved':pi_corr_conv_decon,
-                                                'metrics':metrics_corr_conv,
-                                                }
-
-        # print(f'Unresolved pol: {dolp_unres*100} %, angle: {aolp_unres} deg')
-
-        # print(f'Unresolved pol after conv: {dolp_unres_conv*100} %, angle: {aolp_unres_conv} deg')
-        if plot:
-                images_list = [q_phi_rescaled, pi_rescaled, q_phi_corr, pi_corr,
-                        Q_phi_conv, PI_conv, q_phi_corr_conv, pi_corr_conv
-                        ]
-                
-                titles = ['Q$_\\phi$', 'I$_{\\mathrm{pol}}$', 'Q$_\\phi$', 'I$_{\\mathrm{pol}}$',
-                        'Q$_\\phi$', 'I$_{\\mathrm{pol}}$', 'Q$_\\phi$', 'I$_{\\mathrm{pol}}$']
-
-        # print(ps, type(ps))
-        
-                fig, axs = plot_image_grid(
-                                images=images_list,
-                                ps_mas=inst_ps_mas,
-                                nrows=2,
-                                ncols=4,
-                                titles=titles,
-                                group_headers=[(0.31, 'With unresolved'), (0.72, 'Without unresolved')],
-                                scale="asinh",
-                                roi_half_size=roi_size_half,          
-                                per_panel_autoscale=True,
-                                colorbar="individual",
-                                figsize=(12, 6),
-                                show=False
-                                )
-                fig.savefig(fig_dir+extra_title+"mcfost_model_comparison.png", dpi=150, bbox_inches='tight')
+        titles = ['Q$_\\phi$', 'I$_{\\mathrm{pol}}$', 'Q$_\\phi$', 'I$_{\\mathrm{pol}}$',
+                'Q$_\\phi$', 'I$_{\\mathrm{pol}}$', 'Q$_\\phi$', 'I$_{\\mathrm{pol}}$']
 
 
 
-        # kf.plot_polarimetric_image(q_phi_corr_conv,ps,Q=q_corr_conv,U=u_corr_conv,I=I_conv,title="convolved, unresolved corrected Q phi",bin_factor=(4,4),save=False,snr_threshold=3,noise_level=5e-19,roi_half_size=30,aolp_quiver=True, quiver_scale=0.1)
-        # kf.plot_polarimetric_image(pi_rescaled,ps,Q=img_q_rescaled,U=img_u_rescaled,I=img_total_rescaled,title="Q phi",bin_factor=(4,4),save=False,snr_threshold=3,noise_level=2e-17,roi_half_size=30,aolp_quiver=True, quiver_scale=5)
-        # kf.plot_polarimetric_image(q_phi_corr_conv, ps, roi_half_size=30, image_scale="asinh")
-        # kf.plot_polarimetric_image(Q_conv, ps, roi_half_size=30, image_scale="linear")
-        # kf.plot_polarimetric_image(I_conv, ps, roi_half_size=30, image_scale="linear")
-
-        # kf.plot_polarimetric_image(q_phi,pixel_scale,Q=img_q,U=img_u,I=img_tot,title="Q phi",bin_factor=(4,4),image_scale="asinh",save=False,snr_threshold=3,noise_level=1e-17,roi_half_size=100,aolp_quiver=True, quiver_scale=3)
-
-
-
-        # radial_profile=radial_br_profile(pi_corr_conv, inst_ps_mas,deprojection[0],deprojection[1], R_limit=radial_limit_mas/inst_ps_mas, mode='sum',save=fig_dir+"mcfost_", plot=True,background_annulus_mas=background_annulus_mas)
-
-
-        # az_profile=azimuthal_profile(pi_corr_conv, inst_ps_mas, r_in_mas=azimuthal_r_in_mas, r_out_mas=azimuthal_r_out_mas, plot=True,mode='sum', save=fig_dir+"mcfost_", nbins=azimuthal_nbins, theta0=theta0)
-
-        # results['radial_profile']=radial_profile
-        # results['azimuthal_profile']=az_profile
-
-        return results 
-
+        fig, axs = plot_image_grid(
+                        images=images_list,
+                        ps_mas=inst_ps_mas,
+                        nrows=2,
+                        ncols=4,
+                        titles=titles,
+                        group_headers=[(0.31, 'With unresolved'), (0.72, 'Without unresolved')],
+                        scale="asinh",
+                        roi_half_size=roi_size_half,          
+                        per_panel_autoscale=True,
+                        colorbar="individual",
+                        figsize=(12, 6),
+                        show=False
+                        )
+        fig.savefig(fig_dir+extra_title+"mcfost_model_comparison.png", dpi=150, bbox_inches='tight')
+        plt.close(fig)
+    
+    return results
 
 
 
-
-
-
-
-
-def profiles_chi2(
-    obs_data: np.ndarray,
+def profiles(
     model_data: np.ndarray,
-    ps: float,
+    ps: float,  # mas/pix
     *,
-    obs_err: Optional[np.ndarray]=None,
-    noise_level: Optional[float] = None,
     profile_type: Literal["radial", "azimuthal", "both"] = "radial",
     mode: Literal["mean", "median", "sum"] = "mean",
     radial_limit_mas: float = 500.0,
     plot: bool = True,
-    save: Optional[str] = '',
+    save_prefix: str = "",
     deprojection_inc_pa_deg: Optional[Tuple[float, float]] = None,
     center: Optional[Tuple[float, float]] = None,
+    azimuthal_r_in_mas: float = 0.0,
+    azimuthal_r_out_mas: float = 100.0,
     az_nbins: int = 20,
-) -> Tuple[float, float, float, int]:
+    theta0: float = 0.0,
+) -> Tuple[Optional[Dict[str, np.ndarray]], Optional[Dict[str, np.ndarray]]]:
+
+    # radii in both units to avoid mixing
+    R_limit_pix = radial_limit_mas / ps
+
+    inc_deg, pa_deg = deprojection_inc_pa_deg if deprojection_inc_pa_deg is not None else (0.0, 0.0)
+    xc, yc = center if center is not None else (None, None)
+
+    prof_rad: Optional[Dict[str, np.ndarray]] = None
+    prof_az: Optional[Dict[str, np.ndarray]] = None
+
+    if profile_type in ("radial", "both"):
+        # IMPORTANT: decide what radial_br_profile expects: mas or pixels.
+        prof_rad = radial_br_profile(
+            model_data, ps,
+            inclination_deg=inc_deg,
+            position_angle_deg=pa_deg,
+            R_limit=R_limit_pix,          # <-- if it expects pixels
+            mode=mode, xc=xc, yc=yc,
+            plot=plot,
+            save=save_prefix + "radial_"
+        )
+
+    if profile_type in ("azimuthal", "both"):
+        prof_az = azimuthal_profile(
+            model_data, ps,
+            azimuthal_r_in_mas, azimuthal_r_out_mas,
+            mode=mode, xc=xc, yc=yc, nbins=az_nbins,
+            plot=plot,
+            save=save_prefix + "azimuthal_", 
+            theta0=theta0
+        )
+
+    return prof_rad, prof_az
+
+
+
+
+def profile_chi2(
+    prof_obs: np.ndarray,
+    prof_mod: np.ndarray,
+    ps: float,
+    *,
+    profile_type: Literal["radial", "azimuthal"] = "radial",
+    plot: bool = True,
+    save: Optional[str] = '',
+    ) -> Tuple[float, float, float, int]:
     """
     Calculate the reduced chi2 between data and model contained in arrays.
 
@@ -2018,18 +2125,8 @@ def profiles_chi2(
         Model data array.
     ps : float
         Pixel scale (e.g., mas/pix).
-    obs_err : ndarray
-        Observational error array (same shape as obs_data, uphi typically).
-    noise_level : float
-        Fractional noise level (err = noise_level * signal_mean) if obs_err is None
-    deprojection_inc_pa_deg : tuple of float, optional
-        (inclination_deg, position_angle_deg) for deprojection. If None, no deprojection is applied.
-    center : tuple of float, optional
-        (xc, yc) center coordinates in pixels. If None, image center is used.
-    profile_type : {'radial','azimuthal','both'}
+    profile_type : {'radial','azimuthal'}
         Type of profile to compute chi2 on.
-    mode : {'mean','median','sum'}
-        How to compute profile values per bin.
     plot : bool
         Whether to plot profiles.
     save : str, optional
@@ -2039,45 +2136,18 @@ def profiles_chi2(
     -------
     Tuple containing (chi2, chi2_red, loglike, n_data_points)
      """
-    plot_polarimetric_image(obs_data, ps, title='Observed Data check', save=save+'check.png', image_scale='asinh', roi_half_size=30)
-
+    
     # Initialize chi2 accumulators
     chi2_sum = 0.0
     loglike_sum=0.0
     n_data_points = 0
 
-    if deprojection_inc_pa_deg is not None:
-        inc_deg, pa_deg = deprojection_inc_pa_deg
-    else:
-        inc_deg, pa_deg = 0.0, 0.0
-    
-    if center is not None:
-        xc=center[0]
-        yc=center[1]
-    else:
-        xc=None
-        yc=None
-
-    chi2_sum_radial = 0.
-    loglike_sum_radial = 0.
-    n_points_radial=0
     # Compute profiles
-    if profile_type in ("radial", "both"):
-        prof_obs = radial_br_profile(obs_data, ps, inclination_deg=inc_deg, position_angle_deg=pa_deg, R_limit=radial_limit_mas,
-                                     mode=mode, noise_map=obs_err, noise_level=noise_level,xc=xc,yc=yc,
-                                     plot=plot, save=save+"obs_")
-        R_limit= np.max(prof_obs["i_rad_mas"])
+    if profile_type in ("radial"):
 
-        prof_mod = radial_br_profile(model_data, ps, inclination_deg=inc_deg, position_angle_deg=pa_deg,
-                                     R_limit=R_limit, mode=mode, xc=xc,yc=yc,
-                                     plot=plot, save=save+"model_")
-        
         max_i_rad_mas = min(np.max(prof_obs["i_rad_mas"]), np.max(prof_mod["i_rad_mas"]))
         index_max = np.where(prof_obs["i_rad_mas"] <= max_i_rad_mas)[0][-1]
         
-    
-
-
         if plot:
             plt.errorbar(prof_obs["i_rad_mas"][:index_max], prof_obs["signal"][:index_max], yerr=prof_obs["error"][:index_max], fmt='o', label='obs')
             plt.errorbar(prof_mod["i_rad_mas"][:index_max], prof_mod["signal"][:index_max], yerr=prof_mod["error"][:index_max], fmt='o', label='model')
@@ -2087,42 +2157,26 @@ def profiles_chi2(
             plt.savefig(save+'radial_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
             plt.close()
         
-        chi2_sum_radial= ((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2 / (prof_obs["error"][:index_max] ** 2 + 1e-16)).sum()
-        loglike_sum_radial = np.nansum(((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2)/(prof_obs["error"][:index_max] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs["error"][:index_max] ** 2 + 1e-16)))
-        n_points_radial=len(prof_obs["signal"][:index_max])
+        chi2_sum= ((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2 / (prof_obs["error"][:index_max] ** 2 + 1e-16)).sum()
+        loglike_sum = np.nansum(((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2)/(prof_obs["error"][:index_max] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs["error"][:index_max] ** 2 + 1e-16)))
+        n_data_points=len(prof_obs["signal"][:index_max])
     
-    if profile_type in ("azimuthal", "both"):
-        r_in_mas = 0
-        if profile_type=="azimuthal":
-            r_out_mas= 500.0
-        else:
-            r_out_mas =R_limit
 
-        prof_obs_az = azimuthal_profile(obs_data, ps, r_in_mas, r_out_mas,
-                                       mode=mode, xc=xc, yc=yc, nbins=az_nbins,
-                                       plot=plot, save=save+"obs_")
-        
-        prof_mod_az = azimuthal_profile(model_data, ps, r_in_mas, r_out_mas,
-                                       mode=mode, xc=xc, yc=yc, nbins=az_nbins,
-                                       plot=plot, save=save+"model_")
+    if profile_type=="azimuthal":    
+       
         if plot:
-            plt.plot(prof_obs_az["theta_deg_centers"], prof_obs_az["value"], 'o', label='obs')
-            plt.plot(prof_mod_az["theta_deg_centers"], prof_mod_az["value"], 'o', label='model')
+            plt.plot(prof_obs["theta_deg_centers"], prof_obs["value"], 'o', label='obs')
+            plt.plot(prof_mod["theta_deg_centers"], prof_mod["value"], 'o', label='model')
             plt.xlabel('Position angle (deg)')
             plt.ylabel('Normalised intensity')
             plt.legend()
             plt.savefig(save+'azimuthal_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
             plt.close()
         
-        chi2_sum_az = ((prof_obs_az["value"] - prof_mod_az["value"]) ** 2 / (prof_obs_az["std"] ** 2 + 1e-16)).sum() #this is weighted least-squares χ²
-        loglike_sum_az = np.nansum(((prof_obs_az["value"] - prof_mod_az["value"]) ** 2)/(prof_obs_az["std"] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs_az["std"] ** 2 + 1e-16)))
-        n_points_az=len(prof_obs_az["value"])
-       
-    # Combine results
-    chi2_sum = chi2_sum_radial + (chi2_sum_az if profile_type in ("azimuthal", "both") else 0.0)
-    loglike_sum = loglike_sum_radial + (loglike_sum_az if profile_type in ("azimuthal", "both") else 0.0)
-    n_data_points = n_points_radial + (n_points_az if profile_type in ("azimuthal", "both") else 0)
-
+        chi2_sum = ((prof_obs["value"] - prof_mod["value"]) ** 2 / (prof_obs["std"] ** 2 + 1e-16)).sum() #this is weighted least-squares χ²
+        loglike_sum = np.nansum(((prof_obs["value"] - prof_mod["value"]) ** 2)/(prof_obs["std"] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs["std"] ** 2 + 1e-16)))
+        n_data_points=len(prof_obs["value"])
+    
    
     
     if n_data_points == 0:
@@ -2135,7 +2189,6 @@ def profiles_chi2(
 
 
 
-#testing part 
 from skimage.metrics import structural_similarity as ssim
 
 def nan_safe(a: np.ndarray) -> np.ndarray:
@@ -2382,7 +2435,7 @@ def plotImage(image, lim):
     plt.colorbar()
     plt.tight_layout
 
-def deconvolution(image, psf, limit_N_decon=200, critlim=0.015,  image_cut=0,savefig=None, plot_lim=100):
+def deconvolution(image, psf, limit_N_decon=200, critlim=0.015,  image_cut=0,savefig=None, plot_lim=100, print_steps=False):
     """
     Perform Richardson-Lucy deconvolution on the given image with the specified PSF.
     
@@ -2406,7 +2459,7 @@ def deconvolution(image, psf, limit_N_decon=200, critlim=0.015,  image_cut=0,sav
 
     decon = np.copy(image)  # Create starting file for first iteration of deconvolution
     for i in range(0, limit_N_decon):  
-        print('deconvolution step ' + str(i))  # just some control output
+        if print_steps: print('deconvolution step ' + str(i))  # just some control output
 
         decon = decon * (convolve_fft(image / convolve_fft(decon, psf), psf_fliped))
         if savefig!= None:
@@ -2426,7 +2479,7 @@ def deconvolution(image, psf, limit_N_decon=200, critlim=0.015,  image_cut=0,sav
         if i >= 1:
             crit = compare(decon[a:b, a:b], deconvolved1[a:b, a:b])
 
-        print(crit)
+        if print_steps: print(crit)
         deconvolved1 = decon # Update for next iteration
 
         if (crit < critlim):

@@ -563,7 +563,7 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
     # Write param file and run MCFOST
     par_path = obm.write_mcfost_paramfile(cfg, fidelity, trial_dir)
     try:
-        obm.run_mcfost(fidelity,par_path, trial_dir)
+        obm.run_mcfost(fidelity,par_path, trial_dir, args.puffed_up_rim, cfg)
     except Exception:
         # Trial failed; return a high loss
         print(f"[objective] Trial failed for cfg={cfg}, dir={trial_dir}")
@@ -691,7 +691,8 @@ def main():
     p.add_argument("--seed", type=int, default=-1)# Random seed for SMAC
     p.add_argument("--correct-unresolved-polarimetry", action="store_true", help="Apply correction for unresolved central source polarimetry")
     p.add_argument("--warmstart", type=str, default=None, help="Path to previous SMAC run directory to warmstart from")
-
+    p.add_argument("--plot-intermediate", action="store_true", help="Plot intermediate results during scoring")
+    p.add_argument("--puffed-up-rim", action="store_true", help="Enable puffed up rim feature")
     args = p.parse_args()
     
     WORK_ROOT = Path(args.working_root).resolve()
@@ -785,8 +786,9 @@ def main():
 
     # Write param file and run MCFOST
     par_path = obm.write_mcfost_paramfile(incumbent, fidelity_result, results_dir)
-    obm.run_mcfost(fidelity_result,par_path, results_dir)
+    obm.run_mcfost(fidelity_result,par_path, results_dir, args.puffed_up_rim, incumbent)
     # Score outputs
+    args.plot_intermediate=True #to plot final results
     loss = obm.load_and_score_outputs(fidelity_result, results_dir, data_arg, args)
 
 
