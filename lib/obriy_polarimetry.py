@@ -1834,8 +1834,8 @@ def polarimetric_analysis(
                                             azimuthal_r_out_mas=azimuthal_r_out_mas,
                                             theta0=theta0
                                             )
-    results['mcfost_rescaled']['radial_profile_pi']=rad_prof_pi
-    results['mcfost_rescaled']['azimuthal_profile_pi']=az_prof_pi
+    results['mcfost_original']['radial_profile_pi']=rad_prof_pi
+    results['mcfost_original']['azimuthal_profile_pi']=az_prof_pi
           
     
 

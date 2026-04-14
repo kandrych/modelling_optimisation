@@ -211,8 +211,10 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         stage = "F4"
     if budget >= 5.0:
         stage = "F5"
-    if budget >= 6.0:
-        stage = "F6"
+    if budget >= 15.0:
+        stage = "F15"
+    if budget >= 16.0:
+        stage = "F16"
 
     # scale photons with budget
     # nbr_photons_eq_th = int(1.28e5 * (10**budget))
@@ -236,10 +238,10 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
     elif stage == "F4":
         img_res = 2
         products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
-    elif stage == "F5":
+    elif stage == "F15":
         img_res = 2
         products = ["sed","pdi_V", "pdi_I", "pdi_H"]
-    elif stage == "F6": #created for AR Pup test
+    elif stage == "F16": #created for AR Pup test
         img_res = 2
         products = ["pdi_V", "pdi_I", "pdi_H"]
     else:
@@ -472,6 +474,16 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             pdi_v=None
             pdi_i=None
             pdi_h=None
+        if  "alma" in fidelity_products:
+            alma_folder = '/fred/oz061/kandrych/Data/ALMA/IRAS08544-4431/'
+            alma_cont_file='IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits'
+            alma_cont=obp.Loadimage(alma_folder, alma_cont_file)
+            obp.plot_polarimetric_image(alma_cont, 2, title='IRAS08544-4431 ALMA continuum', save=work_root+'/alma_cont.png', image_scale='linear')
+            print('ALMA continuum loaded')
+        else:
+            alma_cont=None
+
+        
 
     elif data_root =='ar_pup_ozstar':
         #real PSF from observations
