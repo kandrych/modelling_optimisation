@@ -551,9 +551,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 fig.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()
             print(f'[obriy_mcfost] I band metrics: SSIM={metrics_i["ssim"]}, NCC={metrics_i["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
-            loss_i=1-(metrics_i['ssim']+metrics_i['ncc'])/2 + profile_pi_chi2_red # weights can be adjusted
-       
-
+            #loss_i=1-(metrics_i['ssim']+metrics_i['ncc'])/2 + profile_pi_chi2_red # weights can be adjusted
+            #Loss based only on profile chi2 to test if it can drive the fit
+            loss_i=profile_pi_chi2_red
 
 
         if "pdi_V" in fidelity["products"]:
@@ -637,8 +637,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 fig.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()
             print(f'[obriy_mcfost] V band metrics: SSIM={metrics_v["ssim"]}, NCC={metrics_v["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
-            loss_v=1-(metrics_v['ssim']+metrics_v['ncc'])/2 + profile_pi_chi2_red # weights can be adjusted
-        
+            #loss_v=1-(metrics_v['ssim']+metrics_v['ncc'])/2 + profile_pi_chi2_red # weights can be adjusted
+            #Loss based only on profile chi2 to test if it can drive the fit
+            loss_v= profile_pi_chi2_red
 
 
         if "pdi_H" in fidelity["products"]:
@@ -722,7 +723,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 fig.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()  
             print(f'[obriy_mcfost] H band metrics: SSIM={metrics_h["ssim"]}, NCC={metrics_h["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
-            loss_h=1-(metrics_h['ssim']+metrics_h['ncc'])/2 + profile_pi_chi2_red # weights can be adjusted
+            #loss_h=1-(metrics_h['ssim']+metrics_h['ncc'])/2 + profile_pi_chi2_red # weights can be adjusted
+            #Loss based only on profile chi2 to test if it can drive the fit
+            loss_h=profile_pi_chi2_red # weights can be adjusted
 
 
 
@@ -753,14 +756,14 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     chi2_red_total = chi_total/(num_points_total-i_num)  # reduced chi2 - not sure about number of free parameters here
     
     if "pdi_I" in fidelity["products"]:
-        chi2_red_total+=(loss_i)*100 # weighting factor to bring SSIM losses to similar scale as chi2
+        chi2_red_total+=(loss_i)#*100 # weighting factor to bring SSIM losses to similar scale as chi2
    
     
     if "pdi_V" in fidelity["products"]:
-        chi2_red_total+=(loss_v)*100 # weighting factor to bring SSIM losses to similar scale as chi2
+        chi2_red_total+=(loss_v)#*100 # weighting factor to bring SSIM losses to similar scale as chi2
    
     if "pdi_H" in fidelity["products"]:
-        chi2_red_total+=(loss_h)*100 # weighting factor to bring SSIM losses to similar scale as chi2
+        chi2_red_total+=(loss_h)#*100 # weighting factor to bring SSIM losses to similar scale as chi2
    
         #chi2_red_total=metrics_i["chi2_red"]+metrics_v["chi2_red"] #sum of reduced chi2 values for I and V bands for AR Pup fitting
 
