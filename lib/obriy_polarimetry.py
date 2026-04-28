@@ -2112,7 +2112,7 @@ def profile_chi2(
     *,
     profile_type: Literal["radial", "azimuthal"] = "radial",
     plot: bool = True,
-    save: Optional[str] = '',
+    save_prefix: Optional[str] = '',
     ) -> Tuple[float, float, float, int]:
     """
     Calculate the reduced chi2 between data and model contained in arrays.
@@ -2154,7 +2154,7 @@ def profile_chi2(
             plt.xlabel('Distance from the star (mas)')
             plt.ylabel('Normalised intensity')
             plt.legend()
-            plt.savefig(save+'radial_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
+            plt.savefig(save_prefix+'radial_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
             plt.close()
         
         chi2_sum= ((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2 / (prof_obs["error"][:index_max] ** 2 + 1e-16)).sum()
@@ -2170,7 +2170,7 @@ def profile_chi2(
             plt.xlabel('Position angle (deg)')
             plt.ylabel('Normalised intensity')
             plt.legend()
-            plt.savefig(save+'azimuthal_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
+            plt.savefig(save_prefix+'azimuthal_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
             plt.close()
         
         chi2_sum = ((prof_obs["value"] - prof_mod["value"]) ** 2 / (prof_obs["std"] ** 2 + 1e-16)).sum() #this is weighted least-squares χ²
