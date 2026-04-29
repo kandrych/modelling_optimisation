@@ -495,7 +495,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                             save_prefix=str(workdir)+'/figures/'+ "data_i_",
                                             deprojection_inc_pa_deg=(0.0, 0.0),
                                             center=None,
-                                            az_nbins=20,
+                                            az_nbins=18,
                                             azimuthal_r_in_mas=0.0,
                                             azimuthal_r_out_mas=500.0,
                                             theta0=0.0
@@ -586,7 +586,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                             save_prefix=str(workdir)+'/figures/'+ "data_v_",
                                             deprojection_inc_pa_deg=(0.0, 0.0),
                                             center=None,
-                                            az_nbins=20,
+                                            az_nbins=18,
                                             azimuthal_r_in_mas=0.0,
                                             azimuthal_r_out_mas=500.0,
                                             theta0=0.0
@@ -668,7 +668,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                             save_prefix=str(workdir)+'/figures/'+ "data_h_",
                                             deprojection_inc_pa_deg=(0.0, 0.0),
                                             center=None,
-                                            az_nbins=20,
+                                            az_nbins=18,
                                             azimuthal_r_in_mas=0.0,
                                             azimuthal_r_out_mas=500.0,
                                             theta0=0.0
