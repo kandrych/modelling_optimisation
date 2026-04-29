@@ -394,7 +394,13 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
                 print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
                 continue
             run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
-    
+    if "alma" in fidelity["products"]:
+        for w in [870.0]:
+            if os.path.exists(str(workdir)+"/data_"+str(w)+"/"):   
+                print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
+                continue
+            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
+
     if "vis2_chromatic" in fidelity["products"]: # all wavelengths for chromatic visibilities (PIONIER, MATISSE, GRAVITY) + full PDI
         for w in [0.55, 0.82, 1.5,1.55,1.6,1.63,1.65,1.7,1.75,1.8,1.85,1.9,
                   1.95,2.0,2.05,2.1,2.15,2.2,2.25,2.3,2.35,2.4,2.45,2.5,
@@ -433,6 +439,8 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         pdi_data_i = data_arg[6] 
     if "pdi_H" in fidelity["products"]:
         pdi_data_h = data_arg[7]
+    if "alma" in fidelity["products"]:
+        data_alma = data_arg[8]
     
     print('[obriy_mcfost] Data for scoring loaded successfully')
 
@@ -734,6 +742,13 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         
          
         print(f"PDI losses: I-band: {loss_i}, V-band: {loss_v}, H-band: {loss_h}")
+    
+
+
+    if "alma" in fidelity["products"]:
+        chi2_alma, chi2_red_alma, loglike_alma= oba.chi2_ALMA(str(workdir), data_alma=data_alma, plot=True, description=simulation_name)
+    
+    
     #initialize totals so eve if there is no sed and interferometry - we can still compute pdi only chi2
     chi_total=0.0
     num_points_total=1
