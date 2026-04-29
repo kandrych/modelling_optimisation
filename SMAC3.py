@@ -308,16 +308,11 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             #real PSF from observations
             star_psf='HD83878'
             figfolder_psf='/Users/katerynaandrych/Work/lin/PhD/SPHERE_reduction_data/paper2/mean_combined/'+star_psf+'/'
+
         if  "pdi_V" in fidelity_products:    
             file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
             psf_v=obp.Loadimage(figfolder_psf,file_psf)
             obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
-        if  "pdi_I" in fidelity_products: 
-            file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
-            psf_i=obp.Loadimage(figfolder_psf,file_psf)
-            obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
-
-        if  "pdi_V" in fidelity_products: 
             #polarimetric observations
             pdi_folder_v = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
             pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
@@ -325,21 +320,37 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             obp.plot_polarimetric_image(pdi_v, 3.6, title='IRAS08544-4431 V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=50)
         
         if  "pdi_I" in fidelity_products:    
+            file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
+            psf_i=obp.Loadimage(figfolder_psf,file_psf)
+            obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
+            #polarimetric observations
             pdi_folder_i = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
             pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
             pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
             obp.plot_polarimetric_image(pdi_i, 3.6, title='IRAS08544-4431 I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=50)
-
-        if  "pdi_H" in fidelity_products: 
-            pdi_folder_h = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
-            pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
-            pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
-            obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=work_root+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
-        
+            
         if  "pdi_H" in fidelity_products: 
             file_psf='iras08544-4431_calib_H_I_meancombined.fits'
             psf_h=obp.Loadimage(pdi_folder_h,file_psf)
             obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
+            pdi_folder_h = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
+            pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
+            pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
+            obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=work_root+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
+            
+        if "alma" in fidelity_products:
+            try:
+                data_dir_alma, data_file_alma = "/Users/katerynaandrych/Work/lin/Postdoc/Data/ALMA/IRAS08544-4431/", "IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits"
+                alma_cont=obp.Loadimage(data_dir_alma,data_file_alma)
+                ps_alma=0.002 #arcsec/pixel
+                alma_wavelength=0.87 #mm
+                print('ALMA data loaded')
+            except:
+                print("[main] ALMA data files not found. Please check the path if your budget expects ALMA data.")
+                alma_cont=None
+                ps_alma=None
+                alma_wavelength=None
+
 
     elif data_root =='demo_ozstar':
         if  "sed" in fidelity_products: 
@@ -478,7 +489,9 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             alma_folder = '/fred/oz061/kandrych/Data/ALMA/IRAS08544-4431/'
             alma_cont_file='IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits'
             alma_cont=obp.Loadimage(alma_folder, alma_cont_file)
-            obp.plot_polarimetric_image(alma_cont, 2, title='IRAS08544-4431 ALMA continuum', save=work_root+'/alma_cont.png', image_scale='linear')
+            ps_alma=2 #mas/pixel
+            alma_wavelength=0.87*1000 #mkm
+            obp.plot_polarimetric_image(alma_cont, ps_alma, title='IRAS08544-4431 ALMA continuum', save=work_root+'/alma_cont.png', image_scale='linear')
             print('ALMA continuum loaded')
         else:
             alma_cont=None
