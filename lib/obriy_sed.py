@@ -250,7 +250,6 @@ def chi2_SED_with_reddening(
 
    # --- Resolve reddening law path if not provided ---
     if reddening_law_path is None:
-        # folder_of_script = .../lib  (for example)
         folder_of_script = Path(__file__).resolve().parent
         # one above the folder of the script:
         reddening_law_path = str(folder_of_script.parent / "utils"/"ISMreddening_law_Cardelli1989.dat")

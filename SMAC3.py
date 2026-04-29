@@ -547,11 +547,53 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
     pdi_data_v={'psf': psf_v, 'pi': pdi_v}
     pdi_data_i={'psf': psf_i, 'pi': pdi_i}
     pdi_data_h={'psf': psf_h, 'pi': pdi_h}
+    data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma, 'alma_wavelength': alma_wavelength}
     data_sed = [data_wave, data_flux, data_err]
-    data_arrays = [data_sed, container_data_pionier, container_data_gravity, container_data_matisse_l, container_data_matisse_n,pdi_data_v, pdi_data_i, pdi_data_h]
+    data_arrays = [data_sed, container_data_pionier, container_data_gravity, container_data_matisse_l, container_data_matisse_n,pdi_data_v, pdi_data_i, pdi_data_h, data_alma]
     print('data loaded')
 
     return data_arrays
+
+
+#idea is to add commonly used observable calculations here, so that they can be reused across different trials.
+# def calculate_observables(data_arraays, fidelity_products: list)-> Dict[str, Any]:
+
+#     if "pdi_V" in fidelity_products:
+#         pdi_data_v = data_arraays[5] #each disc with data not deconvolved q_phi, u_phi, pi, and psf
+#     if "pdi_I" in fidelity_products:
+#         pdi_data_i = data_arraays[6] 
+#     if "pdi_H" in fidelity_products:
+#         pdi_data_h = data_arraays[7]
+#     if "alma" in fidelity_products:
+#         data_alma = data_arraays[8]
+    
+#     if  "pdi_V" in fidelity_products:    
+#         # Calculate metrics for arcsinh-scaled images to highlight morphology
+#             obs_rad_prof_pi, obs_az_prof_pi = obp.profiles(pdi_data_v['pi'], 3.6, 
+#                                             profile_type="both",
+#                                             mode="sum",
+#                                             radial_limit_mas=500,
+#                                             plot=False,
+#                                             deprojection_inc_pa_deg=(0.0, 0.0),
+#                                             center=None,
+#                                             az_nbins=18,
+#                                             azimuthal_r_in_mas=0.0,
+#                                             azimuthal_r_out_mas=500.0,
+#                                             theta0=0.0
+#                                             ) 
+            
+#     if  "pdi_I" in fidelity_products:    
+        
+#     if  "pdi_H" in fidelity_products: 
+        
+#     if "alma" in fidelity_products:
+            
+
+
+
+
+
+
 
 def make_unique_trial_dir(scratch_root: Path, seed: int, budget: float) -> Path:
     """
