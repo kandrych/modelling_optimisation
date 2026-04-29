@@ -1258,8 +1258,8 @@ def rotate_image(image, angle,xc,yc):
 def radial_br_profile(
     img: np.ndarray,
     ps: float,                         # pixel scale (e.g., mas/px)
-    inclination_deg: float,
-    position_angle_deg: float,         # major-axis PA (deg)
+    inclination_deg: float=0.0,
+    position_angle_deg: float=0.0,         # major-axis PA (deg)
     R_limit: float = 1000.0,           # limit in same units as ps (e.g., mas)
     *,
     noise_level: Optional[float] = None,     # fractional (err = noise_level * signal_mean)
@@ -1281,6 +1281,7 @@ def radial_br_profile(
     - Deprojection uses inclination + PA by rotating coordinates then compressing the minor axis by cos(i).
     - Binning uses annuli centered at radius i_r (in *pixels*) with half-width ~ sqrt(i_r)/2 pixels.
     - Error per bin is from: noise_map (std/sqrt(N) normalized), or noise_level * signal_mean, or a constant from background RMS.
+    - mode determines how the signal_mean is computed per annulus: mean, median (normalised by maximum intensity), or sum (normalized by total intensity).
     """
     if img.ndim != 2:
             raise ValueError("img must be 2D.")
@@ -1292,7 +1293,7 @@ def radial_br_profile(
 
     
     inc = np.deg2rad(inclination_deg)
-    cosi = max(1e-6, math.cos(inc)) #to avoid division by zero
+    cosi = max(1e-10, math.cos(inc)) #to avoid division by zero
     pa = math.radians(position_angle_deg)
     
     R,_,_,X, Y = compute_grid(img, xc=xc, yc=yc)
@@ -1302,7 +1303,7 @@ def radial_br_profile(
     finite_max = np.nanmax(img[R< R_limit/ps])
     total_intensity = np.nansum(img[R< R_limit/ps])
     if not np.isfinite(finite_max) or finite_max == 0:
-        raise ValueError("Image region set by upper radius (R_limit) has non-finite or zero maximum; cannot normalize.")
+        raise ValueError(f"Image region set by upper radius ({R_limit/ps} pixels) has non-finite or zero maximum; cannot normalize. finite_max: {finite_max}. image img[R< R_limit/ps]: {img[R< R_limit/ps]}")
     
     # Apply PA rotation to coords, then deproject by cos(i)
     cos_t, sin_t = math.cos(-pa), math.sin(-pa)   # rotate coords by -PA so major axis aligns with x'
@@ -1366,7 +1367,7 @@ def radial_br_profile(
         elif mode=="sum":
             signal_mean = float(np.nansum(vals)) / total_intensity
 
-        
+        #TO BE FIXED, CURRENTLY NOISE IS NOT DONE PROPERLY, IT IS JUST A PLACEHOLDER        
         if noise_map is not None:
             noise = noise_map[mask]
             
@@ -1727,7 +1728,7 @@ def polarimetric_analysis(
     image_scale: Literal["linear", "asinh"] = "asinh",
     unresolved_correction_radius_px: int = 3,   # radius (in px of rescaled image)
     background_annulus_mas: Optional[Tuple[float, float]] = (200, 250),
-    radial_limit_mas: float = 150.0,
+    radial_limit_mas: float = 1000.0,
     deprojection: Tuple[float, float]=(0.0,0.0), # whether to deproject image for radial/azimuthal profiles, tuple of (incl_deg, pa_deg)
     azimuthal_r_in_mas: float = 0.0,
     azimuthal_r_out_mas: float = 100.0,
@@ -2058,7 +2059,7 @@ def profiles(
     *,
     profile_type: Literal["radial", "azimuthal", "both"] = "radial",
     mode: Literal["mean", "median", "sum"] = "mean",
-    radial_limit_mas: float = 500.0,
+    radial_limit_mas: float = 1000.0,
     plot: bool = True,
     save_prefix: str = "",
     deprojection_inc_pa_deg: Optional[Tuple[float, float]] = None,
@@ -2069,8 +2070,7 @@ def profiles(
     theta0: float = 0.0,
 ) -> Tuple[Optional[Dict[str, np.ndarray]], Optional[Dict[str, np.ndarray]]]:
 
-    # radii in both units to avoid mixing
-    R_limit_pix = radial_limit_mas / ps
+
 
     inc_deg, pa_deg = deprojection_inc_pa_deg if deprojection_inc_pa_deg is not None else (0.0, 0.0)
     xc, yc = center if center is not None else (None, None)
@@ -2079,12 +2079,12 @@ def profiles(
     prof_az: Optional[Dict[str, np.ndarray]] = None
 
     if profile_type in ("radial", "both"):
-        # IMPORTANT: decide what radial_br_profile expects: mas or pixels.
+      
         prof_rad = radial_br_profile(
             model_data, ps,
             inclination_deg=inc_deg,
             position_angle_deg=pa_deg,
-            R_limit=R_limit_pix,          # <-- if it expects pixels
+            R_limit=radial_limit_mas,          # <-- if it expects pixels
             mode=mode, xc=xc, yc=yc,
             plot=plot,
             save=save_prefix + "radial_"
