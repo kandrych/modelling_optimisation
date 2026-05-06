@@ -48,6 +48,7 @@ import lib.obriy_general as obg
 import lib.obriy_interferometry as obi
 import lib.obriy_sed as obs
 import lib.obriy_polarimetry as obp
+import lib.obriy_alma as oba
 
 
 import shutil, subprocess
@@ -711,8 +712,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
 
     if "alma" in fidelity["products"]:
-        chi2_alma, chi2_red_alma, loglike_alma= oba.chi2_ALMA(str(workdir), data_alma=data_alma, plot=True, description=simulation_name)
-    
+        chi2_red_alma, profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints = oba.chi2_ALMA(str(workdir), data_alma=data_alma, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_ALMA_')
+        loss_alma= chi2_red_alma
+        print(f"ALMA chi2: {chi2_red_alma}")
     
     #initialize totals so eve if there is no sed and interferometry - we can still compute pdi only chi2
     chi_total=0.0
@@ -746,7 +748,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         chi2_red_total+=(loss_h)#*100 # weighting factor to bring SSIM losses to similar scale as chi2
    
         #chi2_red_total=metrics_i["chi2_red"]+metrics_v["chi2_red"] #sum of reduced chi2 values for I and V bands for AR Pup fitting
-
+    
+    if "alma" in fidelity["products"]:
+        chi2_red_total+=loss_alma 
     print(f"Total reduced chi2: {chi2_red_total}, loglike: {loglike_total}")
     
     return chi2_red_total
