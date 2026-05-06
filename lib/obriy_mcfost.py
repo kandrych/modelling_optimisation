@@ -394,6 +394,7 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
                 print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
                 continue
             run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
+    
     if "alma" in fidelity["products"]:
         for w in [870.0]:
             if os.path.exists(str(workdir)+"/data_"+str(w)+"/"):   

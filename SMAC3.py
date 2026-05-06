@@ -211,6 +211,8 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         stage = "F4"
     if budget >= 5.0:
         stage = "F5"
+    if budget >= 14.0:
+        stage = "F14"
     if budget >= 15.0:
         stage = "F15"
     if budget >= 16.0:
@@ -238,6 +240,9 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
     elif stage == "F4":
         img_res = 2
         products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
+    elif stage == "F14":
+        img_res = 2
+        products = ["sed", "vis2_1perband", "pdi_V", "pdi_I", "pdi_H", "alma"]
     elif stage == "F15":
         img_res = 2
         products = ["sed","pdi_V", "pdi_I", "pdi_H"]
@@ -447,35 +452,65 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             #real PSF from observations
             figfolder_psf='/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/psf/'
             star_psf='HD83878'
+            pdi_h={}
+            pdi_i={}
+            pdi_v={}
+            
             if  "pdi_V" in fidelity_products:
                 file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
                 psf_v=obp.Loadimage(figfolder_psf,file_psf)
                 obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=work_root+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
+                #polarimetric observations
+                pdi_folder_v = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
+                file_type=['PI','Q','U', "Q_phi", "U_phi"]
+                for ft in file_type:
+                    pdi_file_v = f'IRAS08544-4431_dc_notnorm_V_{ft}_corr_tel+unres.fits'
+                    pdi_v[ft]= obp.Loadimage(pdi_folder_v,pdi_file_v)
+                    obp.plot_polarimetric_image(pdi_v[ft], 3.6, title=f'IRAS08544-4431 V-band {ft}', save=work_root+f'/v_band_{ft}.png', image_scale='asinh', roi_half_size=50)
+                
+                pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_I_meancombined.fits'
+                pdi_v['I']= obp.Loadimage(pdi_folder_v,pdi_file_v)
+                obp.plot_polarimetric_image(pdi_v['I'], 3.6, title='IRAS08544-4431 V-band I', save=work_root+'/v_band_I.png', image_scale='asinh', roi_half_size=50)
+
+            
             if  "pdi_I" in fidelity_products:
                 file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
                 psf_i=obp.Loadimage(figfolder_psf,file_psf)
                 obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=work_root+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
-
-            if  "pdi_V" in fidelity_products:
                 #polarimetric observations
-                pdi_folder_v = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
-                pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
-                pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
-                obp.plot_polarimetric_image(pdi_v, 3.6, title='IRAS08544-4431 V-band PI', save=work_root+'/pi_v_band.png', image_scale='asinh', roi_half_size=50)
-            if  "pdi_I" in fidelity_products:
                 pdi_folder_i = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
-                pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
-                pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
-                obp.plot_polarimetric_image(pdi_i, 3.6, title='IRAS08544-4431 I-band PI', save=work_root+'/pi_i_band.png', image_scale='asinh', roi_half_size=50)
-            if  "pdi_H" in fidelity_products:
-                pdi_folder_h = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
-                pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
-                pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
-                obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=work_root+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
+                file_type=['PI','Q','U', "Q_phi", "U_phi"]
+                for ft in file_type:
+                    pdi_file_i = f'IRAS08544-4431_dc_notnorm_I_{ft}_corr_tel+unres.fits'
+                    pdi_i[ft]= obp.Loadimage(pdi_folder_i,pdi_file_i)
+                    obp.plot_polarimetric_image(pdi_i[ft], 3.6, title=f'IRAS08544-4431 I-band {ft}', save=work_root+f'/i_band_{ft}.png', image_scale='asinh', roi_half_size=50)
+                
+                pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_I_meancombined.fits'
+                pdi_i['I']= obp.Loadimage(pdi_folder_i,pdi_file_i)
+                obp.plot_polarimetric_image(pdi_i['I'], 3.6, title='IRAS08544-4431 I-band I', save=work_root+'/i_band_I.png', image_scale='asinh', roi_half_size=50)
 
+
+            if  "pdi_H" in fidelity_products:
+                
                 file_psf='iras08544-4431_calib_H_I_meancombined.fits'
                 psf_h=obp.Loadimage(pdi_folder_h,file_psf)
                 obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=work_root+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
+                pdi_h['I']= obp.Loadimage(pdi_folder_h,pdi_file_h)
+                obp.plot_polarimetric_image(pdi_h['I'], 12.27, title='IRAS08544-4431 H-band I', save=work_root+'/h_band_I.png', image_scale='asinh', roi_half_size=30)
+                #polarimetric observations
+                pdi_folder_h = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
+                file_type=['PI','Q','U', "Q_phi", "U_phi"]
+                for ft in file_type:
+                    pdi_file_h = f'iras08544-4431_calib_H_{ft}_corr_tel+unres.fits'
+                    pdi_h[ft]= obp.Loadimage(pdi_folder_h,pdi_file_h)
+                    obp.plot_polarimetric_image(pdi_h[ft], 12.27, title=f'IRAS08544-4431 H-band {ft}', save=work_root+f'/h_band_{ft}.png', image_scale='asinh', roi_half_size=30)
+                
+                pdi_file_h = 'iras08544-4431_calib_H_I_meancombined.fits'
+                pdi_h['I']= obp.Loadimage(pdi_folder_h,pdi_file_h)
+                obp.plot_polarimetric_image(pdi_h['I'], 12.27, title='IRAS08544-4431 H-band I', save=work_root+'/h_band_I.png', image_scale='asinh', roi_half_size=30)
+
+
+
 
             print('Polarimetric data loaded')
         else:
@@ -485,6 +520,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             pdi_v=None
             pdi_i=None
             pdi_h=None
+
         if  "alma" in fidelity_products:
             alma_folder = '/fred/oz061/kandrych/Data/ALMA/IRAS08544-4431/'
             alma_cont_file='IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits'
@@ -495,10 +531,15 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             print('ALMA continuum loaded')
         else:
             alma_cont=None
+            ps_alma=None
+            alma_wavelength=None
 
         
 
     elif data_root =='ar_pup_ozstar':
+        #HERE FILES AND TUPES NOT FIXED YET, TO DO
+        #NEW VERSION IS IN IRAS08 OZSTAR
+
         #real PSF from observations
         if  "pdi_V" in fidelity_products or "pdi_I" in fidelity_products:
             figfolder_psf='/fred/oz061/kandrych/Data/polarimetry/AR_Pup_zimpol_2018/psf/'
@@ -542,53 +583,97 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         raise ValueError(f"Unknown data_root: {data_root}")
     
 
+    if "pdi_V" in fidelity_products:    
+        # Calculate metrics for arcsinh-scaled images to highlight morphology
+        radial_profile_v={}
+        azimuthal_profile_v={}
+        for ft in ['PI',"Q_phi",'I']:
+            radial_profile_v[ft], azimuthal_profile_v[ft] = obp.profiles(pdi_v[ft], 3.6, 
+                                                    profile_type="both",
+                                                    mode="sum",
+                                                    radial_limit_mas=500,
+                                                    plot=False,
+                                                    deprojection_inc_pa_deg=(0.0, 0.0),
+                                                    center=None,
+                                                    az_nbins=18,
+                                                    azimuthal_r_in_mas=0.0,
+                                                    azimuthal_r_out_mas=500.0,
+                                                    theta0=0.0
+                                                    ) 
+    else:
+        radial_profile_v=None
+        azimuthal_profile_v=None
 
+    if "pdi_I" in fidelity_products:    
+        radial_profile_i={}
+        azimuthal_profile_i={}
+        # Calculate metrics for arcsinh-scaled images to highlight morphology
+        for ft in ['PI',"Q_phi",'I']:
+            radial_profile_i[ft], azimuthal_profile_i[ft] = obp.profiles(pdi_i[ft], 3.6, 
+                                                    profile_type="both",
+                                                    mode="sum",
+                                                    radial_limit_mas=500,
+                                                plot=False,
+                                                deprojection_inc_pa_deg=(0.0, 0.0),
+                                                center=None,
+                                                az_nbins=18,
+                                                azimuthal_r_in_mas=0.0,
+                                                azimuthal_r_out_mas=500.0,
+                                                theta0=0.0
+                                                ) 
+    else:
+        radial_profile_i=None
+        azimuthal_profile_i=None
 
-    pdi_data_v={'psf': psf_v, 'pi': pdi_v}
-    pdi_data_i={'psf': psf_i, 'pi': pdi_i}
-    pdi_data_h={'psf': psf_h, 'pi': pdi_h}
-    data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma, 'alma_wavelength': alma_wavelength}
+    if "pdi_H" in fidelity_products:
+        radial_profile_h={}
+        azimuthal_profile_h={}
+        # Calculate metrics for arcsinh-scaled images to highlight morphology
+        for ft in ['PI',"Q_phi",'I']:
+            radial_profile_h[ft], azimuthal_profile_h[ft] = obp.profiles(pdi_h[ft], 12.27, 
+                                                    profile_type="both",
+                                                    mode="sum",
+                                                    radial_limit_mas=500,
+                                                    plot=False,
+                                                    deprojection_inc_pa_deg=(0.0, 0.0),
+                                                    center=None,
+                                                    az_nbins=18,
+                                                    azimuthal_r_in_mas=0.0,
+                                                    azimuthal_r_out_mas=500.0,
+                                                theta0=0.0
+                                                )
+    else:
+        radial_profile_h=None
+        azimuthal_profile_h=None    
+
+    if "alma" in fidelity_products:
+        # Calculate metrics for arcsinh-scaled images to highlight morphology
+        radial_profile_alma, azimuthal_profile_alma = obp.profiles(alma_cont, 2.0, 
+                                                profile_type="both",
+                                                mode="mean",
+                                                radial_limit_mas=500,
+                                                plot=False,
+                                                deprojection_inc_pa_deg=(0.0, 0.0),
+                                                center=None,
+                                                az_nbins=18,
+                                                azimuthal_r_in_mas=0.0,
+                                                azimuthal_r_out_mas=500.0,
+                                                theta0=0.0
+                                                )
+    else:
+        radial_profile_alma=None
+        azimuthal_profile_alma=None  
+
+    pdi_data_v={'psf': psf_v, 'pol_images': pdi_v, 'radial_profiles': radial_profile_v, 'azimuthal_profiles': azimuthal_profile_v}
+    pdi_data_i={'psf': psf_i, 'pol_images': pdi_i, 'radial_profiles': radial_profile_i, 'azimuthal_profiles': azimuthal_profile_i}
+    pdi_data_h={'psf': psf_h, 'pol_images': pdi_h, 'radial_profiles': radial_profile_h, 'azimuthal_profiles': azimuthal_profile_h}
+
+    data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma, 'alma_wavelength': alma_wavelength, 'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma}
     data_sed = [data_wave, data_flux, data_err]
     data_arrays = [data_sed, container_data_pionier, container_data_gravity, container_data_matisse_l, container_data_matisse_n,pdi_data_v, pdi_data_i, pdi_data_h, data_alma]
     print('data loaded')
 
     return data_arrays
-
-
-#idea is to add commonly used observable calculations here, so that they can be reused across different trials.
-# def calculate_observables(data_arraays, fidelity_products: list)-> Dict[str, Any]:
-
-#     if "pdi_V" in fidelity_products:
-#         pdi_data_v = data_arraays[5] #each disc with data not deconvolved q_phi, u_phi, pi, and psf
-#     if "pdi_I" in fidelity_products:
-#         pdi_data_i = data_arraays[6] 
-#     if "pdi_H" in fidelity_products:
-#         pdi_data_h = data_arraays[7]
-#     if "alma" in fidelity_products:
-#         data_alma = data_arraays[8]
-    
-#     if  "pdi_V" in fidelity_products:    
-#         # Calculate metrics for arcsinh-scaled images to highlight morphology
-#             obs_rad_prof_pi, obs_az_prof_pi = obp.profiles(pdi_data_v['pi'], 3.6, 
-#                                             profile_type="both",
-#                                             mode="sum",
-#                                             radial_limit_mas=500,
-#                                             plot=False,
-#                                             deprojection_inc_pa_deg=(0.0, 0.0),
-#                                             center=None,
-#                                             az_nbins=18,
-#                                             azimuthal_r_in_mas=0.0,
-#                                             azimuthal_r_out_mas=500.0,
-#                                             theta0=0.0
-#                                             ) 
-            
-#     if  "pdi_I" in fidelity_products:    
-        
-#     if  "pdi_H" in fidelity_products: 
-        
-#     if "alma" in fidelity_products:
-            
-
 
 
 
