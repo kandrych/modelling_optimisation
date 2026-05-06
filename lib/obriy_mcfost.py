@@ -485,33 +485,21 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             
             if args.correct_unresolved_polarimetry:
                 print('[obriy_mcfost] Applying unresolved polarization correction for I band')
-                data_cropped_i, model_cropped_i= obp.crop_to_same_size(pdi_data_i['pi'], results_i['mcfost_convolved_unresolved_corrected']['pi'])
-                model_rad_prof_pi= results_i['mcfost_convolved_unresolved_corrected']['radial_profile_pi']
-                model_azimuthal_prof_pi= results_i['mcfost_convolved_unresolved_corrected']['azimuthal_profile_pi']
+                data_cropped_i, model_cropped_i= obp.crop_to_same_size(pdi_data_i['pol_images']['Q_phi'], results_i['mcfost_convolved_unresolved_corrected']['q_phi'])
+                model_rad_prof= results_i['mcfost_convolved_unresolved_corrected']['radial_profiles']['q_phi']
+                model_azimuthal_prof= results_i['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']['q_phi']
                 
             else:
                 print('[obriy_mcfost] No unresolved polarization correction applied for I band')
-                data_cropped_i, model_cropped_i= obp.crop_to_same_size(pdi_data_i['pi'], results_i['mcfost_convolved']['pi'])
-                model_rad_prof_pi= results_i['mcfost_convolved']['radial_profile_pi']
-                model_azimuthal_prof_pi= results_i['mcfost_convolved']['azimuthal_profile_pi']
+                data_cropped_i, model_cropped_i= obp.crop_to_same_size(pdi_data_i['pol_images']['Q_phi'], results_i['mcfost_convolved']['q_phi'])
+                model_rad_prof= results_i['mcfost_convolved']['radial_profiles']['q_phi']
+                model_azimuthal_prof= results_i['mcfost_convolved']['azimuthal_profiles']['q_phi']
                    
             # Calculate metrics for arcsinh-scaled images to highlight morphology
-            obs_rad_prof_pi, obs_az_prof_pi = obp.profiles(data_cropped_i, 3.6, 
-                                            profile_type="both",
-                                            mode="sum",
-                                            radial_limit_mas=500,
-                                            plot=args.plot_intermediate,
-                                            save_prefix=str(workdir)+'/figures/'+ "data_i_",
-                                            deprojection_inc_pa_deg=(0.0, 0.0),
-                                            center=None,
-                                            az_nbins=18,
-                                            azimuthal_r_in_mas=0.0,
-                                            azimuthal_r_out_mas=500.0,
-                                            theta0=0.0
-                                            ) 
+            obs_rad_prof_pi, obs_az_prof_pi = pdi_data_i['radial_profiles']['Q_phi'], pdi_data_i['azimuthal_profiles']['Q_phi']
             
-            profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof_pi, 3.6, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_i_")
-            profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof_pi, 3.6, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_i_")
+            profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 3.6, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_i_")
+            profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_i_")
             profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
             profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
 
@@ -523,8 +511,8 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 return_pixel_chi2=True
             )
             if args.plot_intermediate:
-                obp.plot_polarimetric_image(results_i['mcfost_convolved_unresolved_corrected']['pi_deconvolved'], 3.6, title=f'Model PI, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_pi_corr_conv_deconv_I.png', image_scale='asinh', roi_half_size=100)
-                obp.plot_polarimetric_image(results_i['mcfost_convolved']['pi_deconvolved'], 3.6, title=f'Model PI, conv, decon', save=str(workdir)+'/figures'+'/model_pi_conv_deconv_I.png', image_scale='asinh', roi_half_size=100)
+                obp.plot_polarimetric_image(results_i['mcfost_convolved_unresolved_corrected']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_q_phi_corr_conv_deconv_I.png', image_scale='asinh', roi_half_size=100)
+                obp.plot_polarimetric_image(results_i['mcfost_convolved']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, decon', save=str(workdir)+'/figures'+'/model_q_phi_conv_deconv_I.png', image_scale='asinh', roi_half_size=100)
 
                 obp.plot_polarimetric_image(metrics_i["ssim_image"], 3.6, title=f'ssim, score {metrics_i["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_I.png', image_scale='linear', roi_half_size=50)
 
@@ -572,37 +560,25 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                         theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Vband')
             if args.plot_intermediate:
-                obp.plot_polarimetric_image(results_v['mcfost_convolved_unresolved_corrected']['pi_deconvolved'], 3.6, title=f'Model PI, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_pi_corr_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
-                obp.plot_polarimetric_image(results_v['mcfost_convolved']['pi_deconvolved'], 3.6, title=f'Model PI, conv, decon', save=str(workdir)+'/figures'+'/model_pi_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
+                obp.plot_polarimetric_image(results_v['mcfost_convolved_unresolved_corrected']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_q_phi_corr_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
+                obp.plot_polarimetric_image(results_v['mcfost_convolved']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, decon', save=str(workdir)+'/figures'+'/model_q_phi_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
             
             if args.correct_unresolved_polarimetry:
                 print('[obriy_mcfost] Applying unresolved polarization correction for I band')
-                data_cropped_v, model_cropped_v= obp.crop_to_same_size(pdi_data_v['pi'], results_v['mcfost_convolved_unresolved_corrected']['pi'])
-                model_rad_prof_pi= results_v['mcfost_convolved_unresolved_corrected']['radial_profile_pi']
-                model_azimuthal_prof_pi= results_v['mcfost_convolved_unresolved_corrected']['azimuthal_profile_pi']
+                data_cropped_v, model_cropped_v= obp.crop_to_same_size(pdi_data_v['pol_images']['Q_phi'], results_v['mcfost_convolved_unresolved_corrected']['q_phi'])
+                model_rad_prof= results_v['mcfost_convolved_unresolved_corrected']['radial_profiles']['q_phi']
+                model_azimuthal_prof= results_v['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']['q_phi']
                  
             else:
                 print('[obriy_mcfost] No unresolved polarization correction applied for I band')
-                data_cropped_v, model_cropped_v= obp.crop_to_same_size(pdi_data_v['pi'], results_v['mcfost_convolved']['pi'])   
-                model_rad_prof_pi= results_v['mcfost_convolved']['radial_profile_pi']
-                model_azimuthal_prof_pi= results_v['mcfost_convolved']['azimuthal_profile_pi']
-
-            obs_rad_prof_pi, obs_az_prof_pi = obp.profiles(data_cropped_v, 3.6, 
-                                            profile_type="both",
-                                            mode="sum",
-                                            radial_limit_mas=500,
-                                            plot=args.plot_intermediate,
-                                            save_prefix=str(workdir)+'/figures/'+ "data_v_",
-                                            deprojection_inc_pa_deg=(0.0, 0.0),
-                                            center=None,
-                                            az_nbins=18,
-                                            azimuthal_r_in_mas=0.0,
-                                            azimuthal_r_out_mas=500.0,
-                                            theta0=0.0
-                                            ) 
+                data_cropped_v, model_cropped_v= obp.crop_to_same_size(pdi_data_v['pol_images']['Q_phi'], results_v['mcfost_convolved']['q_phi'])   
+                model_rad_prof= results_v['mcfost_convolved']['radial_profiles']['q_phi']
+                model_azimuthal_prof= results_v['mcfost_convolved']['azimuthal_profiles']['q_phi']
+            #CHANGE HERE for profiles that are already calculated in loading data initially to avoid recalculating them and speed up the process
+            obs_rad_prof, obs_az_prof= pdi_data_v['radial_profiles']['Q_phi'], pdi_data_v['azimuthal_profiles']['Q_phi']
             
-            profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof_pi, 3.6, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_v_")
-            profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof_pi, 3.6, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_v_")
+            profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof, model_rad_prof, 3.6, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_v_")
+            profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_v_")
             profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
             profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
 
@@ -660,30 +636,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
            
             if args.correct_unresolved_polarimetry:
                 print('[obriy_mcfost] Applying unresolved polarization correction for H band')
-                data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pi'], results_h['mcfost_convolved_unresolved_corrected']['pi']) 
-                model_rad_prof_pi= results_h['mcfost_convolved_unresolved_corrected']['radial_profile_pi']
-                model_azimuthal_prof_pi= results_h['mcfost_convolved_unresolved_corrected']['azimuthal_profile_pi']
+                data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pol_images']['Q_phi'], results_h['mcfost_convolved_unresolved_corrected']['q_phi']) 
+                model_rad_prof= results_h['mcfost_convolved_unresolved_corrected']['radial_profiles']['q_phi']
+                model_azimuthal_prof= results_h['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']['q_phi']
             else:
                 print('[obriy_mcfost] No unresolved polarization correction applied for H band')
-                data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pi'], results_h['mcfost_convolved']['pi']) 
-                model_rad_prof_pi= results_h['mcfost_convolved']['radial_profile_pi']
-                model_azimuthal_prof_pi= results_h['mcfost_convolved']['azimuthal_profile_pi']
+                data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pol_images']['Q_phi'], results_h['mcfost_convolved']['q_phi']) 
+                model_rad_prof= results_h['mcfost_convolved']['radial_profiles']['q_phi']
+                model_azimuthal_prof= results_h['mcfost_convolved']['azimuthal_profiles']['q_phi']
             
-            obs_rad_prof_pi, obs_az_prof_pi = obp.profiles(data_cropped_h, 12.27, 
-                                            profile_type="both",
-                                            mode="sum",
-                                            radial_limit_mas=500,
-                                            plot=args.plot_intermediate,
-                                            save_prefix=str(workdir)+'/figures/'+ "data_h_",
-                                            deprojection_inc_pa_deg=(0.0, 0.0),
-                                            center=None,
-                                            az_nbins=18,
-                                            azimuthal_r_in_mas=0.0,
-                                            azimuthal_r_out_mas=500.0,
-                                            theta0=0.0
-                                            )       
-            profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof_pi, 12.27, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_h_")
-            profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof_pi, 12.27, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_h_")
+            obs_rad_prof_pi, obs_az_prof_pi = pdi_data_h['radial_profiles']['Q_phi'], pdi_data_h['azimuthal_profiles']['Q_phi']     
+            profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 12.27, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_h_")
+            profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 12.27, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_h_")
             profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
             profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
 

@@ -1822,7 +1822,12 @@ def polarimetric_analysis(
                                 'phi':phi_mcfost_original,
                                 'metrics':metrics_original
                                 }
-    rad_prof_pi, az_prof_pi = profiles(pi_original, inst_ps_mas, 
+
+
+    rad_prof={}
+    az_prof={}
+    for ft in ['pi',"q_phi",'img_tot']:            
+        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_original'][ft], inst_ps_mas, 
                                             profile_type="both",
                                             mode="sum",
                                             radial_limit_mas=radial_limit_mas,
@@ -1835,8 +1840,8 @@ def polarimetric_analysis(
                                             azimuthal_r_out_mas=azimuthal_r_out_mas,
                                             theta0=theta0
                                             )
-    results['mcfost_original']['radial_profile_pi']=rad_prof_pi
-    results['mcfost_original']['azimuthal_profile_pi']=az_prof_pi
+    results['mcfost_original']['radial_profiles']=rad_prof
+    results['mcfost_original']['azimuthal_profiles']=az_prof
           
     
 
@@ -1854,21 +1859,24 @@ def polarimetric_analysis(
                                     'phi':phi_rescaled,
                                     'metrics':metrics_rescaled
                                     }
-    rad_prof_pi, az_prof_pi = profiles(pi_rescaled, inst_ps_mas, 
-                                            profile_type="both",
-                                            mode="sum",
-                                            radial_limit_mas=radial_limit_mas,
-                                            plot=plot,
-                                            save_prefix=fig_dir + extra_title + "mcfost_rescaled_",
-                                            deprojection_inc_pa_deg=deprojection,
-                                            center=None,
-                                            az_nbins=azimuthal_nbins,
-                                            azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                            azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                            theta0=theta0
-                                            )
-    results['mcfost_rescaled']['radial_profile_pi']=rad_prof_pi
-    results['mcfost_rescaled']['azimuthal_profile_pi']=az_prof_pi
+    rad_prof={}
+    az_prof={}
+    for ft in ['pi',"q_phi",'img_tot']:      
+        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_rescaled'][ft], inst_ps_mas, 
+                                                profile_type="both",
+                                                mode="sum",
+                                                radial_limit_mas=radial_limit_mas,
+                                                plot=plot,
+                                                save_prefix=fig_dir + extra_title + "mcfost_rescaled_",
+                                                deprojection_inc_pa_deg=deprojection,
+                                                center=None,
+                                                az_nbins=azimuthal_nbins,
+                                                azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                theta0=theta0
+                                                )
+    results['mcfost_rescaled']['radial_profiles']=rad_prof
+    results['mcfost_rescaled']['azimuthal_profiles']=az_prof
           
 
     
@@ -1893,7 +1901,8 @@ def polarimetric_analysis(
         
     if convolution_mode!='none':
             pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
-
+            q_phi_conv_decon=deconvolution(Q_phi_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
+            
             results['mcfost_convolved']={'img_q':Q_conv,
                                             'img_u':U_conv,
                                             'img_tot':I_conv,
@@ -1901,23 +1910,28 @@ def polarimetric_analysis(
                                             'u_phi':U_phi_conv,
                                             'pi':PI_conv,
                                             'pi_deconvolved':pi_conv_decon,
+                                            'q_phi_deconvolved':q_phi_conv_decon,
                                             'metrics':metrics_conv
                                             }
-            rad_prof_pi, az_prof_pi = profiles(PI_conv, inst_ps_mas, 
-                                            profile_type="both",
-                                            mode="sum",
-                                            radial_limit_mas=radial_limit_mas,
-                                            plot=plot,
-                                            save_prefix=fig_dir + extra_title + "mcfost_convolved_",
-                                            deprojection_inc_pa_deg=deprojection,
-                                            center=None,
-                                            az_nbins=azimuthal_nbins,
-                                            azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                            azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                            theta0=theta0
-                                            )
-            results['mcfost_convolved']['radial_profile_pi']=rad_prof_pi
-            results['mcfost_convolved']['azimuthal_profile_pi']=az_prof_pi
+            
+            rad_prof={}
+            az_prof={}
+            for ft in ['pi',"q_phi",'img_tot']:      
+                rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved'][ft], inst_ps_mas, 
+                                                profile_type="both",
+                                                mode="sum",
+                                                radial_limit_mas=radial_limit_mas,
+                                                plot=plot,
+                                                save_prefix=fig_dir + extra_title + "mcfost_convolved_",
+                                                deprojection_inc_pa_deg=deprojection,
+                                                center=None,
+                                                az_nbins=azimuthal_nbins,
+                                                azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                theta0=theta0
+                                                )
+            results['mcfost_convolved']['radial_profiles']=rad_prof
+            results['mcfost_convolved']['azimuthal_profiles']=az_prof
             
 
 
@@ -1950,22 +1964,25 @@ def polarimetric_analysis(
                                             'aolp_unres':aolp_unres,
                                             'phi':phi
                                             }
-    
-    rad_prof_pi, az_prof_pi = profiles(pi_corr, inst_ps_mas, 
-                                            profile_type="both",
-                                            mode="sum",
-                                            radial_limit_mas=radial_limit_mas,
-                                            plot=plot,
-                                            save_prefix=fig_dir + extra_title + "mcfost_not_convolved_unresolved_corrected_",
-                                            deprojection_inc_pa_deg=deprojection,
-                                            center=None,
-                                            az_nbins=azimuthal_nbins,
-                                            azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                            azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                            theta0=theta0
-                                            )
-    results['mcfost_not_convolved_unresolved_corrected']['radial_profile_pi']=rad_prof_pi
-    results['mcfost_not_convolved_unresolved_corrected']['azimuthal_profile_pi']=az_prof_pi
+
+    rad_prof={}
+    az_prof={}
+    for ft in ['pi',"q_phi"]:      
+        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_not_convolved_unresolved_corrected'][ft], inst_ps_mas, 
+                                                profile_type="both",
+                                                mode="sum",
+                                                radial_limit_mas=radial_limit_mas,
+                                                plot=plot,
+                                                save_prefix=fig_dir + extra_title + "mcfost_not_convolved_unresolved_corrected_",
+                                                deprojection_inc_pa_deg=deprojection,
+                                                center=None,
+                                                az_nbins=azimuthal_nbins,
+                                                azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                theta0=theta0
+                                                )
+    results['mcfost_not_convolved_unresolved_corrected']['radial_profiles']=rad_prof
+    results['mcfost_not_convolved_unresolved_corrected']['azimuthal_profiles']=az_prof
     
 
     
@@ -1988,7 +2005,7 @@ def polarimetric_analysis(
         print('Deconvolution of unresolved corrected images')
         # Create PSF for deconvolution
         pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
-
+        q_phi_corr_conv_decon=deconvolution(q_phi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
     
     results['mcfost_convolved_unresolved_corrected']={'img_q':q_corr_conv,
                                             'img_u':u_corr_conv,
@@ -1998,10 +2015,13 @@ def polarimetric_analysis(
                                             'aolp_corr':aolp_corr_conv,
                                             'phi':phi,
                                             'pi_deconvolved':pi_corr_conv_decon,
+                                            'q_phi_deconvolved':q_phi_corr_conv_decon,
                                             'metrics':metrics_corr_conv,
                                             }
-    
-    rad_prof_pi, az_prof_pi = profiles(pi_corr_conv, inst_ps_mas, 
+    rad_prof={}
+    az_prof={}
+    for ft in ['pi',"q_phi"]:      
+        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved_unresolved_corrected'][ft], inst_ps_mas, 
                                             profile_type="both",
                                             mode="sum",
                                             radial_limit_mas=radial_limit_mas,
@@ -2014,8 +2034,8 @@ def polarimetric_analysis(
                                             azimuthal_r_out_mas=azimuthal_r_out_mas,
                                             theta0=theta0
                                             )
-    results['mcfost_convolved_unresolved_corrected']['radial_profile_pi']=rad_prof_pi
-    results['mcfost_convolved_unresolved_corrected']['azimuthal_profile_pi']=az_prof_pi
+    results['mcfost_convolved_unresolved_corrected']['radial_profiles']=rad_prof
+    results['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']=az_prof
     
 
 
