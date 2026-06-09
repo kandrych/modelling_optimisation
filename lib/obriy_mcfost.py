@@ -365,9 +365,9 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
 
     
     if puffed_up_rim:
-        run_mcfost_safe(param_path, workdir, options=["-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_base.log")
+        run_mcfost_safe(param_path, workdir, options=["-disk_struct","-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_base.log")
     else:
-        run_mcfost_safe(param_path, workdir, options=[], logfile="mcfost_base.log")
+        run_mcfost_safe(param_path, workdir, options=["-disk_struct"], logfile="mcfost_base.log")
     
     if "vis2_1perband" in fidelity["products"]:
         for w in [1.63, 2.20, 3.50, 10.0]:
@@ -401,7 +401,7 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
             if os.path.exists(str(workdir)+"/data_"+str(w)+"/"):   
                 print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
                 continue
-            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
+            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}", "-casa"], logfile=f"mcfost_{w:.2f}.log")
 
     if "vis2_chromatic" in fidelity["products"]: # all wavelengths for chromatic visibilities (PIONIER, MATISSE, GRAVITY) + full PDI
         for w in [0.55, 0.82, 1.5,1.55,1.6,1.63,1.65,1.7,1.75,1.8,1.85,1.9,
