@@ -668,13 +668,13 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         radial_profile_alma, azimuthal_profile_alma = obp.profiles(alma_cont, 2.0, 
                                                 profile_type="both",
                                                 mode="mean",
-                                                radial_limit_mas=500,
+                                                radial_limit_mas=100,
                                                 plot=False,
                                                 deprojection_inc_pa_deg=(0.0, 0.0),
                                                 center=None,
                                                 az_nbins=18,
                                                 azimuthal_r_in_mas=0.0,
-                                                azimuthal_r_out_mas=500.0,
+                                                azimuthal_r_out_mas=100.0,
                                                 theta0=0.0
                                                 )
     else:
