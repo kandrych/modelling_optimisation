@@ -2256,7 +2256,7 @@ def full_image_metrics_noshift(
     *,
     mask: Optional[np.ndarray] = None,        # e.g. valid FoV / SNR>threshold / coronagraph hole excluded
     normalize: Literal["zscore","minmax","mean1","none"] = "zscore",
-    ssim_win: Optional[int] = 11,             # odd window size for SSIM local stats; None => auto
+    ssim_win: Optional[int] = None,             # odd window size for SSIM local stats; None => auto
     ssim_gaussian_weights: bool = True,       # closer to perceptual similarity
     return_pixel_chi2: bool = True,           # χ² over pixels (optional)
     pixel_sigma: Optional[float] = None,      # if None, uses robust σ from obs_data
@@ -2475,6 +2475,7 @@ def deconvolution(image, psf, limit_N_decon=200, critlim=0.015,  image_cut=0,sav
     n = image.shape[0]
     a = int(image_cut)  
     b = int(n - image_cut) 
+    image = image[a:b, a:b]
     psf_fliped = np.flip(psf)
 
     decon = np.copy(image)  # Create starting file for first iteration of deconvolution

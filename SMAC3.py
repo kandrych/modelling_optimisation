@@ -361,8 +361,9 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         if "alma" in fidelity_products:
             try:
                 data_dir_alma, data_file_alma = "/Users/katerynaandrych/Work/lin/Postdoc/Data/ALMA/IRAS08544-4431/", "IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits"
-                alma_cont, alma_header=oba.Loadimage_alma(data_dir_alma, data_file_alma)
-                ps_alma=2.0 #mas/pixel
+                alma_cont, alma_header,pix_scale_alma, data_size_alma=oba.Loadimage_alma(data_dir_alma, data_file_alma)
+                ps_alma=pix_scale_alma*1.0
+                #ps_alma=2.0 #mas/pixel from what Maks said
                 alma_wavelength=0.87*1000 #mkm
                 print('ALMA data loaded')
             except:
@@ -685,7 +686,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
     pdi_data_i={'psf': psf_i, 'pol_images': pdi_i, 'radial_profiles': radial_profile_i, 'azimuthal_profiles': azimuthal_profile_i}
     pdi_data_h={'psf': psf_h, 'pol_images': pdi_h, 'radial_profiles': radial_profile_h, 'azimuthal_profiles': azimuthal_profile_h}
 
-    data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma, 'alma_wavelength': alma_wavelength, 'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma}
+    data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma,'image_size': data_size_alma, 'alma_wavelength': alma_wavelength, 'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma}
     data_sed = [data_wave, data_flux, data_err]
     data_arrays = [data_sed, container_data_pionier, container_data_gravity, container_data_matisse_l, container_data_matisse_n,pdi_data_v, pdi_data_i, pdi_data_h, data_alma]
     print('data loaded')

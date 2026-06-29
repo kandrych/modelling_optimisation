@@ -365,9 +365,11 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
 
     
     if puffed_up_rim:
-        run_mcfost_safe(param_path, workdir, options=["-disk_struct","-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_base.log")
+        run_mcfost_safe(param_path, workdir, options=["-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_base.log")
+        run_mcfost_safe(param_path, workdir, options=["-disk_struct","-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_base_struct.log")
     else:
-        run_mcfost_safe(param_path, workdir, options=["-disk_struct"], logfile="mcfost_base.log")
+        run_mcfost_safe(param_path, workdir, logfile="mcfost_base_struct.log")
+        run_mcfost_safe(param_path, workdir, options=["-disk_struct"], logfile="mcfost_base_struct.log")
     
     if "vis2_1perband" in fidelity["products"]:
         for w in [1.63, 2.20, 3.50, 10.0]:
@@ -508,7 +510,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             metrics_i = obp.full_image_metrics_noshift(
                 np.arcsinh(data_cropped_i), np.arcsinh(model_cropped_i),
                 normalize="zscore",          # good default for morphology
-                ssim_win=11,                 # 7–15 is typical
+                ssim_win=None,                 # 7–15 is typical
                 return_pixel_chi2=True
             )
             if args.plot_intermediate:
@@ -549,9 +551,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 fig.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()
             print(f'[obriy_mcfost] I band metrics: SSIM={metrics_i["ssim"]}, NCC={metrics_i["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
-            #loss_i=1-(metrics_i['ssim']+metrics_i['ncc'])/2 + profile_pi_chi2_red # weights can be adjusted
+            loss_i=1-(metrics_i['ssim']+metrics_i['ncc'])/2 #+ profile_pi_chi2_red # weights can be adjusted
             #Loss based only on profile chi2 to test if it can drive the fit
-            loss_i=profile_pi_chi2_red
+            #loss_i=profile_pi_chi2_red
 
 
         if "pdi_V" in fidelity["products"]:
@@ -586,7 +588,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             metrics_v = obp.full_image_metrics_noshift(
                 np.arcsinh(data_cropped_v), np.arcsinh(model_cropped_v),
                 normalize="zscore",          # good default for morphology
-                ssim_win=11,                 # 7–15 is typical
+                ssim_win=None,                 # 7–15 is typical
                 return_pixel_chi2=True
             )
             if args.plot_intermediate:
@@ -623,9 +625,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 fig.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()
             print(f'[obriy_mcfost] V band metrics: SSIM={metrics_v["ssim"]}, NCC={metrics_v["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
-            #loss_v=1-(metrics_v['ssim']+metrics_v['ncc'])/2 + profile_pi_chi2_red # weights can be adjusted
+            loss_v=1-(metrics_v['ssim']+metrics_v['ncc'])/2 #+ profile_pi_chi2_red # weights can be adjusted
             #Loss based only on profile chi2 to test if it can drive the fit
-            loss_v= profile_pi_chi2_red
+            #loss_v= profile_pi_chi2_red
 
 
         if "pdi_H" in fidelity["products"]:
@@ -656,7 +658,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             metrics_h = obp.full_image_metrics_noshift(
                 np.arcsinh(data_cropped_h), np.arcsinh(model_cropped_h),
                 normalize="zscore",          # good default for morphology
-                ssim_win=11,                 # 7–15 is typical
+                ssim_win=None,                 # 7–15 is typical
                 return_pixel_chi2=True
             )
             if args.plot_intermediate:
@@ -697,9 +699,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 fig.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()  
             print(f'[obriy_mcfost] H band metrics: SSIM={metrics_h["ssim"]}, NCC={metrics_h["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
-            #loss_h=1-(metrics_h['ssim']+metrics_h['ncc'])/2 + profile_pi_chi2_red # weights can be adjusted
+            loss_h=1-(metrics_h['ssim']+metrics_h['ncc'])/2 #+ profile_pi_chi2_red # weights can be adjusted
             #Loss based only on profile chi2 to test if it can drive the fit
-            loss_h=profile_pi_chi2_red # weights can be adjusted
+            #loss_h=profile_pi_chi2_red # weights can be adjusted
 
 
 
@@ -712,9 +714,52 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
 
     if "alma" in fidelity["products"]:
-        chi2_red_alma, profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints = oba.chi2_ALMA(str(workdir), data_alma=data_alma, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_ALMA_')
-        loss_alma= chi2_red_alma
-        print(f"ALMA chi2: {chi2_red_alma}")
+        #chi2_red_alma, profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints = oba.chi2_ALMA(str(workdir), data_alma=data_alma, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_ALMA_')
+        alma_cont = data_alma['alma_cont']
+        obs_rad_prof = data_alma['radial_profile']
+        obs_az_prof = data_alma['azimuthal_profile']
+        ps_alma = data_alma['ps_alma']
+        data_size_alma = data_alma['image_size']
+        wave=data_alma['wave']
+
+        
+        _, _, simulated_itot, pix_scale, image_size = oba.load_mcfost_image_alma_casa(str(workdir), '870.0')  
+        
+        if args.plot_intermediate: obp.plot_polarimetric_image(simulated_itot, ps_alma, title=f'Model Itot, alma_cont', save=str(fig_dir)+'/model_itot_alma.png', image_scale='asinh', roi_half_size=100)
+        simulated_itot_resc=oba.rescale_alma(simulated_itot, pix_scale, ps_alma)
+        simulated_itot_as_data=oba.cut_down_alma(simulated_itot_resc, data_size_alma)
+        residuals=(simulated_itot_as_data-alma_cont)**2
+
+        residuals_reduced=np.sum(residuals)/alma_cont.size #does not have error estimate, so not a proper chi2
+
+
+        if args.plot_intermediate:
+            #do some plotting
+            fig, ax = plt.subplots(1, 3, figsize=(14,7))
+            color_map = 'viridis' #'afmhot'
+            ax[0].imshow(alma_cont, color_map, extent=[+alma_cont.shape[0]/2, -alma_cont.shape[0]/2, -alma_cont.shape[1]/2, alma_cont.shape[1]/2])
+            ax[0].set_title("Data I$_{tot}$")
+            ax[1].imshow(simulated_itot_as_data, color_map, extent=[+simulated_itot_as_data.shape[0]/2, -simulated_itot_as_data.shape[0]/2, -simulated_itot_as_data.shape[1]/2, simulated_itot_as_data.shape[1]/2])
+            ax[1].set_title('Simulated I$_{tot}$')
+            ax[2].imshow(residuals, color_map,extent=[+alma_cont.shape[0]/2, -alma_cont.shape[0]/2, -alma_cont.shape[1]/2, alma_cont.shape[1]/2])
+            ax[2].set_title("Residual I$_{tot}$")
+            plt.suptitle("ALMA, "+str(wave)+"$\mu m$, reduces chi2 "+ residuals_reduced.astype(str)) #does not have error estimate, so not a proper chi2
+            fig.savefig(str(workdir)+'_alma_sim_vs_data_'+str(wave)+'.png', dpi= 150, bbox_inches='tight')
+            plt.close(fig)
+
+
+
+        metrics_alma = obp.full_image_metrics_noshift(
+                alma_cont, simulated_itot_as_data,
+                normalize="zscore",          # good default for morphology
+                ssim_win=None,                 # 7–15 is typical
+                return_pixel_chi2=True
+            )
+        
+        loss_alma= 1-(metrics_alma['ssim']+metrics_alma['ncc'])/2 #chi2_red_alma
+        print(f'[obriy_mcfost] ALMA metrics: SSIM={metrics_alma["ssim"]}, NCC={metrics_alma["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
+            
+        #print(f"ALMA chi2: {chi2_red_alma}")
     
     #initialize totals so eve if there is no sed and interferometry - we can still compute pdi only chi2
     chi_total=0.0
