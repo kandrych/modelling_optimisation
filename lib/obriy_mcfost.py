@@ -6,6 +6,7 @@ from typing import Literal, Tuple, Dict, Optional, Union, Any, List
 
 import os
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 from astropy.io import fits
 import astropy.units as u
@@ -306,7 +307,6 @@ def run_mcfost_image(wavelength, folder):
         
 
 
-
 def plot_mcfost_disk_structure(main_dir: str, sub_dir: str,  az_disk=0) -> None:
 
     """
@@ -331,6 +331,7 @@ def plot_mcfost_disk_structure(main_dir: str, sub_dir: str,  az_disk=0) -> None:
     if os.path.exists(simulation_dir+"figures/")==False:
         os.system("mkdir "+simulation_dir+"figures/")
 
+
     #open the required grid structure file
     hdul=fits.open(simulation_dir+'data_disk/grid.fits.gz')
     grid_struct=hdul[0].data
@@ -339,70 +340,169 @@ def plot_mcfost_disk_structure(main_dir: str, sub_dir: str,  az_disk=0) -> None:
     r = grid_struct[0, az_disk, :, :]
     z = grid_struct[1, az_disk, :, :]
 
-    #open the required temperature, dust and gas mass density fits files and plot them
-    paths=['data_th/Temperature.fits.gz', 'data_disk/dust_mass_density.fits.gz', 'data_disk/gas_density.fits.gz']
-    fig, ax = plt.subplots(len(paths), 1, figsize=(9, 5*len(paths)))
-    for i, path in enumerate(paths):
-        hdul=fits.open(simulation_dir+path)
-        quantity_struct=hdul[0].data
-        #see if we're dealing with different azimuthal zones by checking dimesnionality
-        #of file & select data out of hdu accordingly
-        if quantity_struct.ndim > 2:
-            quantity = quantity_struct[az_disk, :, :]
-        else:
-            quantity = quantity_struct[:, :]
-        #plotting
-        cmesh = ax[i].pcolormesh(r, z, quantity, cmap='viridis', norm=LogNorm())
-        cb = plt.colorbar(cmesh, ax=ax[i])
-        if path == 'data_th/Temperature.fits.gz':
-            cb.set_label(r'$T \, \mathrm{[K]}$')
-        elif path == 'data_disk/dust_mass_density.fits.gz':
-            cb.set_label(r'$\rho_{dust} \, \mathrm{[g \, cm^{-3}]}$')
-        elif path == 'data_disk/gas_density.fits.gz':
-            cb.set_label(r'$\rho_{gas} \, \mathrm{[g \, cm^{-3}]}$')
-        ax[i].set_xlabel(r'$r \, \mathrm{[AU]}$')
-        #ax[i].set_yscale('log')
 
-        ax[i].set_ylabel(r'$z \, \mathrm{[AU]}$')
+    paths = [
+    ('data_th/Temperature.fits.gz', r'$T \, \mathrm{[K]}$'),
+    ('data_disk/dust_mass_density.fits.gz', r'$\rho_{dust} \, \mathrm{[g\,cm^{-3}]}$'),
+    ('data_disk/gas_density.fits.gz', r'$\rho_{gas} \, \mathrm{[g\,cm^{-3}]}$')
+    ]
+
+    quantities = []
+
+    # Read each file only once
+    for path, label in paths:
+        with fits.open(simulation_dir + path) as hdul:
+            q = hdul[0].data
+
+        if q.ndim > 2:
+            q = q[az_disk]
+        quantities.append((q, label))
+
+
+
+
+    fig, ax = plt.subplots(len(quantities), 1, figsize=(9, 5*len(quantities)))
+
+    for i, (quantity, label) in enumerate(quantities):
+        cmesh = ax[i].pcolormesh(r, z, quantity,
+                                cmap='viridis',
+                                norm=LogNorm())
+        cb = plt.colorbar(cmesh, ax=ax[i])
+        cb.set_label(label)
+
+        ax[i].set_xlabel(r'$r\,[AU]$')
+        ax[i].set_ylabel(r'$z\,[AU]$')
         ax[i].set_xlim(0, np.max(r))
     plt.suptitle('2D cut disk structure')
     plt.tight_layout()
     fig.savefig(simulation_dir+'figures/disk_structure2D'+'.png', dpi= 150, bbox_inches='tight')
+    plt.close()
+    
 
-    paths=['data_th/Temperature.fits.gz', 'data_disk/dust_mass_density.fits.gz', 'data_disk/gas_density.fits.gz']
-    fig, ax = plt.subplots(len(paths), 1, figsize=(9, 5*len(paths)))
-    for i, path in enumerate(paths):
-        hdul=fits.open(simulation_dir+path)
-        quantity_struct=hdul[0].data
-        if quantity_struct.ndim > 2:
-            quantity = quantity_struct[az_disk, :, :]
-        else:
-            quantity = quantity_struct[:, :]
+
+    fig, ax = plt.subplots(len(quantities), 1, figsize=(9, 5*len(quantities)))
+
+    for i, (quantity, label) in enumerate(quantities):
+
         colmax = np.nanmax(quantity, axis=0)
         colmax[colmax == 0] = np.nan
-        q_norm = quantity / colmax[None, :] #normalize each column to its maximum value
+        q_norm = quantity / colmax[None, :]
 
-        #q_norm = quantity / np.nanmax(quantity, axis=0)[None, :] #normalize each column to its maximum value
-        #plotting
-        cmesh = ax[i].pcolormesh(r, z, q_norm, cmap='viridis')
+        cmesh = ax[i].pcolormesh(r, z, q_norm,
+                                cmap='viridis')
+
         cb = plt.colorbar(cmesh, ax=ax[i])
-        if path == 'data_th/Temperature.fits.gz':
-            cb.set_label(r'Normalized $T \, \mathrm{[K]}$')
-        elif path == 'data_disk/dust_mass_density.fits.gz':
-            cb.set_label(r'Normalized $\rho_{dust} \, \mathrm{[g \, cm^{-3}]}$')
-        elif path == 'data_disk/gas_density.fits.gz':
-            cb.set_label(r'$\rho_{gas} \, \mathrm{[g \, cm^{-3}]}$')
-        ax[i].set_xlabel(r'$r \, \mathrm{[AU]}$')
-        #ax[i].set_yscale('log')
+        cb.set_label("Normalized " + label)
 
-        ax[i].set_ylabel(r'$z \, \mathrm{[AU]}$')
+        ax[i].set_xlabel(r'$r\,[AU]$')
+        ax[i].set_ylabel(r'$z\,[AU]$')
         ax[i].set_xlim(0, 20)
         ax[i].set_ylim(0, 20)
-        
     plt.suptitle('Zoomed inner rim 2D cut disk structure')
     #save the plot
     plt.tight_layout()
     fig.savefig(simulation_dir+'figures/disk_structure2D_zoomed'+'.png', dpi= 150, bbox_inches='tight')
+    plt.close()
+
+
+
+
+# def plot_mcfost_disk_structure(main_dir: str, sub_dir: str,  az_disk=0) -> None:
+
+#     """
+#     Plot the disk structure from an MCFOST parameter file.
+
+#     Parameters
+#     ----------
+#     main_dir : str
+#         Main directory where the simulation folder is located.
+#     sub_dir : str
+#         Subdirectory within the main directory where the simulation files are located.
+#     az_disk : int, optional
+#         Azimuthal zone to consider for the disk structure (default is 0).
+#     Returns
+#     -------
+#     None
+#     plots two (general and zoomed in inner rim) 2D cuts of the disk structure for temperature, dust mass density, and gas density.
+#     """
+#     simulation_dir = main_dir+sub_dir+'/'
+    
+#     #make folder to store images if needed
+#     if os.path.exists(simulation_dir+"figures/")==False:
+#         os.system("mkdir "+simulation_dir+"figures/")
+
+#     #open the required grid structure file
+#     hdul=fits.open(simulation_dir+'data_disk/grid.fits.gz')
+#     grid_struct=hdul[0].data
+#     #note we don't check for dimensionality because it's always 4D for this file
+#     #extract cylindrical radius and height above midplane of computation grid cell
+#     r = grid_struct[0, az_disk, :, :]
+#     z = grid_struct[1, az_disk, :, :]
+
+#     #open the required temperature, dust and gas mass density fits files and plot them
+#     paths=['data_th/Temperature.fits.gz', 'data_disk/dust_mass_density.fits.gz', 'data_disk/gas_density.fits.gz']
+#     fig, ax = plt.subplots(len(paths), 1, figsize=(9, 5*len(paths)))
+#     for i, path in enumerate(paths):
+#         hdul=fits.open(simulation_dir+path)
+#         quantity_struct=hdul[0].data
+#         #see if we're dealing with different azimuthal zones by checking dimesnionality
+#         #of file & select data out of hdu accordingly
+#         if quantity_struct.ndim > 2:
+#             quantity = quantity_struct[az_disk, :, :]
+#         else:
+#             quantity = quantity_struct[:, :]
+#         #plotting
+#         cmesh = ax[i].pcolormesh(r, z, quantity, cmap='viridis', norm=LogNorm())
+#         cb = plt.colorbar(cmesh, ax=ax[i])
+#         if path == 'data_th/Temperature.fits.gz':
+#             cb.set_label(r'$T \, \mathrm{[K]}$')
+#         elif path == 'data_disk/dust_mass_density.fits.gz':
+#             cb.set_label(r'$\rho_{dust} \, \mathrm{[g \, cm^{-3}]}$')
+#         elif path == 'data_disk/gas_density.fits.gz':
+#             cb.set_label(r'$\rho_{gas} \, \mathrm{[g \, cm^{-3}]}$')
+#         ax[i].set_xlabel(r'$r \, \mathrm{[AU]}$')
+#         #ax[i].set_yscale('log')
+
+#         ax[i].set_ylabel(r'$z \, \mathrm{[AU]}$')
+#         ax[i].set_xlim(0, np.max(r))
+#     plt.suptitle('2D cut disk structure')
+#     plt.tight_layout()
+#     fig.savefig(simulation_dir+'figures/disk_structure2D'+'.png', dpi= 150, bbox_inches='tight')
+
+#     paths=['data_th/Temperature.fits.gz', 'data_disk/dust_mass_density.fits.gz', 'data_disk/gas_density.fits.gz']
+#     fig, ax = plt.subplots(len(paths), 1, figsize=(9, 5*len(paths)))
+#     for i, path in enumerate(paths):
+#         hdul=fits.open(simulation_dir+path)
+#         quantity_struct=hdul[0].data
+#         if quantity_struct.ndim > 2:
+#             quantity = quantity_struct[az_disk, :, :]
+#         else:
+#             quantity = quantity_struct[:, :]
+#         colmax = np.nanmax(quantity, axis=0)
+#         colmax[colmax == 0] = np.nan
+#         q_norm = quantity / colmax[None, :] #normalize each column to its maximum value
+
+#         #q_norm = quantity / np.nanmax(quantity, axis=0)[None, :] #normalize each column to its maximum value
+#         #plotting
+#         cmesh = ax[i].pcolormesh(r, z, q_norm, cmap='viridis')
+#         cb = plt.colorbar(cmesh, ax=ax[i])
+#         if path == 'data_th/Temperature.fits.gz':
+#             cb.set_label(r'Normalized $T \, \mathrm{[K]}$')
+#         elif path == 'data_disk/dust_mass_density.fits.gz':
+#             cb.set_label(r'Normalized $\rho_{dust} \, \mathrm{[g \, cm^{-3}]}$')
+#         elif path == 'data_disk/gas_density.fits.gz':
+#             cb.set_label(r'$\rho_{gas} \, \mathrm{[g \, cm^{-3}]}$')
+#         ax[i].set_xlabel(r'$r \, \mathrm{[AU]}$')
+#         #ax[i].set_yscale('log')
+
+#         ax[i].set_ylabel(r'$z \, \mathrm{[AU]}$')
+#         ax[i].set_xlim(0, 20)
+#         ax[i].set_ylim(0, 20)
+        
+#     plt.suptitle('Zoomed inner rim 2D cut disk structure')
+#     #save the plot
+#     plt.tight_layout()
+#     fig.savefig(simulation_dir+'figures/disk_structure2D_zoomed'+'.png', dpi= 150, bbox_inches='tight')
 
 
 
@@ -552,11 +652,14 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
     simulation_name = workdir.name
 
+
     sed_path = workdir / "data_th" / "sed_rt.fits.gz"
     if not sed_path.exists():
         print(f"Temperature file {sed_path} not found.")
         # trial ran but produced no SED -> invalid config or earlier failure
         return 1e99
+    plot_mcfost_disk_structure(str(workdir.parent)+'/', simulation_name,  az_disk=0)
+
     
     if "sed" in fidelity["products"]:
 
@@ -822,7 +925,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         obs_az_prof = data_alma['azimuthal_profile']
         ps_alma = data_alma['ps_alma']
         data_size_alma = data_alma['image_size']
-        wave=data_alma['wave']
+        wave=data_alma['alma_wavelength']
 
         
         _, _, simulated_itot, pix_scale, image_size = oba.load_mcfost_image_alma_casa(str(workdir), '870.0')  

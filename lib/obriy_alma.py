@@ -2,8 +2,21 @@ import os
 import fnmatch
 from astropy.io import fits
 from pathlib import Path
+import numpy as np
+from typing import Literal, Tuple, Dict, Optional, Union, Any, List
+
+#from distroi.auxiliary import constants
+from distroi.data import image
+from distroi.data import sed
+from distroi.model.geom_comp import geom_comp
+from distroi.auxiliary import select_data_oifits
+from distroi.data.oi_container import OIContainer
+
+import matplotlib.pyplot as plt
+
 
 from skimage.transform import rescale
+
 
 import lib.obriy_general as obg
 import lib.obriy_interferometry as obi

@@ -371,6 +371,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
                 alma_cont=None
                 ps_alma=None
                 alma_wavelength=None
+                data_size_alma=None
 
 
     elif data_root =='demo_ozstar':
@@ -542,8 +543,8 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         if  "alma" in fidelity_products:
             alma_folder = '/fred/oz061/kandrych/Data/ALMA/IRAS08544-4431/'
             alma_cont_file='IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits'
-            alma_cont, alma_header=oba.Loadimage_alma(alma_folder, alma_cont_file)
-            ps_alma=2 #mas/pixel
+            alma_cont, alma_header, ps_alma, data_size_alma=oba.Loadimage_alma(alma_folder, alma_cont_file)
+            #ps_alma=2 #mas/pixel
             alma_wavelength=0.87*1000 #mkm
             obp.plot_polarimetric_image(alma_cont, ps_alma, title='IRAS08544-4431 ALMA continuum', save=work_root+'/alma_cont.png', image_scale='linear')
             print('ALMA continuum loaded')
@@ -551,6 +552,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             alma_cont=None
             ps_alma=None
             alma_wavelength=None
+            data_size_alma=None
 
         
 
