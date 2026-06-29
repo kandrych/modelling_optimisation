@@ -307,6 +307,108 @@ def run_mcfost_image(wavelength, folder):
 
 
 
+def plot_mcfost_disk_structure(main_dir: str, sub_dir: str,  az_disk=0) -> None:
+
+    """
+    Plot the disk structure from an MCFOST parameter file.
+
+    Parameters
+    ----------
+    main_dir : str
+        Main directory where the simulation folder is located.
+    sub_dir : str
+        Subdirectory within the main directory where the simulation files are located.
+    az_disk : int, optional
+        Azimuthal zone to consider for the disk structure (default is 0).
+    Returns
+    -------
+    None
+    plots two (general and zoomed in inner rim) 2D cuts of the disk structure for temperature, dust mass density, and gas density.
+    """
+    simulation_dir = main_dir+sub_dir+'/'
+    
+    #make folder to store images if needed
+    if os.path.exists(simulation_dir+"figures/")==False:
+        os.system("mkdir "+simulation_dir+"figures/")
+
+    #open the required grid structure file
+    hdul=fits.open(simulation_dir+'data_disk/grid.fits.gz')
+    grid_struct=hdul[0].data
+    #note we don't check for dimensionality because it's always 4D for this file
+    #extract cylindrical radius and height above midplane of computation grid cell
+    r = grid_struct[0, az_disk, :, :]
+    z = grid_struct[1, az_disk, :, :]
+
+    #open the required temperature, dust and gas mass density fits files and plot them
+    paths=['data_th/Temperature.fits.gz', 'data_disk/dust_mass_density.fits.gz', 'data_disk/gas_density.fits.gz']
+    fig, ax = plt.subplots(len(paths), 1, figsize=(9, 5*len(paths)))
+    for i, path in enumerate(paths):
+        hdul=fits.open(simulation_dir+path)
+        quantity_struct=hdul[0].data
+        #see if we're dealing with different azimuthal zones by checking dimesnionality
+        #of file & select data out of hdu accordingly
+        if quantity_struct.ndim > 2:
+            quantity = quantity_struct[az_disk, :, :]
+        else:
+            quantity = quantity_struct[:, :]
+        #plotting
+        cmesh = ax[i].pcolormesh(r, z, quantity, cmap='viridis', norm=LogNorm())
+        cb = plt.colorbar(cmesh, ax=ax[i])
+        if path == 'data_th/Temperature.fits.gz':
+            cb.set_label(r'$T \, \mathrm{[K]}$')
+        elif path == 'data_disk/dust_mass_density.fits.gz':
+            cb.set_label(r'$\rho_{dust} \, \mathrm{[g \, cm^{-3}]}$')
+        elif path == 'data_disk/gas_density.fits.gz':
+            cb.set_label(r'$\rho_{gas} \, \mathrm{[g \, cm^{-3}]}$')
+        ax[i].set_xlabel(r'$r \, \mathrm{[AU]}$')
+        #ax[i].set_yscale('log')
+
+        ax[i].set_ylabel(r'$z \, \mathrm{[AU]}$')
+        ax[i].set_xlim(0, np.max(r))
+    plt.suptitle('2D cut disk structure')
+    plt.tight_layout()
+    fig.savefig(simulation_dir+'figures/disk_structure2D'+'.png', dpi= 150, bbox_inches='tight')
+
+    paths=['data_th/Temperature.fits.gz', 'data_disk/dust_mass_density.fits.gz', 'data_disk/gas_density.fits.gz']
+    fig, ax = plt.subplots(len(paths), 1, figsize=(9, 5*len(paths)))
+    for i, path in enumerate(paths):
+        hdul=fits.open(simulation_dir+path)
+        quantity_struct=hdul[0].data
+        if quantity_struct.ndim > 2:
+            quantity = quantity_struct[az_disk, :, :]
+        else:
+            quantity = quantity_struct[:, :]
+        colmax = np.nanmax(quantity, axis=0)
+        colmax[colmax == 0] = np.nan
+        q_norm = quantity / colmax[None, :] #normalize each column to its maximum value
+
+        #q_norm = quantity / np.nanmax(quantity, axis=0)[None, :] #normalize each column to its maximum value
+        #plotting
+        cmesh = ax[i].pcolormesh(r, z, q_norm, cmap='viridis')
+        cb = plt.colorbar(cmesh, ax=ax[i])
+        if path == 'data_th/Temperature.fits.gz':
+            cb.set_label(r'Normalized $T \, \mathrm{[K]}$')
+        elif path == 'data_disk/dust_mass_density.fits.gz':
+            cb.set_label(r'Normalized $\rho_{dust} \, \mathrm{[g \, cm^{-3}]}$')
+        elif path == 'data_disk/gas_density.fits.gz':
+            cb.set_label(r'$\rho_{gas} \, \mathrm{[g \, cm^{-3}]}$')
+        ax[i].set_xlabel(r'$r \, \mathrm{[AU]}$')
+        #ax[i].set_yscale('log')
+
+        ax[i].set_ylabel(r'$z \, \mathrm{[AU]}$')
+        ax[i].set_xlim(0, 20)
+        ax[i].set_ylim(0, 20)
+        
+    plt.suptitle('Zoomed inner rim 2D cut disk structure')
+    #save the plot
+    plt.tight_layout()
+    fig.savefig(simulation_dir+'figures/disk_structure2D_zoomed'+'.png', dpi= 150, bbox_inches='tight')
+
+
+
+
+
+
 def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir: Path) -> Path:
     """
     test
