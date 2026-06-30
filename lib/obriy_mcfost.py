@@ -364,9 +364,38 @@ def plot_mcfost_disk_structure(main_dir: str, sub_dir: str,  az_disk=0) -> None:
     fig, ax = plt.subplots(len(quantities), 1, figsize=(9, 5*len(quantities)))
 
     for i, (quantity, label) in enumerate(quantities):
-        cmesh = ax[i].pcolormesh(r, z, quantity,
-                                cmap='viridis',
-                                norm=LogNorm())
+        #check if the quantity has any positive finite values
+        q = np.asarray(quantity)
+        valid = np.isfinite(q) & (q > 0)
+        if not np.any(valid):
+            ax[i].text(
+                0.5, 0.5,
+                "No positive finite values to plot",
+                ha="center", va="center",
+                transform=ax[i].transAxes,
+            )
+            ax[i].set_title(label)
+            continue
+
+        vmin = np.nanmin(q[valid])
+        vmax = np.nanmax(q[valid])
+
+        if vmin >= vmax:
+            ax[i].text(
+                0.5, 0.5,
+                "Constant values; cannot use LogNorm",
+                ha="center", va="center",
+                transform=ax[i].transAxes,
+            )
+            ax[i].set_title(label)
+            continue
+
+        cmesh = ax[i].pcolormesh(
+            r, z, q,
+            cmap="viridis",
+            norm=LogNorm(vmin=vmin, vmax=vmax),
+        )
+        
         cb = plt.colorbar(cmesh, ax=ax[i])
         cb.set_label(label)
 
@@ -396,8 +425,8 @@ def plot_mcfost_disk_structure(main_dir: str, sub_dir: str,  az_disk=0) -> None:
 
         ax[i].set_xlabel(r'$r\,[AU]$')
         ax[i].set_ylabel(r'$z\,[AU]$')
-        ax[i].set_xlim(0, 20)
-        ax[i].set_ylim(0, 20)
+        ax[i].set_xlim(0, 100)
+        ax[i].set_ylim(0, 100)
     plt.suptitle('Zoomed inner rim 2D cut disk structure')
     #save the plot
     plt.tight_layout()

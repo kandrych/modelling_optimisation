@@ -732,6 +732,8 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
     if hasattr(cfg, "get_dictionary"):
         cfg = dict(cfg)
 
+    cfg["puffed_r_rim"] = (float(cfg["zone_1_Rin"]) + float(cfg["puffed_r_offset"]))  # Add puffed-up rim radius to config for MCFOST
+
     # Write param file and run MCFOST
     par_path = obm.write_mcfost_paramfile(cfg, fidelity, trial_dir)
     try:
