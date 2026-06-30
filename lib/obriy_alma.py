@@ -4,6 +4,7 @@ from astropy.io import fits
 from pathlib import Path
 import numpy as np
 from typing import Literal, Tuple, Dict, Optional, Union, Any, List
+import subprocess
 
 #from distroi.auxiliary import constants
 from distroi.data import image
