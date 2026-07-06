@@ -1572,6 +1572,12 @@ def azimuthal_profile(
     total_intensity=np.nansum(img[sel_ann])
     peak_intensity=np.nanmax(img[sel_ann])
     
+    if total_intensity==0 or peak_intensity==0:
+        raise ValueError(f"Total ({total_intensity}) or peak intensity ({peak_intensity}) in the annulus is zero; cannot normalize azimuthal profile.")
+    
+    if total_intensity<0 or peak_intensity<0:
+        raise ValueError(f"Total ({total_intensity}) or peak intensity ({peak_intensity}) in the annulus is negative; cannot normalize azimuthal profile.")
+
     if not np.any(sel_ann):
         return {
         "theta_deg_centers": np.array([]),
@@ -1613,15 +1619,19 @@ def azimuthal_profile(
             value[i] = np.nansum(v)/total_intensity
             scat[i] = np.nanstd(v)/total_intensity
 
+    value[counts == 0] = np.nan
+    stderr = np.full_like(scat, np.nan, dtype=float)
 
-    with np.errstate(divide="ignore", invalid="ignore"):
-        stderr = scat / np.sqrt(np.maximum(counts, 1))
+    mask = counts > 0   
+    stderr[mask] = scat[mask] / np.sqrt(counts[mask])
+
+    stderr[~np.isfinite(stderr)] = np.nan
 
 
     theta_deg_centers = np.degrees(centers)
     theta_deg_edges = np.degrees(edges)
 
-
+    
     out = {
     "theta_deg_centers": theta_deg_centers,
     "value": value,

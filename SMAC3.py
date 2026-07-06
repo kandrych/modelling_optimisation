@@ -286,6 +286,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
     
     figdir = Path(work_root)/"data_figures"
     figdir.mkdir(parents=True, exist_ok=True)
+    figdir=str(figdir)
     #filename of SED catalogue data file
     if data_root =='demo_mac':
         if  "sed" in fidelity_products: 

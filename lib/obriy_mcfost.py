@@ -659,6 +659,12 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     """
     print(f'[obriy_mcfost] fidelity["stage"] = {fidelity["stage"]}')
     print(f'[obriy_mcfost] fidelity["products"] = {fidelity["products"]}')  
+
+
+    if args.plot_intermediate:
+        if not os.path.exists(str(workdir)+'/figures/'):
+            os.makedirs(str(workdir)+'/figures/')
+
     if "sed" in fidelity["products"]:
        data_sed = data_arg[0]
 
@@ -959,7 +965,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         
         _, _, simulated_itot, pix_scale = oba.load_mcfost_image_alma_casa(str(workdir), '870.0')  
         
-        if args.plot_intermediate: obp.plot_polarimetric_image(simulated_itot, ps_alma, title=f'Model Itot, alma_cont', save=str(fig_dir)+'/model_itot_alma.png', image_scale='asinh', roi_half_size=100)
+        if args.plot_intermediate: obp.plot_polarimetric_image(simulated_itot, ps_alma, title=f'Model Itot, alma_cont', save=str(workdir)+'/figures/'+'/model_itot_alma.png', image_scale='asinh', roi_half_size=100)
         simulated_itot_resc=oba.rescale_alma(simulated_itot, pix_scale, ps_alma)
         simulated_itot_as_data=oba.cut_down_alma(simulated_itot_resc, alma_cont)
         residuals=(simulated_itot_as_data-alma_cont)**2
@@ -999,6 +1005,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     chi_total=0.0
     num_points_total=0
     loglike_total=0.0
+    chi2_red_total=0.0
     i_num=0
 
     if "sed" in fidelity["products"]:
@@ -1012,16 +1019,17 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             chi_total=0.0
             chi2_red_total = 0.0
         else:
-            chi2_red_total = chi_total/(num_points_total-i_num)
+            chi2_red_total = chi2_reduced_sed
 
     if ("vis2_1perband" in fidelity["products"]) or ("vis2_chromatic" in fidelity["products"]):
         
-        chi_total+= chi2_pionier + chi2_gravity + chi2_matisse_l + chi2_matisse_n
-        num_points_total+=num_points_pionier + num_points_gravity + num_points_matisse_l + num_points_matisse_n
+        chi_total= chi2_pionier + chi2_gravity + chi2_matisse_l + chi2_matisse_n
+        num_points_total=num_points_pionier + num_points_gravity + num_points_matisse_l + num_points_matisse_n
         loglike_total+=loglike_pionier+loglike_gravity+loglike_matisse_l+loglike_matisse_n
-        i_num+=4
+        i_num=4
 
-        chi2_red_total = chi_total/(num_points_total-i_num)  # reduced chi2 - not sure about number of free parameters here
+        chi2_red_total += chi2_red_pionier+chi2_red_gravity+chi2_red_matisse_l+chi2_red_matisse_n
+        #chi_total/(num_points_total-i_num)  # reduced chi2 - not sure about number of free parameters here
     
     if "pdi_I" in fidelity["products"]:
         chi2_red_total+=(loss_i)#*100 # weighting factor to bring SSIM losses to similar scale as chi2
