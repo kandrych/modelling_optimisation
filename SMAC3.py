@@ -27,6 +27,10 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, Tuple
+import numpy as np
+import matplotlib.pyplot as plt
+
+
 
 # --- Cluster imports ---
 # pip install dask distributed dask-jobqueue
@@ -671,6 +675,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
 
     if "alma" in fidelity_products:
         # Calculate metrics for arcsinh-scaled images to highlight morphology
+        
         radial_profile_alma, azimuthal_profile_alma = obp.profiles(alma_cont, 2.0, 
                                                 profile_type="both",
                                                 mode="mean",
@@ -683,15 +688,29 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
                                                 azimuthal_r_out_mas=100.0,
                                                 theta0=0.0
                                                 )
+        ny, nx = alma_cont.shape
+        xc = (nx - 1) / 2.0
+        yc = (ny - 1) / 2.0
+        R,_,_,X, Y = obp.compute_grid(alma_cont, xc=xc, yc=yc)
+        noise_level_alma=np.nanstd(alma_cont[R>(100/ps_alma)])
+        mask_alma = (alma_cont >= 3*noise_level_alma)
+        #local plotting
+        plt.imshow(mask_alma, origin='lower')
+        plt.savefig(figdir+'/alma_cont_mask_3snr.png', dpi=300)
+        plt.close()
+        
     else:
         radial_profile_alma=None
-        azimuthal_profile_alma=None  
+        azimuthal_profile_alma=None
+        mask_alma = None
+        noise_level_alma = None 
 
     pdi_data_v={'psf': psf_v, 'pol_images': pdi_v, 'radial_profiles': radial_profile_v, 'azimuthal_profiles': azimuthal_profile_v}
     pdi_data_i={'psf': psf_i, 'pol_images': pdi_i, 'radial_profiles': radial_profile_i, 'azimuthal_profiles': azimuthal_profile_i}
     pdi_data_h={'psf': psf_h, 'pol_images': pdi_h, 'radial_profiles': radial_profile_h, 'azimuthal_profiles': azimuthal_profile_h}
 
-    data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma,'image_size': data_size_alma, 'alma_wavelength': alma_wavelength, 'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma}
+    data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma,'image_size': data_size_alma, 'alma_wavelength': alma_wavelength, 
+               'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma, 'mask_alma': mask_alma, 'noise_level_alma': noise_level_alma}
     data_sed = [data_wave, data_flux, data_err]
     data_arrays = [data_sed, container_data_pionier, container_data_gravity, container_data_matisse_l, container_data_matisse_n,pdi_data_v, pdi_data_i, pdi_data_h, data_alma]
     print('data loaded')
@@ -739,7 +758,7 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
         cfg["puffed_r_rim"] = (float(cfg["zone_1_Rin"]) + float(cfg["puffed_r_offset"]))  # Add puffed-up rim radius to config for MCFOST
     if args.tapered_edge_p1_eq_p2:
         cfg["zone_1_-gamma_exp"] = cfg['zone_1_surface_density_exp']
-        
+
     # Write param file and run MCFOST
     par_path = obm.write_mcfost_paramfile(cfg, fidelity, trial_dir)
     try:

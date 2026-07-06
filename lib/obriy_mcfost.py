@@ -961,6 +961,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         ps_alma = data_alma['ps_alma']
         data_size_alma = data_alma['image_size']
         wave=data_alma['alma_wavelength']
+        mask_alma = data_alma['mask_alma']
 
         
         _, _, simulated_itot, pix_scale = oba.load_mcfost_image_alma_casa(str(workdir), '870.0')  
@@ -968,9 +969,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         if args.plot_intermediate: obp.plot_polarimetric_image(simulated_itot, ps_alma, title=f'Model Itot, alma_cont', save=str(workdir)+'/figures/'+'/model_itot_alma.png', image_scale='asinh', roi_half_size=100)
         simulated_itot_resc=oba.rescale_alma(simulated_itot, pix_scale, ps_alma)
         simulated_itot_as_data=oba.cut_down_alma(simulated_itot_resc, alma_cont)
-        residuals=(simulated_itot_as_data-alma_cont)**2
+        residuals=(simulated_itot_as_data[mask_alma]-alma_cont[mask_alma])**2
 
-        residuals_reduced=np.sum(residuals)/alma_cont.size #does not have error estimate, so not a proper chi2
+        residuals_reduced=np.sum(residuals)/np.sum(mask_alma) #does not have error estimate, so not a proper chi2, but takes into account only 3snr points
 
 
         if args.plot_intermediate:
