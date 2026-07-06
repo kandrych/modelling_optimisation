@@ -737,7 +737,9 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
 
     if args.puffed_up_rim:
         cfg["puffed_r_rim"] = (float(cfg["zone_1_Rin"]) + float(cfg["puffed_r_offset"]))  # Add puffed-up rim radius to config for MCFOST
-
+    if args.tapered_edge_p1_eq_p2:
+        cfg["zone_1_-gamma_exp"] = cfg['zone_1_surface_density_exp']
+        
     # Write param file and run MCFOST
     par_path = obm.write_mcfost_paramfile(cfg, fidelity, trial_dir)
     try:
@@ -871,6 +873,7 @@ def main():
     p.add_argument("--warmstart", type=str, default=None, help="Path to previous SMAC run directory to warmstart from")
     p.add_argument("--plot-intermediate", action="store_true", help="Plot intermediate results during scoring")
     p.add_argument("--puffed-up-rim", action="store_true", help="Enable puffed up rim feature")
+    p.add_argument("--tapered-edge-p1-eq-p2", action="store_true", help="Enable tapered edge with p1=p2")
     args = p.parse_args()
     
     WORK_ROOT = Path(args.working_root).resolve()
