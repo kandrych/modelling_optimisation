@@ -1,11 +1,18 @@
 #from distroi.auxiliary import constants
 from astropy import units as u
 from functools import wraps
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 ###################################
 # GENERAL
 ###################################
+
+
+def add_colorbar(fig, ax, im, size="3%", pad=0.05):
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size=size, pad=pad)
+    return fig.colorbar(im, cax=cax)
 
 
 def pick_output(fn, idx=0, cast=float):

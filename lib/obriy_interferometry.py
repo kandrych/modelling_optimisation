@@ -2,6 +2,8 @@ import distroi
 import numpy as np
 import pandas as pd
 from typing import Literal, Tuple, Dict, Optional, Union, Any, List
+from pathlib import Path
+from collections.abc import Sequence
 
 from distroi.auxiliary import constants
 from distroi.data import image
@@ -463,7 +465,7 @@ def chi2_for_optimisation_overresolved(frac, ref_wavelength, container_data, img
 
 def monochromatic_chi(
         simulation_dir: str,
-        img_dir: str,
+        img_dir: str| Sequence[str],
         container_data: OIContainer,
         vistype: str='vis2',
         plot: bool=False,
@@ -506,8 +508,8 @@ def monochromatic_chi(
     num_points : int
         Number of data points used in the chi2 calculation.
     """
-    
-    img_ffts = distroi.read_image_list(simulation_dir, img_dir)
+  
+    img_ffts=distroi.read_image_list(simulation_dir, img_dir)
     container_model = distroi.oi_container_calc_image_fft_observables(container_data, img_ffts)
     chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 
@@ -656,8 +658,20 @@ def chromatic_chi(
     num_points : int
         Number of data points used in the chi2 calculation.
     """
+
+    img_dir = [img_dir] if isinstance(img_dir, str) else list(img_dir)
+    img_ffts=[]
+    wavelengths=[]
+
+    for directory in img_dir:
+        wavelength_img= directory.split('_')[-1]
+        print(f"[obriy_interferometry, chromatic_chi] Reading image for wavelength {wavelength_img} from {simulation_dir}/{directory}")
+        img= distroi.read_image_list(simulation_dir, directory)
+        img_ffts.append(img)
+        wavelengths.append(float(wavelength_img))
     
-    img_ffts = distroi.read_image_list(simulation_dir, img_dir)
+    wavelengths, img_ffts = list(zip(*sorted(zip(wavelengths, img_ffts))))  # sort the objects in wavelength
+
     container_model = distroi.oi_container_calc_image_fft_observables(container_data, img_ffts)
     chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 

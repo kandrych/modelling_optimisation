@@ -1575,9 +1575,7 @@ def azimuthal_profile(
     if total_intensity==0 or peak_intensity==0:
         raise ValueError(f"Total ({total_intensity}) or peak intensity ({peak_intensity}) in the annulus is zero; cannot normalize azimuthal profile.")
     
-    if total_intensity<0 or peak_intensity<0:
-        raise ValueError(f"Total ({total_intensity}) or peak intensity ({peak_intensity}) in the annulus is negative; cannot normalize azimuthal profile.")
-
+    
     if not np.any(sel_ann):
         return {
         "theta_deg_centers": np.array([]),
@@ -1626,6 +1624,7 @@ def azimuthal_profile(
     stderr[mask] = scat[mask] / np.sqrt(counts[mask])
 
     stderr[~np.isfinite(stderr)] = np.nan
+    stderr[stderr < 0] = abs(stderr[stderr < 0])  # ensure non-negative
 
 
     theta_deg_centers = np.degrees(centers)
@@ -2114,7 +2113,7 @@ def profiles(
             model_data, ps,
             inclination_deg=inc_deg,
             position_angle_deg=pa_deg,
-            R_limit=radial_limit_mas,          # <-- if it expects pixels
+            R_limit=radial_limit_mas,          
             mode=mode, xc=xc, yc=yc,
             plot=plot,
             save=save_prefix + "radial_"
