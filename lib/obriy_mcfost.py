@@ -707,11 +707,21 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
         chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
     
+                
     if "vis2_chromatic" in fidelity["products"]:
-        chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.monochromatic_chi(str(workdir), img_dir="", container_data=container_data_pionier, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER", log_plotv=False)
-        chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.monochromatic_chi(str(workdir), img_dir="", container_data=container_data_gravity, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY", log_plotv=False)
-        chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="", container_data=container_data_matisse_l,vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L", log_plotv=True)
-        chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="", container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N", log_plotv=False)
+      
+        pionier_wavelengths = [1.5,1.55,1.6,1.63,1.65,1.7,1.75,1.8,1.85, 1.9]
+        pionier_img_dirs=[f"data_{w}/" for w in pionier_wavelengths]
+        chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.chromatic_chi(str(workdir), img_dir=pionier_img_dirs, container_data=container_data_pionier, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER", log_plotv=False)
+        gravity_wavelengths = [1.95,2.0,2.05,2.1,2.15,2.2,2.25,2.3,2.35,2.4,2.45,2.5]
+        gravity_img_dirs=[f"data_{w}/" for w in gravity_wavelengths]
+        chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.chromatic_chi(str(workdir), img_dir=gravity_img_dirs, container_data=container_data_gravity, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY", log_plotv=False)
+        matisse_l_wavelengths = [2.8,2.9,3.0,3.1,3.2,3.3,3.4,3.5,3.6,3.7,3.8,3.9,4.0,4.1,4.2,4.3]
+        matisse_l_img_dirs=[f"data_{w}/" for w in matisse_l_wavelengths]
+        chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.chromatic_chi(str(workdir), img_dir=matisse_l_img_dirs, container_data=container_data_matisse_l,vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L", log_plotv=True)
+        matisse_n_wavelengths = [7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0]
+        matisse_n_img_dirs=[f"data_{w}/" for w in matisse_n_wavelengths]
+        chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.chromatic_chi(str(workdir), img_dir=matisse_n_img_dirs, container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N", log_plotv=False)
     
     if ("pdi_I" in fidelity["products"]) or ("pdi_V" in fidelity["products"]) or ("pdi_H" in fidelity["products"]):
         loss_i=np.nan
@@ -721,7 +731,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         print('[obriy_mcfost] Polarimetric analysis started')
         if "pdi_I" in fidelity["products"]:
     
-            results_i=obp.polarimetric_analysis(str(workdir), 0.55, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'], psf_cut=100, 
+            results_i=obp.polarimetric_analysis(str(workdir), 0.82, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'], psf_cut=100, 
                                                                                                         image_scale='asinh', radial_limit_mas=500.0,
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                         theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Iband')
@@ -798,7 +808,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
         if "pdi_V" in fidelity["products"]:
     
-            results_v=obp.polarimetric_analysis(str(workdir), 0.82, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
+            results_v=obp.polarimetric_analysis(str(workdir), 0.55, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
                                                                                                         image_scale='asinh', radial_limit_mas=500.0,
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                         theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Vband')
@@ -954,7 +964,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
 
     if "alma" in fidelity["products"]:
-        #chi2_red_alma, profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints = oba.chi2_ALMA(str(workdir), data_alma=data_alma, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_ALMA_')
+        
         alma_cont = data_alma['alma_cont']
         obs_rad_prof = data_alma['radial_profile']
         obs_az_prof = data_alma['azimuthal_profile']
@@ -968,22 +978,39 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         
         if args.plot_intermediate: obp.plot_polarimetric_image(simulated_itot, ps_alma, title=f'Model Itot, alma_cont', save=str(workdir)+'/figures/'+'/model_itot_alma.png', image_scale='asinh', roi_half_size=100)
         simulated_itot_resc=oba.rescale_alma(simulated_itot, pix_scale, ps_alma)
-        simulated_itot_as_data=oba.cut_down_alma(simulated_itot_resc, alma_cont)
-        residuals=(simulated_itot_as_data[mask_alma]-alma_cont[mask_alma])**2
 
-        residuals_reduced=np.sum(residuals)/np.sum(mask_alma) #does not have error estimate, so not a proper chi2, but takes into account only 3snr points
+        if simulated_itot_resc.shape[0] > alma_cont.shape[0]:
+            simulated_itot_as_data=oba.cut_down_alma(simulated_itot_resc, alma_cont)
+        elif simulated_itot_resc.shape[0] < alma_cont.shape[0]:
+            print(f"[obriy_mcfost] WARNING: simulated_itot_resc.shape[0] < alma_cont.shape[0], cutting down alma_cont to match simulated_itot_resc")
+            simulated_itot_as_data=simulated_itot_resc
+            alma_cont=oba.cut_down_alma(alma_cont,simulated_itot_as_data)
+        else:
+            simulated_itot_as_data=simulated_itot_resc
 
 
+        residuals_map=(simulated_itot_as_data-alma_cont)**2
+        residuals_map_masked = np.where(mask_alma, residuals_map, np.nan)
+        residuals_reduced=np.nansum(residuals_map_masked)/np.sum(mask_alma) #does not have error estimate, so not a proper chi2, but takes into account only 3snr points
+        print(f"[obriy_mcfost] ALMA residuals image snr>=3 = {residuals_reduced}, sum of mask = {np.sum(mask_alma)}")
+        print(f"[obriy_mcfost] ALMA total flux: data = {np.nansum(alma_cont)}, model = {np.nansum(simulated_itot_as_data)}")
+
+    
         if args.plot_intermediate:
             #do some plotting
-            fig, ax = plt.subplots(1, 3, figsize=(14,7))
+            fig, ax = plt.subplots(1, 3, figsize=(16,6))
+            fig.subplots_adjust(wspace=0.5)
+
             color_map = 'viridis' #'afmhot'
-            ax[0].imshow(alma_cont, color_map, extent=[+alma_cont.shape[0]/2, -alma_cont.shape[0]/2, -alma_cont.shape[1]/2, alma_cont.shape[1]/2])
+            im0=ax[0].imshow(alma_cont, color_map, extent=[+alma_cont.shape[0]/2, -alma_cont.shape[0]/2, -alma_cont.shape[1]/2, alma_cont.shape[1]/2])
             ax[0].set_title("Data I$_{tot}$")
-            ax[1].imshow(simulated_itot_as_data, color_map, extent=[+simulated_itot_as_data.shape[0]/2, -simulated_itot_as_data.shape[0]/2, -simulated_itot_as_data.shape[1]/2, simulated_itot_as_data.shape[1]/2])
+            obg.add_colorbar(fig, ax[0], im0)
+            im1=ax[1].imshow(simulated_itot_as_data, color_map, extent=[+simulated_itot_as_data.shape[0]/2, -simulated_itot_as_data.shape[0]/2, -simulated_itot_as_data.shape[1]/2, simulated_itot_as_data.shape[1]/2])
             ax[1].set_title('Simulated I$_{tot}$')
-            ax[2].imshow(residuals, color_map,extent=[+alma_cont.shape[0]/2, -alma_cont.shape[0]/2, -alma_cont.shape[1]/2, alma_cont.shape[1]/2])
+            obg.add_colorbar(fig, ax[1], im1)
+            im2=ax[2].imshow(residuals_map_masked, color_map,extent=[+alma_cont.shape[0]/2, -alma_cont.shape[0]/2, -alma_cont.shape[1]/2, alma_cont.shape[1]/2])
             ax[2].set_title("Residual I$_{tot}$")
+            obg.add_colorbar(fig, ax[2], im2)
             plt.suptitle("ALMA, "+str(wave)+"$\mu m$, reduces chi2 "+ residuals_reduced.astype(str)) #does not have error estimate, so not a proper chi2
             fig.savefig(str(workdir)+'_alma_sim_vs_data_'+str(wave)+'.png', dpi= 150, bbox_inches='tight')
             plt.close(fig)
@@ -997,8 +1024,17 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 return_pixel_chi2=True
             )
         
-        loss_alma= 1-(metrics_alma['ssim']+metrics_alma['ncc'])/2 #chi2_red_alma
-        print(f'[obriy_mcfost] ALMA metrics: SSIM={metrics_alma["ssim"]}, NCC={metrics_alma["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
+        try:
+            chi2_red_alma_profiles, profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints = oba.chi2_ALMA(str(workdir), data_alma=data_alma, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_ALMA_')
+        except Exception as e:
+            print(f"Error computing ALMA chi2: {e}")
+            chi2_red_alma_profiles = 1e99
+        
+        #loss_alma= 1-(metrics_alma['ssim']+metrics_alma['ncc'])/2 #
+        loss_alma=residuals_reduced 
+        #loss_alma=chi2_red_alma_profiles
+
+        print(f'[obriy_mcfost] ALMA metrics: SSIM={metrics_alma["ssim"]}, NCC={metrics_alma["ncc"]}, chi2_red_alma_profiles={chi2_red_alma_profiles}, residuals image snr>=3 = {residuals_reduced}')
             
         #print(f"ALMA chi2: {chi2_red_alma}")
     
