@@ -5,6 +5,7 @@ from typing import Literal, Tuple, Dict, Optional, Union, Any, List
 from pathlib import Path
 from collections.abc import Sequence
 
+import distroi
 from distroi.auxiliary import constants
 from distroi.data import image
 from distroi.data import sed
@@ -615,13 +616,15 @@ def monochromatic_chi_with_background(
 
 def chromatic_chi(
         simulation_dir: str,
-        img_dir: str,
+        img_dir: str | list[str],
         container_data: OIContainer,
         vistype: str='vis2',
         plot: bool=False,
         fig_dir: str=None,
         extra_title: str=None,
-        log_plotv: bool=False
+        log_plotv: bool=False,
+        ebminv: float = 0.0,
+        reddening_law: str = None
 ) -> Tuple[float, float,float, int]:
     """
     Wrapper to calculate chi2 and reduced chi2 for a chromatic model without background.
@@ -631,8 +634,8 @@ def chromatic_chi(
     
     simulation_dir : str
         Directory where the MCFOST simulation is located.
-    img_dir : str
-        Directory where the MCFOST image for specific wavelength is located.
+    img_dir : str | list[str]
+        Directory or list of directories where the MCFOST images for specific wavelengths are located.
     container_data : OIContainer
         Container with data observables.
     vistype : {'vis2', 'vis', 'fcorr'}, optional
@@ -664,11 +667,16 @@ def chromatic_chi(
     wavelengths=[]
 
     for directory in img_dir:
-        wavelength_img= directory.split('_')[-1]
-        print(f"[obriy_interferometry, chromatic_chi] Reading image for wavelength {wavelength_img} from {simulation_dir}/{directory}")
-        img= distroi.read_image_list(simulation_dir, directory)
-        img_ffts.append(img)
-        wavelengths.append(float(wavelength_img))
+        #wavelength_img= directory.split('_')[-1]
+        #wavelength_img= float(wavelength_img.replace('/',''))
+        #print(f"[obriy_interferometry, chromatic_chi] Reading image for wavelength {wavelength_img} from {simulation_dir}/{directory}")
+        img_file_paths = sorted(glob.glob(f"{simulation_dir}/{directory}/**/*RT.fits.gz", recursive=True))
+        for img_path in img_file_paths:
+            img= distroi.read_image_mcfost(img_path)
+            img=distroi_redden_copy(img, ebminv=ebminv, reddening_law_path=reddening_law)  # redden the Image object
+            img_ffts.append(img)  # append to the list of Image objects
+            wavelengths.append(img.wavelength)  # append wavelength
+       
     
     wavelengths, img_ffts = list(zip(*sorted(zip(wavelengths, img_ffts))))  # sort the objects in wavelength
 
@@ -688,3 +696,43 @@ def chromatic_chi(
 
     return chi2, chi2_red, likelihood, num_points
 
+def distroi_redden_copy(
+        img: image.Image,
+        ebminv: float,
+        reddening_law_path: str = None,
+    ) -> image.Image:
+        """Redden the image.
+
+        Further reddens the model image according to the appropriate E(B-V) and a corresponding reddening law.
+
+        Parameters
+        ----------
+        ebminv : float
+            E(B-V) reddening factor to be applied.
+        reddening_law : str, optional
+            Path to the reddening law to be used. Defaults to the ISM reddening law by Cardelli (1989) in DISTROI's
+            'utils/ISM_reddening folder'. See this file for the expected formatting of your own reddening laws.
+
+        Returns
+        -------
+        None
+        """
+        if reddening_law_path is None:
+            folder_of_script = Path(__file__).resolve().parent
+             # one above the folder of the script:
+            reddening_law_path = str(folder_of_script.parent / "utils"/"ISMreddening_law_Cardelli1989.dat")
+
+        img.img = constants.redden_flux(
+            img.wavelength,
+            img.img,  # apply additional reddening to the image
+            ebminv,
+            reddening_law=reddening_law_path,
+        )
+        if img.fft is not None:
+            img.fft = constants.redden_flux(
+                img.wavelength, img.fft, ebminv, reddening_law_path
+            )  # apply additional reddening to the fft
+        img.ftot = constants.redden_flux(
+            img.wavelength, img.ftot, ebminv, reddening_law_path
+        )  # apply additional reddening to the toal flux
+        return img

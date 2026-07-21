@@ -245,7 +245,9 @@ def chi2_SED_with_reddening(
     float
         The reduced chi2 
     float
-        Log-likelihood 
+        Log-likelihood
+    float
+        fitted E(B-V)
     """
 
    # --- Resolve reddening law path if not provided ---
@@ -366,5 +368,5 @@ def chi2_SED_with_reddening(
         plt.close(fig)
         
     
-    return  chi2, chi2_red, loglike
+    return  chi2, chi2_red, loglike, E_best
 

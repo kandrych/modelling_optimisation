@@ -695,10 +695,10 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         return 1e99
     plot_mcfost_disk_structure(str(workdir.parent)+'/', simulation_name,  az_disk=0)
 
-    
+    ebminv_sed=0.0
     if "sed" in fidelity["products"]:
 
-        chi2_sed, chi2_reduced_sed, loglike_sed= obs.chi2_SED_with_reddening(str(workdir.name), str(workdir.parent)+'/', data_wave=data_sed[0], data_flux=data_sed[1],data_err=data_sed[2],
+        chi2_sed, chi2_reduced_sed, loglike_sed, ebminv_sed= obs.chi2_SED_with_reddening(str(workdir.name), str(workdir.parent)+'/', data_wave=data_sed[0], data_flux=data_sed[1],data_err=data_sed[2],
                                                 plot=True, description=simulation_name)
     
     if "vis2_1perband" in fidelity["products"]:
@@ -712,16 +712,16 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
       
         pionier_wavelengths = [1.5,1.55,1.6,1.63,1.65,1.7,1.75,1.8,1.85, 1.9]
         pionier_img_dirs=[f"data_{w}/" for w in pionier_wavelengths]
-        chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.chromatic_chi(str(workdir), img_dir=pionier_img_dirs, container_data=container_data_pionier, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER", log_plotv=False)
+        chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.chromatic_chi(str(workdir), img_dir=pionier_img_dirs, container_data=container_data_pionier, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER", log_plotv=False, ebminv=ebminv_sed)
         gravity_wavelengths = [1.95,2.0,2.05,2.1,2.15,2.2,2.25,2.3,2.35,2.4,2.45,2.5]
         gravity_img_dirs=[f"data_{w}/" for w in gravity_wavelengths]
-        chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.chromatic_chi(str(workdir), img_dir=gravity_img_dirs, container_data=container_data_gravity, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY", log_plotv=False)
+        chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.chromatic_chi(str(workdir), img_dir=gravity_img_dirs, container_data=container_data_gravity, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY", log_plotv=False, ebminv=ebminv_sed)
         matisse_l_wavelengths = [2.8,2.9,3.0,3.1,3.2,3.3,3.4,3.5,3.6,3.7,3.8,3.9,4.0,4.1,4.2,4.3]
         matisse_l_img_dirs=[f"data_{w}/" for w in matisse_l_wavelengths]
-        chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.chromatic_chi(str(workdir), img_dir=matisse_l_img_dirs, container_data=container_data_matisse_l,vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L", log_plotv=True)
+        chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.chromatic_chi(str(workdir), img_dir=matisse_l_img_dirs, container_data=container_data_matisse_l,vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L", log_plotv=True, ebminv=ebminv_sed)
         matisse_n_wavelengths = [7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0]
         matisse_n_img_dirs=[f"data_{w}/" for w in matisse_n_wavelengths]
-        chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.chromatic_chi(str(workdir), img_dir=matisse_n_img_dirs, container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N", log_plotv=False)
+        chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.chromatic_chi(str(workdir), img_dir=matisse_n_img_dirs, container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N", log_plotv=False, ebminv=ebminv_sed)
     
     if ("pdi_I" in fidelity["products"]) or ("pdi_V" in fidelity["products"]) or ("pdi_H" in fidelity["products"]):
         loss_i=np.nan
@@ -992,7 +992,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         residuals_map=(simulated_itot_as_data-alma_cont)**2
         residuals_map_masked = np.where(mask_alma, residuals_map, np.nan)
         residuals_reduced=np.nansum(residuals_map_masked)/np.sum(mask_alma) #does not have error estimate, so not a proper chi2, but takes into account only 3snr points
-        print(f"[obriy_mcfost] ALMA residuals image snr>=3 = {residuals_reduced}, sum of mask = {np.sum(mask_alma)}")
+        print(f"[obriy_mcfost] ALMA residuals image snr>=2 = {residuals_reduced}, sum of mask = {np.sum(mask_alma)}")
         print(f"[obriy_mcfost] ALMA total flux: data = {np.nansum(alma_cont)}, model = {np.nansum(simulated_itot_as_data)}")
 
     
