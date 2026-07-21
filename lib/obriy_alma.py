@@ -208,39 +208,43 @@ def rescale_alma(
 
 
 def cut_down_alma(
-    img_sim: np.ndarray,
-    img_data: np.ndarray
+    img_1: np.ndarray,
+    img_2: np.ndarray
 ) -> Tuple[np.ndarray]:
     """
-    Cut down the ALMA image to match the size of the data image.
+    Cut down the  image1 to match the size of the  image2.
 
     Parameters
     ----------
-    img_sim : np.ndarray
-        Simulated image.
-    img_data : np.ndarray
-        Observed data image.
+    img_1 : np.ndarray
+        First image.
+    img_2 : np.ndarray
+        Second image.
     
     Returns
     -------
     img_tot_res
     """
-    size_sim = img_sim.shape[0]
-    size_data = img_data.shape[0]
-    if size_sim <= 0 or size_data <= 0:
-        raise ValueError("Image dimensions must be positive.")
-    
-    if size_sim < size_data:
-        raise ValueError("Simulated image must be larger than data image. Size of simulation: {}, size of data: {}".format(size_sim, size_data))
-    
-    diff = (size_sim - size_data) // 2
-    if (size_sim - size_data) % 2 != 0:
-        raise ValueError("Simulated image size must be even larger than data image size. Size of simulation: {}, size of data: {}".format(size_sim, size_data))
-
-    img_tot_res = img_sim[diff:size_sim-diff, diff:size_sim-diff]
-   
+    size1 = img_1.shape[0]
+    size2= img_2.shape[0]
+    try:
+        if size1 <= 0 or size2 <= 0:
+            raise ValueError("Image dimensions must be positive.")
+        if size1 < size2:
+            raise ValueError("First image must be larger than second image. Size of first image: {}, size of second image: {}".format(size1, size2))
+        diff = (size1 - size2)
+        # For an odd difference, the extra pixel is removed from the bottom and right side.
+        start= diff// 2
+        end = start + size2
+        if diff % 2 != 0:
+            print("For an odd difference, the extra pixel is removed from the bottom and right side. Possible geometrical shift! Size of first image: {}, size of second image: {}".format(size1, size2))
+        img_tot_res = img_1[start:end, start:end]
+    except ValueError as e:
+        print(f"Error in cut_down_alma: {e}. Returning the original simulated image.")
+        img_tot_res = img_1
 
     return img_tot_res
+
 
 def chi2_ALMA(main_dir, data_alma, plot=False, fig_dir=None, extra_title=""):
     """
