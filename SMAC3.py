@@ -7,7 +7,6 @@ SMAC3 + Dask(SLURM) + Multi‑Fidelity skeleton
 - Objective wrapper that shells out to MCFOST and returns a scalar loss
 - SMAC3 MultiFidelityFacade orchestration (parallel, async-friendly)
 
-Test locally first, then switch to SLURM.
 """
 from __future__ import annotations
 
@@ -82,6 +81,8 @@ matplotlib.rcParams["font.serif"] = [
 
 def start_cluster(n_workers: int, processes_per_worker: int, use_slurm: bool) -> Client:
     """
+    NOT REALLY WORKING
+    
     Start a Dask cluster. For quick local testing, set use_slurm=False and
     rely on default LocalCluster via `Client()`.
 
@@ -90,6 +91,8 @@ def start_cluster(n_workers: int, processes_per_worker: int, use_slurm: bool) ->
       - activate the same venv
       - export all runtime env vars (MCFOST, PATH, OMP, PYTHONPATH)
       - write logs per-job so you can debug startup
+
+    
     """
     if not use_slurm:
         client = Client(n_workers=n_workers, threads_per_worker=processes_per_worker)  # LocalCluster default
@@ -693,7 +696,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         yc = (ny - 1) / 2.0
         R,_,_,X, Y = obp.compute_grid(alma_cont, xc=xc, yc=yc)
         noise_level_alma=np.nanstd(alma_cont[R>(100/ps_alma)])
-        mask_alma = (alma_cont >= 3*noise_level_alma)
+        mask_alma = (alma_cont >= 2*noise_level_alma)
         #local plotting
         plt.imshow(mask_alma, origin='lower')
         plt.savefig(figdir+'/alma_cont_mask_3snr.png', dpi=300)
