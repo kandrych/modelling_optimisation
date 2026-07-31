@@ -1268,7 +1268,7 @@ def radial_br_profile(
     plot: bool = True,
     save: Optional[str] = '',        # folder/prefix or None
     roi_half_size: int = 30,           # for the image plotting(pixels)
-    image_scale: str = "asinh",
+    image_scale:  Literal["asinh","linear"] = "asinh",
     mode: Literal["mean","median","sum"] = "mean", # how to compute brightness per annulus
     xc: Optional[float] = None,
     yc: Optional[float] = None,
