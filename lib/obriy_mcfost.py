@@ -985,6 +985,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             print(f"[obriy_mcfost] WARNING: simulated_itot_resc.shape[0] < alma_cont.shape[0], cutting down alma_cont to match simulated_itot_resc")
             simulated_itot_as_data=simulated_itot_resc
             alma_cont=oba.cut_down_alma(alma_cont,simulated_itot_as_data)
+            mask_alma=oba.cut_down_alma(mask_alma,simulated_itot_as_data)
         else:
             simulated_itot_as_data=simulated_itot_resc
 
