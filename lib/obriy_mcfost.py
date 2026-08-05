@@ -394,6 +394,7 @@ def plot_mcfost_disk_structure(main_dir: str, sub_dir: str,  az_disk=0) -> None:
             r, z, q,
             cmap="viridis",
             norm=LogNorm(vmin=vmin, vmax=vmax),
+            shading="nearest"
         )
         
         cb = plt.colorbar(cmesh, ax=ax[i])
@@ -413,15 +414,15 @@ def plot_mcfost_disk_structure(main_dir: str, sub_dir: str,  az_disk=0) -> None:
 
     for i, (quantity, label) in enumerate(quantities):
 
-        colmax = np.nanmax(quantity, axis=0)
-        colmax[colmax == 0] = np.nan
-        q_norm = quantity / colmax[None, :]
+        #q_norm = quantity / colmax[None, :]
+        q = np.asarray(quantity)
+        vmin = np.nanmin(q[(r < 100) & (z < 100) & np.isfinite(q) & (q > 0)])
+        vmax = np.nanmax(q[(r < 100) & (z < 100) & np.isfinite(q) & (q > 0)])
+        cmesh = ax[i].pcolormesh(r, z, q, cmap='viridis',shading="nearest", vmin=vmin, vmax=vmax)
 
-        cmesh = ax[i].pcolormesh(r, z, q_norm,
-                                cmap='viridis')
 
         cb = plt.colorbar(cmesh, ax=ax[i])
-        cb.set_label("Normalized " + label)
+        cb.set_label(label)
 
         ax[i].set_xlabel(r'$r\,[AU]$')
         ax[i].set_ylabel(r'$z\,[AU]$')
@@ -596,11 +597,13 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
 
     
     if puffed_up_rim:
-        run_mcfost_safe(param_path, workdir, options=["-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_base.log")
         run_mcfost_safe(param_path, workdir, options=["-disk_struct","-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_base_struct.log")
+        run_mcfost_safe(param_path, workdir, options=["-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_temp.log")
+               
     else:
-        run_mcfost_safe(param_path, workdir, logfile="mcfost_base_struct.log")
+        
         run_mcfost_safe(param_path, workdir, options=["-disk_struct"], logfile="mcfost_base_struct.log")
+        run_mcfost_safe(param_path, workdir, logfile="mcfost_temp.log")
     
     if "vis2_1perband" in fidelity["products"]:
         for w in [1.63, 2.20, 3.50, 10.0]:
