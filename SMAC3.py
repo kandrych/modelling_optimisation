@@ -773,9 +773,8 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
 
     # Score outputs
 
-    loss = obm.load_and_score_outputs(fidelity, trial_dir, data_arg, args)
-
-    return float(loss)
+    loss, additional_info = obm.load_and_score_outputs(fidelity, trial_dir, data_arg, args)
+    return float(loss), additional_info  # Return loss and additional info for SMAC
 
 
 def warmstart_from_runhistory_json(

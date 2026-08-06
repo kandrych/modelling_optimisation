@@ -652,17 +652,17 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
 
 
 
-def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dict[str, Any], args) -> float:
+def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dict[str, Any], args) -> Tuple[float, Dict[str, Any]]:
     """
     Read MCFOST outputs and compute a single scalar loss.
-    Recommended: Gaussian-error negative log-likelihood combining SED/vis2/PDI.
     
 
-    Return the likelihood (lower is better).
+    Return the likelihood (lower is better) and additional_info dictionary.
+    Additional info contains extra information, such as individual chi2 values for each observable.
     """
     print(f'[obriy_mcfost] fidelity["stage"] = {fidelity["stage"]}')
     print(f'[obriy_mcfost] fidelity["products"] = {fidelity["products"]}')  
-
+    additional_info = {}
 
     if args.plot_intermediate:
         if not os.path.exists(str(workdir)+'/figures/'):
@@ -695,7 +695,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     if not sed_path.exists():
         print(f"Temperature file {sed_path} not found.")
         # trial ran but produced no SED -> invalid config or earlier failure
-        return 1e99
+        return 1e99, additional_info
     plot_mcfost_disk_structure(str(workdir.parent)+'/', simulation_name,  az_disk=0)
 
     ebminv_sed=0.0
@@ -703,14 +703,45 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
         chi2_sed, chi2_reduced_sed, loglike_sed, ebminv_sed= obs.chi2_SED_with_reddening(str(workdir.name), str(workdir.parent)+'/', data_wave=data_sed[0], data_flux=data_sed[1],data_err=data_sed[2],
                                                 plot=True, description=simulation_name)
+        additional_info["sed"] = {
+            "chi2": chi2_sed,
+            "chi2_reduced": chi2_reduced_sed,
+            "loglike": loglike_sed,
+            "ebminv": ebminv_sed
+        }
     
     if "vis2_1perband" in fidelity["products"]:
         chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.monochromatic_chi(str(workdir), img_dir="data_1.63/", container_data=container_data_pionier, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.63", log_plotv=False)
         chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.monochromatic_chi(str(workdir), img_dir="data_2.2/", container_data=container_data_gravity, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY 2.2", log_plotv=False)
         chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
         chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
-    
-                
+
+        additional_info["vis2_1perband"] = {
+            'pionier':{
+                "chi2": chi2_pionier,
+                "chi2_reduced": chi2_red_pionier,
+                "loglike": loglike_pionier,
+                "num_points": num_points_pionier
+            },
+            'gravity':{
+                "chi2": chi2_gravity,
+                "chi2_reduced": chi2_red_gravity,
+                "loglike": loglike_gravity,
+                "num_points": num_points_gravity},
+            'matisse_l':{
+                "chi2": chi2_matisse_l,
+                "chi2_reduced": chi2_red_matisse_l,
+                "loglike": loglike_matisse_l,
+                "num_points": num_points_matisse_l
+            },
+            'matisse_n':{
+                "chi2": chi2_matisse_n,
+                "chi2_reduced": chi2_red_matisse_n,
+                "loglike": loglike_matisse_n,
+                "num_points": num_points_matisse_n
+            }
+        }
+
     if "vis2_chromatic" in fidelity["products"]:
       
         pionier_wavelengths = [1.5,1.55,1.6,1.63,1.65,1.7,1.75,1.8,1.85, 1.9]
@@ -725,7 +756,38 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         matisse_n_wavelengths = [7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0]
         matisse_n_img_dirs=[f"data_{w}/" for w in matisse_n_wavelengths]
         chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.chromatic_chi(str(workdir), img_dir=matisse_n_img_dirs, container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N", log_plotv=False, ebminv=ebminv_sed)
-    
+        
+        additional_info["vis2_chromatic"] = {
+            'pionier':{
+                "chi2": chi2_pionier,
+                "chi2_reduced": chi2_red_pionier,
+                "loglike": loglike_pionier,
+                "num_points": num_points_pionier,
+                "wavelengths": pionier_wavelengths
+            },
+            'gravity':{
+                "chi2": chi2_gravity,
+                "chi2_reduced": chi2_red_gravity,
+                "loglike": loglike_gravity,
+                "num_points": num_points_gravity,
+                "wavelengths": gravity_wavelengths
+            },
+            'matisse_l':{
+                "chi2": chi2_matisse_l,
+                "chi2_reduced": chi2_red_matisse_l,
+                "loglike": loglike_matisse_l,
+                "num_points": num_points_matisse_l,
+                "wavelengths": matisse_l_wavelengths
+            },
+            'matisse_n':{
+                "chi2": chi2_matisse_n,
+                "chi2_reduced": chi2_red_matisse_n,
+                "loglike": loglike_matisse_n,
+                "num_points": num_points_matisse_n,
+                "wavelengths": matisse_n_wavelengths
+            }
+        }
+        
     if ("pdi_I" in fidelity["products"]) or ("pdi_V" in fidelity["products"]) or ("pdi_H" in fidelity["products"]):
         loss_i=np.nan
         loss_v=np.nan
@@ -808,6 +870,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             #Loss based only on profile chi2 to test if it can drive the fit
             #loss_i=profile_pi_chi2_red
 
+            additional_info["pdi"] = {'I': {
+                "ssim": metrics_i.get("ssim"),
+                "ncc": metrics_i.get("ncc"),
+                "profile_pi_chi2_red": profile_pi_chi2_red,
+                "profile_pi_loglike": profile_loglike,
+                "profile_rad_pi_chi2": profile_rad_pi_chi2,
+                "profile_rad_pi_npoints": profile_rad_pi_npoints,
+                "profile_az_pi_chi2": profile_az_pi_chi2,
+                "profile_az_pi_npoints": profile_az_pi_npoints,
+                "loss": loss_i
+            }}
+
 
         if "pdi_V" in fidelity["products"]:
     
@@ -881,7 +955,17 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             loss_v=1-(metrics_v['ssim']+metrics_v['ncc'])/2 #+ profile_pi_chi2_red # weights can be adjusted
             #Loss based only on profile chi2 to test if it can drive the fit
             #loss_v= profile_pi_chi2_red
-
+            additional_info["pdi"] = {'V': {
+                            "ssim": metrics_v.get("ssim"),
+                            "ncc": metrics_v.get("ncc"),
+                            "profile_pi_chi2_red": profile_pi_chi2_red,
+                            "profile_pi_loglike": profile_loglike,
+                            "profile_rad_pi_chi2": profile_rad_pi_chi2,
+                            "profile_rad_pi_npoints": profile_rad_pi_npoints,
+                            "profile_az_pi_chi2": profile_az_pi_chi2,
+                            "profile_az_pi_npoints": profile_az_pi_npoints,
+                            "loss": loss_v
+                        }}
 
         if "pdi_H" in fidelity["products"]:
             results_h=obp.polarimetric_analysis(str(workdir), 1.63, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
@@ -955,7 +1039,17 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             loss_h=1-(metrics_h['ssim']+metrics_h['ncc'])/2 #+ profile_pi_chi2_red # weights can be adjusted
             #Loss based only on profile chi2 to test if it can drive the fit
             #loss_h=profile_pi_chi2_red # weights can be adjusted
-
+            additional_info["pdi"] = {'H': {
+                            "ssim": metrics_h.get("ssim"),
+                            "ncc": metrics_h.get("ncc"),
+                            "profile_pi_chi2_red": profile_pi_chi2_red,
+                            "profile_pi_loglike": profile_loglike,
+                            "profile_rad_pi_chi2": profile_rad_pi_chi2,
+                            "profile_rad_pi_npoints": profile_rad_pi_npoints,
+                            "profile_az_pi_chi2": profile_az_pi_chi2,
+                            "profile_az_pi_npoints": profile_az_pi_npoints,
+                            "loss": loss_h
+                        }}
 
 
 
@@ -1038,6 +1132,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         loss_alma=residuals_reduced 
         #loss_alma=chi2_red_alma_profiles
 
+        additional_info["alma"] = {
+            "ssim": metrics_alma.get("ssim"),
+            "ncc": metrics_alma.get("ncc"),
+            "chi2_red_alma_profiles": chi2_red_alma_profiles,
+            "profile_rad_pi_chi2": profile_rad_pi_chi2,
+            "profile_az_pi_chi2": profile_az_pi_chi2,
+            "profile_rad_pi_npoints": profile_rad_pi_npoints,
+            "profile_az_pi_npoints": profile_az_pi_npoints,
+            "residuals_reduced": residuals_reduced,
+            "loss": loss_alma
+        }
+
         print(f'[obriy_mcfost] ALMA metrics: SSIM={metrics_alma["ssim"]}, NCC={metrics_alma["ncc"]}, chi2_red_alma_profiles={chi2_red_alma_profiles}, residuals image snr>=3 = {residuals_reduced}')
             
         #print(f"ALMA chi2: {chi2_red_alma}")
@@ -1048,7 +1154,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     loglike_total=0.0
     chi2_red_total=0.0
     i_num=0
-
+    
     if "sed" in fidelity["products"]:
         
         chi_total+= chi2_sed 
@@ -1088,4 +1194,4 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         chi2_red_total+=loss_alma 
     print(f"Total reduced chi2: {chi2_red_total}, loglike: {loglike_total}")
     
-    return chi2_red_total
+    return chi2_red_total, additional_info

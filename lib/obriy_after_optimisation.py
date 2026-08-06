@@ -50,6 +50,8 @@ def runhistory_to_df(smac, cs) -> pd.DataFrame:
         row["cost"] = v.cost
         row["time"] = getattr(v, "time", None)
         row["status"] = getattr(v, "status", None)
+        row["additional_info"] = v.additional_info if isinstance(v, TrialValue) else None
+        
         rows.append(row)
 
     df = pd.DataFrame(rows)
