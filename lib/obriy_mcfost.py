@@ -711,11 +711,29 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         }
     
     if "vis2_1perband" in fidelity["products"]:
-        chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.monochromatic_chi(str(workdir), img_dir="data_1.63/", container_data=container_data_pionier, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.63", log_plotv=False)
-        chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.monochromatic_chi(str(workdir), img_dir="data_2.2/", container_data=container_data_gravity, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY 2.2", log_plotv=False)
-        chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
-        chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
+        
+        if args.overresolved_flux_fit_for_interferometry:
+            full_wavelengths=[1.63, 2.2, 3.5, 10.0]
+            wave_for_background=args.overresolved_flux_fit_for_interferometry
+            closest = min(full_wavelengths, key=lambda x: abs(x - wave_for_background))
+            container_data=container_data_pionier if closest in pionier_wavelengths else container_data_gravity if closest in gravity_wavelengths else container_data_matisse_l if closest in matisse_l_wavelengths else container_data_matisse_n
+            img_dir = f"data_{closest}/"
+            _, _, _, _, frac_closest_wavelength_optimised= obi.monochromatic_chi_with_background(str(workdir), img_dir=img_dir, container_data=container_data, wave_for_background=wave_for_background, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=f"Reference for overresolved flux, wavelength {closest}", log_plotv=False)
+                
 
+            chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier, _= obi.monochromatic_chi_with_background(str(workdir), img_dir="data_1.63/", container_data=container_data_pionier, wave_for_background=args.overresolved_flux_fit_for_interferometry,frac_for_background=frac_closest_wavelength_optimised, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.63", log_plotv=False)
+            chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity, _= obi.monochromatic_chi_with_background(str(workdir), img_dir="data_2.2/", container_data=container_data_gravity, wave_for_background=args.overresolved_flux_fit_for_interferometry, frac_for_background=frac_closest_wavelength_optimised, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY 2.2", log_plotv=False)
+            chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l, _= obi.monochromatic_chi_with_background(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l, wave_for_background=args.overresolved_flux_fit_for_interferometry,frac_for_background=frac_closest_wavelength_optimised,  vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
+            chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n, _= obi.monochromatic_chi_with_background(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, wave_for_background=args.overresolved_flux_fit_for_interferometry, frac_for_background=frac_closest_wavelength_optimised, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
+
+        else:
+            chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.monochromatic_chi(str(workdir), img_dir="data_1.63/", container_data=container_data_pionier, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.63", log_plotv=False)
+            chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.monochromatic_chi(str(workdir), img_dir="data_2.2/", container_data=container_data_gravity, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY 2.2", log_plotv=False)
+            chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
+            chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
+            frac_closest_wavelength_optimised=None
+            wave_for_background=None
+            
         additional_info["vis2_1perband"] = {
             'pionier':{
                 "chi2": chi2_pionier,
@@ -727,35 +745,55 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 "chi2": chi2_gravity,
                 "chi2_reduced": chi2_red_gravity,
                 "loglike": loglike_gravity,
-                "num_points": num_points_gravity},
+                "num_points": num_points_gravity
+            },
+                
             'matisse_l':{
                 "chi2": chi2_matisse_l,
                 "chi2_reduced": chi2_red_matisse_l,
                 "loglike": loglike_matisse_l,
                 "num_points": num_points_matisse_l
+                
             },
             'matisse_n':{
                 "chi2": chi2_matisse_n,
                 "chi2_reduced": chi2_red_matisse_n,
                 "loglike": loglike_matisse_n,
                 "num_points": num_points_matisse_n
-            }
+            },
+            'fraction_overresolved': {"value": frac_closest_wavelength_optimised,
+                                                  "wavelength": wave_for_background}
+
         }
 
     if "vis2_chromatic" in fidelity["products"]:
-      
+        
         pionier_wavelengths = [1.5,1.55,1.6,1.63,1.65,1.7,1.75,1.8,1.85, 1.9]
-        pionier_img_dirs=[f"data_{w}/" for w in pionier_wavelengths]
-        chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.chromatic_chi(str(workdir), img_dir=pionier_img_dirs, container_data=container_data_pionier, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER", log_plotv=False, ebminv=ebminv_sed)
         gravity_wavelengths = [1.95,2.0,2.05,2.1,2.15,2.2,2.25,2.3,2.35,2.4,2.45,2.5]
-        gravity_img_dirs=[f"data_{w}/" for w in gravity_wavelengths]
-        chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.chromatic_chi(str(workdir), img_dir=gravity_img_dirs, container_data=container_data_gravity, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY", log_plotv=False, ebminv=ebminv_sed)
         matisse_l_wavelengths = [2.8,2.9,3.0,3.1,3.2,3.3,3.4,3.5,3.6,3.7,3.8,3.9,4.0,4.1,4.2,4.3]
-        matisse_l_img_dirs=[f"data_{w}/" for w in matisse_l_wavelengths]
-        chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.chromatic_chi(str(workdir), img_dir=matisse_l_img_dirs, container_data=container_data_matisse_l,vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L", log_plotv=True, ebminv=ebminv_sed)
         matisse_n_wavelengths = [7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0]
+        full_wavelengths = pionier_wavelengths + gravity_wavelengths + matisse_l_wavelengths + matisse_n_wavelengths
+                              
+        if args.overresolved_flux_fit_for_interferometry:
+            wave_for_background=args.overresolved_flux_fit_for_interferometry
+            closest = min(full_wavelengths, key=lambda x: abs(x - wave_for_background))
+            container_data=container_data_pionier if closest in pionier_wavelengths else container_data_gravity if closest in gravity_wavelengths else container_data_matisse_l if closest in matisse_l_wavelengths else container_data_matisse_n
+            img_dir = f"data_{closest}/"
+            _, _, _, _, frac_closest_wavelength_optimised= obi.monochromatic_chi_with_background(str(workdir), img_dir=img_dir, container_data=container_data, wave_for_background=wave_for_background, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=f"Reference for overresolved flux, wavelength {closest}", log_plotv=False)
+                        
+        else:
+            wave_for_background=None
+            frac_closest_wavelength_optimised=None
+                
+
+        pionier_img_dirs=[f"data_{w}/" for w in pionier_wavelengths]
+        chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.chromatic_chi(str(workdir), img_dir=pionier_img_dirs, container_data=container_data_pionier, vistype='vis2',wave_for_background=wave_for_background,frac_for_background=frac_closest_wavelength_optimised, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER", log_plotv=False, ebminv=ebminv_sed)
+        gravity_img_dirs=[f"data_{w}/" for w in gravity_wavelengths]
+        chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.chromatic_chi(str(workdir), img_dir=gravity_img_dirs, container_data=container_data_gravity, vistype='vis2',wave_for_background=wave_for_background,frac_for_background=frac_closest_wavelength_optimised, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY", log_plotv=False, ebminv=ebminv_sed)
+        matisse_l_img_dirs=[f"data_{w}/" for w in matisse_l_wavelengths]
+        chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.chromatic_chi(str(workdir), img_dir=matisse_l_img_dirs, container_data=container_data_matisse_l,vistype='vis2',wave_for_background=wave_for_background,frac_for_background=frac_closest_wavelength_optimised, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L", log_plotv=True, ebminv=ebminv_sed)
         matisse_n_img_dirs=[f"data_{w}/" for w in matisse_n_wavelengths]
-        chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.chromatic_chi(str(workdir), img_dir=matisse_n_img_dirs, container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N", log_plotv=False, ebminv=ebminv_sed)
+        chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.chromatic_chi(str(workdir), img_dir=matisse_n_img_dirs, container_data=container_data_matisse_n, vistype='vis',wave_for_background=wave_for_background,frac_for_background=frac_closest_wavelength_optimised, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N", log_plotv=False, ebminv=ebminv_sed)
         
         additional_info["vis2_chromatic"] = {
             'pionier':{
@@ -785,7 +823,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 "loglike": loglike_matisse_n,
                 "num_points": num_points_matisse_n,
                 "wavelengths": matisse_n_wavelengths
-            }
+            },
+            'fraction_overresolved': {"value": frac_closest_wavelength_optimised,
+                                      "wavelength": wave_for_background}
         }
         
     if ("pdi_I" in fidelity["products"]) or ("pdi_V" in fidelity["products"]) or ("pdi_H" in fidelity["products"]):

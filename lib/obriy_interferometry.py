@@ -528,18 +528,27 @@ def monochromatic_chi(
     return chi2, chi2_red, likelihood, num_points
 
 
+def background_objective(frac: float, ref_wavelength: float, container_data: Any, img_ffts: Any) -> float:
+    _, chi2_red, _, _ = chi2_for_optimisation_overresolved(
+        frac=frac,
+        ref_wavelength=ref_wavelength,
+        container_data=container_data,
+        img_ffts=img_ffts,
+    )
+    return float(chi2_red)
 
 def monochromatic_chi_with_background(
         simulation_dir: str,
         img_dir: str,
         container_data: OIContainer,
         wave_for_background: float,
+        frac_for_background: float=None,
         vistype: str='vis2',
         plot: bool=False,
         fig_dir: str=None,
         extra_title: str=None,
         log_plotv: bool=False
-) -> Tuple[float, float, float, int]:
+) -> Tuple[float, float, float, int, float]:
     """
     Calculate chi2 and reduced chi2 for a monochromatic model with background.
     Background is optimised for a given wavelength based on the reduced chi2.
@@ -554,6 +563,8 @@ def monochromatic_chi_with_background(
         Container with data observables.
     wave_for_background : float
         Wavelength in micrometer for which the background is calculated.
+    frac_for_background : float, optional
+        Fraction of the background (overresolved) flux. Default is None and means that the fraction is to be optimized.
     vistype : {'vis2', 'vis', 'fcorr'}, optional
         Type of visibility to be used in the chi2 calculation. Default is 'vis2'.
     plot : bool, optional
@@ -574,21 +585,28 @@ def monochromatic_chi_with_background(
         Log-likelihood value for optimisation.
     num_points : int
         Number of data points used in the chi2 calculation.
+    frac_best : float
+        Best-fit background flux fraction in the model. If frac_for_background is provided, this will be equal to that value.
     """
     
     
     img_ffts = distroi.read_image_list(simulation_dir, img_dir)
-    
     background = distroi.Overresolved(sp_dep=distroi.FlatSpecDep(flux_form="flam"))
-    objective = obg.pick_output(chi2_for_optimisation_overresolved, idx=2, cast=float)
 
-    frac_min = minimize_scalar(
-        lambda x: objective(x, ref_wavelength=wave_for_background),
-        bounds=(0.0, 0.5),
-        method="bounded",
-        options={"xatol": 1e-4}
-    )
-    frac_best = float(frac_min.x)
+    
+
+    #objective = obg.pick_output(chi2_for_optimisation_overresolved, idx=2, cast=float)
+
+    if frac_for_background is None:
+        frac_min = minimize_scalar(
+            lambda x: background_objective(x, ref_wavelength=wave_for_background, container_data=container_data, img_ffts=img_ffts),
+            bounds=(0.0, 0.5),
+            method="bounded",
+            options={"xatol": 1e-4}
+        )
+        frac_best = float(frac_min.x)
+    else:
+        frac_best = frac_for_background
     
     container_model = distroi.oi_container_calc_image_fft_observables(
         container_data, img_ffts, geom_comps=[background], geom_comp_flux_fracs=[frac_best], ref_wavelength=wave_for_background
@@ -608,7 +626,7 @@ def monochromatic_chi_with_background(
             extra_title=extra_title+f" with background fraction {frac_best:.3f}"
         )
 
-    return chi2, chi2_red, loglike, num_points
+    return chi2, chi2_red, loglike, num_points, frac_best
 
 
 
@@ -619,6 +637,8 @@ def chromatic_chi(
         img_dir: str | list[str],
         container_data: OIContainer,
         vistype: str='vis2',
+        wave_for_background: float=None,
+        frac_for_background: float=None,
         plot: bool=False,
         fig_dir: str=None,
         extra_title: str=None,
@@ -640,6 +660,10 @@ def chromatic_chi(
         Container with data observables.
     vistype : {'vis2', 'vis', 'fcorr'}, optional
         Type of visibility to be used in the chi2 calculation. Default is 'vis2'.
+    wave_for_background : float, optional
+        Wavelength in micrometer for which the background is calculated. Default is None and means that there is no background (overresolved) flux.
+    frac_for_background : float, optional
+        Fraction of the background (overresolved) flux. Default is None and means that the fraction is to be optimized.
     plot : bool, optional
         If True, plots data vs model. Default is False.
     fig_dir : str, optional
@@ -660,6 +684,8 @@ def chromatic_chi(
         Log-likelihood value for optimisation.
     num_points : int
         Number of data points used in the chi2 calculation.
+    frac_best : float
+        Best-fit fraction of the background (overresolved) flux.
     """
 
     img_dir = [img_dir] if isinstance(img_dir, str) else list(img_dir)
@@ -680,7 +706,28 @@ def chromatic_chi(
     
     wavelengths, img_ffts = list(zip(*sorted(zip(wavelengths, img_ffts))))  # sort the objects in wavelength
 
-    container_model = distroi.oi_container_calc_image_fft_observables(container_data, img_ffts)
+    if wave_for_background is not None:
+        background = distroi.Overresolved(sp_dep=distroi.FlatSpecDep(flux_form="flam"))
+
+        if frac_for_background is None:
+            frac_min = minimize_scalar(
+                lambda x: background_objective(x, ref_wavelength=wave_for_background, container_data=container_data, img_ffts=img_ffts),
+                bounds=(0.0, 0.5),
+                method="bounded",
+                options={"xatol": 1e-4}
+            )
+            frac_best = float(frac_min.x)
+        else:
+            frac_best = frac_for_background
+        
+        container_model = distroi.oi_container_calc_image_fft_observables(
+            container_data, img_ffts, geom_comps=[background], geom_comp_flux_fracs=[frac_best], ref_wavelength=wave_for_background
+        )
+    else:
+
+        container_model = distroi.oi_container_calc_image_fft_observables(container_data, img_ffts)
+    
+    
     chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 
     if plot:    

@@ -223,6 +223,8 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         stage = "F10"
     if budget >= 11.0:
         stage = "F11"
+    if budget >= 12.0:
+        stage = "F12"
    
     if budget >= 14.0:
         stage = "F14"
@@ -260,6 +262,9 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
     elif stage == "F11":
         img_res = 2
         products = ["sed", "pdi_V", "pdi_I", "pdi_H", "alma"]
+    elif stage == "F12":
+        img_res = 2
+        products = ["sed", "vis2_chromatic"]
 
     elif stage == "F14":
         img_res = 2
@@ -895,6 +900,7 @@ def main():
     p.add_argument("--plot-intermediate", action="store_true", help="Plot intermediate results during scoring")
     p.add_argument("--puffed-up-rim", action="store_true", help="Enable puffed up rim feature")
     p.add_argument("--tapered-edge-p1-eq-p2", action="store_true", help="Enable tapered edge with p1=p2")
+    p.add_argument("--overresolved_flux_fit_for_interferometry", type=float, help="Fit overresolved flux to interferometry data. Give wavelength.")
     args = p.parse_args()
     
     WORK_ROOT = Path(args.working_root).resolve()
