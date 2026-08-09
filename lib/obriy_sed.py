@@ -86,7 +86,7 @@ def load_sed_data(data_filename:str):
     -------
     data_wave : np.ndarray
         Wavelengths in micrometers.
-    data_flux : np.ndarray
+    data_flam : np.ndarray
         Fluxes in erg/s/cm^2.
     data_err : np.ndarray
         Flux errors in erg/s/cm^2.
@@ -103,14 +103,14 @@ def load_sed_data(data_filename:str):
     data_err = np.array(df['e_cmeas'])*(u.erg/u.second/(u.centimeter**2)/u.Angstrom)
     #put flux to lam x F_lam and in units erg cm^-2 s^-1
     data_wave = data_wave.to(u.micrometer)
-    data_flux = (data_wave*data_flux).to(u.erg/u.second/(u.centimeter**2))
+    data_flam = (data_wave*data_flux).to(u.erg/u.second/(u.centimeter**2))
     data_err = (data_wave*data_err).to(u.erg/u.second/(u.centimeter**2))
     #extract only the values because this might cause trouble in sutractions later on
     if type(data_wave) == astropy.units.quantity.Quantity:
         data_wave = np.array(data_wave.value)
-        data_flux = np.array(data_flux.value)
+        data_flam = np.array(data_flam.value)
         data_err = np.array(data_err.value)
-    return data_wave, data_flux, data_err
+    return data_wave, data_flam, data_err
 
 
 

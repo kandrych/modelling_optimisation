@@ -541,7 +541,8 @@ def monochromatic_chi_with_background(
         simulation_dir: str,
         img_dir: str,
         container_data: OIContainer,
-        wave_for_background: float,
+        img_sed: Any = None,
+        wave_for_background: float = None,
         frac_for_background: float=None,
         vistype: str='vis2',
         plot: bool=False,
@@ -561,6 +562,8 @@ def monochromatic_chi_with_background(
         Directory where the MCFOST image for specific wavelength is located.
     container_data : OIContainer
         Container with data observables.
+    img_sed : distroi.data.sed.SED, optional
+        SED object containing the model SED to scale for the overresolved flux. Default is None and means that the SED is not used for scaling.
     wave_for_background : float
         Wavelength in micrometer for which the background is calculated.
     frac_for_background : float, optional
@@ -609,7 +612,7 @@ def monochromatic_chi_with_background(
         frac_best = frac_for_background
     
     container_model = distroi.oi_container_calc_image_fft_observables(
-        container_data, img_ffts, geom_comps=[background], geom_comp_flux_fracs=[frac_best], ref_wavelength=wave_for_background
+        container_data, img_ffts, img_sed=img_sed, geom_comps=[background], geom_comp_flux_fracs=[frac_best], ref_wavelength=wave_for_background
     )
 
     chi2, chi2_red,loglike, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
@@ -637,6 +640,7 @@ def chromatic_chi(
         img_dir: str | list[str],
         container_data: OIContainer,
         vistype: str='vis2',
+        img_sed: sed.SED=None,
         wave_for_background: float=None,
         frac_for_background: float=None,
         plot: bool=False,
@@ -660,6 +664,8 @@ def chromatic_chi(
         Container with data observables.
     vistype : {'vis2', 'vis', 'fcorr'}, optional
         Type of visibility to be used in the chi2 calculation. Default is 'vis2'.
+    img_sed : distroi.data.sed.SED, optional
+        SED object containing the model SED to scale for the overresolved flux. Default is None and means that the SED is not used for scaling.
     wave_for_background : float, optional
         Wavelength in micrometer for which the background is calculated. Default is None and means that there is no background (overresolved) flux.
     frac_for_background : float, optional
@@ -721,7 +727,7 @@ def chromatic_chi(
             frac_best = frac_for_background
         
         container_model = distroi.oi_container_calc_image_fft_observables(
-            container_data, img_ffts, geom_comps=[background], geom_comp_flux_fracs=[frac_best], ref_wavelength=wave_for_background
+            container_data, img_ffts, img_sed=img_sed, geom_comps=[background], geom_comp_flux_fracs=[frac_best], ref_wavelength=wave_for_background
         )
     else:
 
