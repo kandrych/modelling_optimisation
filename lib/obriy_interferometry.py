@@ -457,8 +457,11 @@ def chi2_for_optimisation_overresolved(frac, ref_wavelength, container_data, img
     """
     frac = float(frac) 
     background = distroi.Overresolved(sp_dep=distroi.FlatSpecDep(flux_form="flam"))
+    #this is fixed for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
+    accretion_secondary = distroi.PointSource(coords=(0.0, 0.0), sp_dep=distroi.spec_dep.BlackBodySpecDep(temp=4000.0, flux_form="flam"))
+    
     container_model = distroi.oi_container_calc_image_fft_observables(
-        container_data, img_ffts, geom_comps=[background], geom_comp_flux_fracs=[frac], ref_wavelength=ref_wavelength)
+        container_data, img_ffts, geom_comps=[background, accretion_secondary], geom_comp_flux_fracs=[frac, 0.039], ref_wavelength=ref_wavelength)
 
 
     chi2, chi2_red, loglike, n_data=oi_container_chi2(container_data, container_model)
@@ -596,6 +599,10 @@ def monochromatic_chi_with_background(
     img_ffts = distroi.read_image_list(simulation_dir, img_dir)
     background = distroi.Overresolved(sp_dep=distroi.FlatSpecDep(flux_form="flam"))
 
+    #this is fixed for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
+    accretion_secondary = distroi.PointSource(coords=(0.0, 0.0), sp_dep=distroi.spec_dep.BlackBodySpecDep(temp=4000.0, flux_form="flam"))
+
+
     
 
     #objective = obg.pick_output(chi2_for_optimisation_overresolved, idx=2, cast=float)
@@ -612,7 +619,7 @@ def monochromatic_chi_with_background(
         frac_best = frac_for_background
     
     container_model = distroi.oi_container_calc_image_fft_observables(
-        container_data, img_ffts, img_sed=img_sed, geom_comps=[background], geom_comp_flux_fracs=[frac_best], ref_wavelength=wave_for_background
+        container_data, img_ffts, img_sed=img_sed, geom_comps=[background, accretion_secondary], geom_comp_flux_fracs=[frac_best, 0.039], ref_wavelength=wave_for_background
     )
 
     chi2, chi2_red,loglike, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
@@ -690,9 +697,7 @@ def chromatic_chi(
         Log-likelihood value for optimisation.
     num_points : int
         Number of data points used in the chi2 calculation.
-    frac_best : float
-        Best-fit fraction of the background (overresolved) flux.
-    """
+     """
 
     img_dir = [img_dir] if isinstance(img_dir, str) else list(img_dir)
     img_ffts=[]
@@ -712,6 +717,10 @@ def chromatic_chi(
     
     wavelengths, img_ffts = list(zip(*sorted(zip(wavelengths, img_ffts))))  # sort the objects in wavelength
 
+    #this is fixed for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
+    accretion_secondary = distroi.PointSource(coords=(0.0, 0.0), sp_dep=distroi.spec_dep.BlackBodySpecDep(temp=4000.0, flux_form="flam"))
+
+
     if wave_for_background is not None:
         background = distroi.Overresolved(sp_dep=distroi.FlatSpecDep(flux_form="flam"))
 
@@ -727,12 +736,12 @@ def chromatic_chi(
             frac_best = frac_for_background
         
         container_model = distroi.oi_container_calc_image_fft_observables(
-            container_data, img_ffts, img_sed=img_sed, geom_comps=[background], geom_comp_flux_fracs=[frac_best], ref_wavelength=wave_for_background
+            container_data, img_ffts, img_sed=img_sed, geom_comps=[background, accretion_secondary], geom_comp_flux_fracs=[frac_best, 0.039], ref_wavelength=wave_for_background
         )
     else:
-
-        container_model = distroi.oi_container_calc_image_fft_observables(container_data, img_ffts)
-    
+        # No background component, just the accretion secondary that is fixed for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
+        container_model = distroi.oi_container_calc_image_fft_observables(container_data, img_ffts, img_sed=img_sed, geom_comps=[accretion_secondary], geom_comp_flux_fracs=[0.039], ref_wavelength=1.65)
+      
     
     chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 

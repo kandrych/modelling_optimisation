@@ -214,7 +214,8 @@ def chi2_SED_with_reddening(
         data_err: np.ndarray,
         reddening_law_path: str | None = None,
         plot: bool = True,
-        description: str = None
+        description: str = None,
+        secondary_component: bool = True #for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
         ) -> Tuple[float,float, float]:
     """
     Wrapper that loads mcfost SED data, calculate the reduced chi2 between the observed SED data 
@@ -279,11 +280,23 @@ def chi2_SED_with_reddening(
     full_sed = sed_array[0, 0, 0, :]
     #single out the star only
     star_sed = sed_array[1, 0, 0, :]
+    if secondary_component:
+        #adding a blackbody component to the SED, this is fixed for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
+        full_sed_with_comp, comp_sed = add_blackbody_component(
+            lam,
+            full_sed,
+            T_comp=4000.0,
+            f_comp_ref=0.039,
+            ref_wavelength=1.65,
+        ) 
 
     #open up the observed photometric data, note that the units are in erg/s/cm2/AA
     #cut out the laste points, these often overlap with the next column
     
+    F_model_H = np.interp(1.65, lam, full_sed)
+    F_comp_H  = np.interp(1.65, lam, comp_sed)
 
+    print("[obriy_sed]Check for the contribution of the secondary component at H-band (1.65 micron) in SED: " + str(F_comp_H / (F_model_H + F_comp_H)))
     #### plot
     #plotting
     if plot:
@@ -291,6 +304,9 @@ def chi2_SED_with_reddening(
         ax.errorbar(data_wave, data_flux, data_err, label='data', fmt='bd', mfc='white', capsize=5, zorder=1000)
         ax.plot(lam, full_sed, ls='-', c='k', label='MCFOST SED', zorder=1)
         ax.plot(lam, star_sed, ls='-', c='grey', label='star', alpha=0.4, zorder=0)
+        if secondary_component:
+            ax.plot(lam, comp_sed, ls='-', c='orange', label='accretion secondary', alpha=0.4, zorder=0)
+            ax.plot(lam, full_sed_with_comp, ls='--', c='k', label='MCFOST SED + accretion secondary', zorder=1)
         ax.set_xlabel(r"$\lambda \, \mathrm{[\mu m]}$")
         ax.set_ylabel(r"$\lambda F_{\lambda} \, \mathrm{[erg \, cm^{-2} \, s^{-1}]}$")
         ax.set_xlim(np.min(lam), np.max(lam))
@@ -317,11 +333,13 @@ def chi2_SED_with_reddening(
     for i in range (0, sim_number):
         new_flux = np.zeros(data_wave.size)
         for j in range(0, data_wave.size):
-            new_flux[j] = data_wave[j]+(random.gauss(0, 1)*data_err[j])
-        par_min = minimize(lambda x: objective(data_wave, data_flux, lam, full_sed, data_err,\
+            new_flux[j] = data_flux[j]+(random.gauss(0, 1)*data_err[j])
+        
+        par_min = minimize(lambda x: objective(data_wave, new_flux, lam, full_sed if not secondary_component else full_sed_with_comp, data_err,\
                                                                 reddening_law_path, x), 1.4)
+        
         E_values[i] = par_min["x"][0]
-        _,chi2_values_sim[i],_ = chi2reddened(data_wave, data_flux, lam, full_sed, data_err,\
+        _,chi2_values_sim[i],_ = chi2reddened(data_wave, data_flux, lam, full_sed if not secondary_component else full_sed_with_comp, data_err,\
                                         reddening_law_path, par_min["x"][0])
 
     E_best = np.mean(E_values)
@@ -330,11 +348,19 @@ def chi2_SED_with_reddening(
     #print('Standard deviation of E(B-V) is:'  + str(E_std))
 
     #redden the model by found ISM reddenning and plot
-    full_sed_red = redden_flux(lam, full_sed, reddening_law_path, E_best)
+    if secondary_component:
+        full_sed_red = redden_flux(lam, full_sed_with_comp, reddening_law_path, E_best)
+    else:
+        full_sed_red = redden_flux(lam, full_sed, reddening_law_path, E_best)
+
     star_sed_red = redden_flux(lam, star_sed, reddening_law_path, E_best)
 
     #calculate chi2 values
-    chi2_red,chi2, loglike=chi2reddened(data_wave, data_flux, lam, full_sed, data_err, reddening_law_path, E_best)
+
+    if secondary_component:
+        chi2_red,chi2, loglike=chi2reddened(data_wave, data_flux, lam, full_sed_with_comp, data_err, reddening_law_path, E_best)
+    else:
+        chi2_red,chi2, loglike=chi2reddened(data_wave, data_flux, lam, full_sed, data_err, reddening_law_path, E_best)
     #plotting
     if plot:
         fig, ax = plt.subplots(figsize=(7, 7))
@@ -370,3 +396,68 @@ def chi2_SED_with_reddening(
     
     return  chi2, chi2_red, loglike, E_best
 
+
+def blackbody_lambdaFlambda(wave_mkm, T):
+    """
+    wavemkm : array-like
+        Wavelengths in micrometers.
+    T : float
+        Temperature in Kelvin.
+    Returns
+    -------
+    np.ndarray
+        Relative blackbody spectrum expressed as lambda * F_lambda.
+        Only the spectral shape matters; normalization is arbitrary.
+    """
+    wave_m = np.asarray(wave_mkm) * 1e-6
+
+    h = 6.62607015e-34
+    c = 2.99792458e8
+    k = 1.380649e-23
+
+    B_lambda = (
+        2.0 * h * c**2 / wave_m**5
+        / np.expm1(h * c / (wave_m * k * T))
+    )
+
+    return wave_m * B_lambda
+
+
+def add_blackbody_component(
+    lam,
+    flux_model,
+    T_comp=4000.0, #for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value.
+    f_comp_ref=0.039, #for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value.
+    ref_wavelength=1.65, #for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value.
+):
+    """
+    Add a blackbody component contributing f_comp_ref of the
+    total model flux at ref_wavelength.
+
+    flux_model is assumed to be lambda * F_lambda.
+    """
+
+    # MCFOST lambda F_lambda at reference wavelength
+    F_model_ref = np.interp(
+        ref_wavelength,
+        lam,
+        flux_model
+    )
+
+    # required companion flux such that:
+    # F_comp / (F_model + F_comp) = f_comp_ref
+    F_comp_ref = (
+        f_comp_ref / (1.0 - f_comp_ref)
+    ) * F_model_ref
+
+    # 4000 K spectral shape in lambda F_lambda
+    bb = blackbody_lambdaFlambda(lam, T_comp)
+
+    bb_ref = blackbody_lambdaFlambda(
+        np.array([ref_wavelength]),
+        T_comp
+    )[0]
+
+    F_comp = F_comp_ref * bb / bb_ref
+
+    return flux_model + F_comp, F_comp

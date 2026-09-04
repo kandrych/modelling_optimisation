@@ -1769,7 +1769,6 @@ def polarimetric_analysis(
             fig_dir = str(simulation_dir +"/polarimetric")
     Path(fig_dir).mkdir(parents=True, exist_ok=True)
 
-
     if convolution_mode=='no':
             print('No convolution selected')
     elif convolution_mode=='synthetic':
@@ -1793,22 +1792,27 @@ def polarimetric_analysis(
     with fits.open(rt_path) as hdul:
             hdr = hdul[0].header
 
+
     # CDELT2 in degrees/pixel to mas/pixel
     native_ps_mas = float(hdr["CDELT2"]) * u.deg.to(u.arcsec) * 1000.0
+    print(f"Native pixel scale: {native_ps_mas:.3f} mas/pix")
     n_pix = int(hdr["NAXIS1"])
     fov_mas = n_pix * native_ps_mas
     fov_au=obg.mas2au(fov_mas, distance_pc)
+    print(f"Native pixel number: {n_pix} pix")
+    print(f"Native FoV: {fov_mas:.3f} mas ({fov_au:.3f} au)")
     
     
     # --- Choose instrument pixel scale
     if pixel_scale_mas is not None:
-            inst_ps_mas = float(pixel_scale_mas)
+        inst_ps_mas = float(pixel_scale_mas)
     elif camera is not None:
-            inst_ps_mas = CAMERA_PS_MAS[camera]
+        inst_ps_mas = CAMERA_PS_MAS[camera]
     else:
                 # default to native if nothing specified
-            inst_ps_mas = native_ps_mas
+        inst_ps_mas = native_ps_mas
 
+    
     # --- Load MCFOST images
     img_array_original, header_original, img_tot_original, img_q_original, img_u_original, img_v_original, img_star_original, img_star_sct_original, img_disk_th_original, img_disk_th_sct_original = load_mcfost_images_1wave(simulation_dir, wavelength, ploting=plot, save_plots=fig_dir, title_addition=extra_title)
     q_phi_original, u_phi_original, pi_original, phi_mcfost_original=compute_qphi_uphi_pi(img_q_original, img_u_original)
@@ -1829,6 +1833,7 @@ def polarimetric_analysis(
                                 'u_phi':u_phi_original, 
                                 'pi':pi_original, 
                                 'phi':phi_mcfost_original,
+                                'pixel_scale_mas':native_ps_mas,
                                 'metrics':metrics_original
                                 }
 
@@ -1836,7 +1841,7 @@ def polarimetric_analysis(
     rad_prof={}
     az_prof={}
     for ft in ['pi',"q_phi",'img_tot']:            
-        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_original'][ft], inst_ps_mas, 
+        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_original'][ft], native_ps_mas, 
                                             profile_type="both",
                                             mode="sum",
                                             radial_limit_mas=radial_limit_mas,
@@ -1858,6 +1863,15 @@ def polarimetric_analysis(
 
     img_q_rescaled, img_u_rescaled, img_total_rescaled, q_phi_rescaled, u_phi_rescaled, pi_rescaled, phi_rescaled=rescale_and_recalculate_all_polarim_img(img_q_original, img_u_original, img_tot_original, native_ps_mas, new_pix_scale=inst_ps_mas, conserve='sum')
     metrics_rescaled=polarimetric_metrics(img_total_rescaled,img_q_rescaled, img_u_rescaled, q_phi_rescaled, u_phi_rescaled,pi_rescaled)
+    
+    print(f"Instrument pixel scale: {inst_ps_mas:.3f} mas/pix")
+    n_pix_inst = int(img_q_rescaled.shape[0])
+    fov_mas = n_pix_inst * inst_ps_mas
+    print(f"Instrument pixel number: {n_pix_inst} pix")
+    print(f"New FoV: {fov_mas:.3f} mas ({obg.mas2au(fov_mas, distance_pc):.3f} au)")
+    
+
+
 
     results['mcfost_rescaled']={'img_q':img_q_rescaled,
                                     'img_u':img_u_rescaled,
@@ -1866,7 +1880,8 @@ def polarimetric_analysis(
                                     'u_phi':u_phi_rescaled,
                                     'pi':pi_rescaled,
                                     'phi':phi_rescaled,
-                                    'metrics':metrics_rescaled
+                                    'metrics':metrics_rescaled,
+                                    'pixel_scale_mas':inst_ps_mas
                                     }
     rad_prof={}
     az_prof={}
@@ -1920,7 +1935,8 @@ def polarimetric_analysis(
                                             'pi':PI_conv,
                                             'pi_deconvolved':pi_conv_decon,
                                             'q_phi_deconvolved':q_phi_conv_decon,
-                                            'metrics':metrics_conv
+                                            'metrics':metrics_conv,
+                                            'pixel_scale_mas':inst_ps_mas
                                             }
             
             rad_prof={}
@@ -1971,7 +1987,8 @@ def polarimetric_analysis(
                                             'aolp_corr':aolp_corr,
                                             'dolp_unres':dolp_unres,
                                             'aolp_unres':aolp_unres,
-                                            'phi':phi
+                                            'phi':phi,
+                                            'pixel_scale_mas':inst_ps_mas
                                             }
 
     rad_prof={}
@@ -2026,6 +2043,7 @@ def polarimetric_analysis(
                                             'pi_deconvolved':pi_corr_conv_decon,
                                             'q_phi_deconvolved':q_phi_corr_conv_decon,
                                             'metrics':metrics_corr_conv,
+                                            'pixel_scale_mas':inst_ps_mas
                                             }
     rad_prof={}
     az_prof={}
@@ -2517,3 +2535,998 @@ def deconvolution(image, psf, limit_N_decon=200, critlim=0.015,  image_cut=0,sav
             break
 
     return decon
+
+
+
+def differential_quadrants(
+    Q,
+    U,
+    pixel_scale_mas,
+    disk_pa_deg,
+    r_in_mas,
+    r_out_mas,
+    *,
+    flip_disk_y=False,
+    plot=False,
+    save=None,
+    title=None,
+    roi_mas=None,
+):
+    """
+    Calculate Schmid differential quadrant parameters.
+
+    Coordinate convention
+    ---------------------
+    Input images:
+        +X_sky = East
+        +Y_sky = North
+
+    disk_pa_deg:
+        Position angle of the DISK MAJOR AXIS,
+        measured North -> East.
+
+    Schmid disk coordinates:
+        +x_disk = along disk major axis
+        +y_disk = along disk minor axis
+
+        phi_disk = atan2(x_disk, y_disk)
+
+        so:
+            phi =   0 deg : +y_disk
+            phi =  90 deg : +x_disk
+            phi = 180 deg : -y_disk
+            phi = 270 deg : -x_disk
+
+    flip_disk_y:
+        If False, +y_disk is chosen 90 deg counter-clockwise
+        from +x_disk in the PA convention.
+        Set True if the opposite minor-axis direction should
+        correspond to +y_disk (e.g. to make +y the disk backside).
+
+    Notes
+    -----
+    - No scipy image rotation/interpolation is performed.
+    - Q/U are rotated analytically into the disk Stokes basis.
+    - Quadrants are defined in disk coordinates.
+    - Q_phi and P are recomputed in the disk frame as a consistency check.
+    - P = sqrt(Q^2 + U^2) is invariant under coordinate rotation.
+
+    Returns
+    -------
+    dict
+        Raw quadrant sums, differential quadrant values,
+        normalized differential values, and coordinate/validation
+        quantities useful for diagnostics.
+    """
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle
+
+    # =========================================================
+    # 0. Basic checks
+    # =========================================================
+
+    Q = np.asarray(Q, dtype=float)
+    U = np.asarray(U, dtype=float)
+
+    if Q.shape != U.shape:
+        raise ValueError(
+            f"Q and U must have the same shape: "
+            f"Q={Q.shape}, U={U.shape}"
+        )
+
+    if r_out_mas <= r_in_mas:
+        raise ValueError("r_out_mas must be larger than r_in_mas.")
+
+    # =========================================================
+    # 1. Sky coordinates
+    # =========================================================
+
+    ny, nx = Q.shape
+
+    yc = (ny - 1) / 2.0
+    xc = (nx - 1) / 2.0
+
+    yy, xx = np.indices(Q.shape)
+
+    # Astronomical sky convention:
+    # +X = East
+    # +Y = North
+    X = (xx - xc) * pixel_scale_mas
+    Y = -(yy - yc) * pixel_scale_mas
+
+    R = np.sqrt(X**2 + Y**2)
+
+    # PA measured from North toward East
+    phi_sky = np.arctan2(X, Y)
+
+    # =========================================================
+    # 2. Define Schmid disk coordinate system
+    # =========================================================
+
+    # Input PA is MAJOR-axis PA.
+    pa_major = np.deg2rad(disk_pa_deg)
+
+    # In Schmid coordinates:
+    #
+    #   +x_disk = major axis
+    #   +y_disk = minor axis
+    #
+    # Since phi = atan2(x,y), +x occurs 90 deg from +y.
+    #
+    # Therefore:
+    # PA(+y_disk) = PA(+x_disk) - 90 deg
+
+    w = pa_major - np.pi / 2.0
+
+    if flip_disk_y:
+        # Reverse both disk axes.
+        #
+        # Note: this does NOT change the Q/U Stokes basis because
+        # Stokes Q,U are invariant under a 180-deg axis reversal,
+        # but it DOES swap the physical quadrant labels.
+        w += np.pi
+
+    # =========================================================
+    # 3. Spatial coordinates in disk frame
+    # =========================================================
+
+    # This is a passive coordinate transformation.
+    #
+    # A point exactly along +y_disk should give:
+    # Xd = 0, Yd > 0
+
+    Xd = X * np.cos(w) - Y * np.sin(w)
+    Yd = X * np.sin(w) + Y * np.cos(w)
+
+    # Schmid azimuth:
+    # phi = atan2(x_disk, y_disk)
+    phi = np.arctan2(Xd, Yd)
+    phi_mod = phi % (2.0 * np.pi)
+
+    # Useful consistency check:
+    phi_from_sky = np.angle(
+        np.exp(1j * (phi_sky - w))
+    )
+
+    # =========================================================
+    # 4. Rotate Stokes Q/U basis into disk coordinates
+    # =========================================================
+
+    cos2w = np.cos(2.0 * w)
+    sin2w = np.sin(2.0 * w)
+
+    Qd = Q * cos2w + U * sin2w
+    Ud = U * cos2w - Q * sin2w
+
+    # =========================================================
+    # 5. Q_phi, U_phi and P in disk coordinates
+    # =========================================================
+
+    # Schmid & Ma equations:
+    #
+    # Q_phi = -Q cos(2phi) - U sin(2phi)
+    # U_phi = +Q sin(2phi) - U cos(2phi)
+
+    Qphi_disk = (
+        -Qd * np.cos(2.0 * phi)
+        -Ud * np.sin(2.0 * phi)
+    )
+
+    Uphi_disk = (
+        +Qd * np.sin(2.0 * phi)
+        -Ud * np.cos(2.0 * phi)
+    )
+
+    # Polarized flux P.
+    # This is invariant under the Q/U reference-frame rotation.
+    P_disk = np.sqrt(Qd**2 + Ud**2)
+
+    # Calculate using your existing routine as a cross-check
+    Qphi_sky, Uphi_sky, P_sky, _ = compute_qphi_uphi_pi(Q, U)
+
+    finite = (
+        np.isfinite(Qphi_disk)
+        & np.isfinite(Qphi_sky)
+    )
+
+    if np.any(finite):
+        max_qphi_difference = np.nanmax(
+            np.abs(Qphi_disk[finite] - Qphi_sky[finite])
+        )
+    else:
+        max_qphi_difference = np.nan
+
+    finite_p = (
+        np.isfinite(P_disk)
+        & np.isfinite(P_sky)
+    )
+
+    if np.any(finite_p):
+        max_p_difference = np.nanmax(
+            np.abs(P_disk[finite_p] - P_sky[finite_p])
+        )
+    else:
+        max_p_difference = np.nan
+
+    # =========================================================
+    # 6. Integration aperture
+    # =========================================================
+
+    aperture = (
+        (R >= r_in_mas)
+        & (R <= r_out_mas)
+        & np.isfinite(Qd)
+        & np.isfinite(Ud)
+    )
+
+    # =========================================================
+    # 7. Non-overlapping quadrant masks
+    # =========================================================
+
+    def angular_difference(phi_array, center_deg):
+        """
+        Wrapped angular difference in [-pi, pi).
+        """
+        center = np.deg2rad(center_deg)
+
+        return np.angle(
+            np.exp(1j * (phi_array - center))
+        )
+
+    def wedge(center_deg):
+        """
+        90-degree wedge centred on center_deg.
+
+        The lower boundary is included and the upper boundary
+        excluded so neighbouring wedges cannot double-count pixels.
+        """
+        dphi = angular_difference(phi, center_deg)
+
+        return (
+            aperture
+            & (dphi >= -np.pi / 4.0)
+            & (dphi <  np.pi / 4.0)
+        )
+
+    # =========================================================
+    # 8. Q quadrants
+    # =========================================================
+
+    Q000 = np.nansum(Qd[wedge(0)])
+    Q090 = np.nansum(Qd[wedge(90)])
+    Q180 = np.nansum(Qd[wedge(180)])
+    Q270 = np.nansum(Qd[wedge(270)])
+
+    # =========================================================
+    # 9. U quadrants
+    # =========================================================
+
+    U045 = np.nansum(Ud[wedge(45)])
+    U135 = np.nansum(Ud[wedge(135)])
+    U225 = np.nansum(Ud[wedge(225)])
+    U315 = np.nansum(Ud[wedge(315)])
+
+    # =========================================================
+    # 10. Integrated quantities
+    # =========================================================
+
+    # Better than summing the four quadrant values because this
+    # guarantees every aperture pixel is counted exactly once.
+    SigmaQ = np.nansum(Qd[aperture])
+    SigmaU = np.nansum(Ud[aperture])
+
+    # Use Qphi calculated self-consistently in disk coordinates.
+    SigmaQphi = np.nansum(Qphi_disk[aperture])
+
+    # Pixel-wise integrated polarized flux:
+    #
+    # SigmaP = sum sqrt(Q^2 + U^2)
+    #
+    # Note: this is NOT the same as aperture polarization:
+    # P(Sigma) = sqrt[(SigmaQ)^2 + (SigmaU)^2]
+    SigmaP = np.nansum(P_disk[aperture])
+
+    P_aperture = np.sqrt(SigmaQ**2 + SigmaU**2)
+
+    # =========================================================
+    # 11. Differential quadrant parameters
+    # =========================================================
+
+    dQ000 = Q000 - SigmaQ / 4.0
+    dQ090 = Q090 - SigmaQ / 4.0
+    dQ180 = Q180 - SigmaQ / 4.0
+    dQ270 = Q270 - SigmaQ / 4.0
+
+    dUplus = U135 - U045
+    dUminus = U225 - U315
+
+    # Relative quantities only meaningful if SigmaQphi != 0.
+    valid = (
+        np.isfinite(SigmaQphi)
+        and not np.isclose(
+            SigmaQphi,
+            0.0,
+            atol=1e-12,
+            rtol=0.0
+        )
+    )
+
+    if valid:
+
+        dQ000_norm = dQ000 / SigmaQphi
+        dQ090_norm = dQ090 / SigmaQphi
+        dQ180_norm = dQ180 / SigmaQphi
+        dQ270_norm = dQ270 / SigmaQphi
+
+        dUplus_norm = dUplus / SigmaQphi
+        dUminus_norm = dUminus / SigmaQphi
+
+    else:
+
+        print(
+            f"Warning: SigmaQphi ~ 0 in annulus "
+            f"{r_in_mas}..{r_out_mas} mas. "
+            "Normalized quadrant quantities set to NaN."
+        )
+
+        dQ000_norm = np.nan
+        dQ090_norm = np.nan
+        dQ180_norm = np.nan
+        dQ270_norm = np.nan
+
+        dUplus_norm = np.nan
+        dUminus_norm = np.nan
+
+    # =========================================================
+    # 12. Results
+    # =========================================================
+
+    result = {
+
+        # Raw Q quadrants
+        "Q000": Q000,
+        "Q090": Q090,
+        "Q180": Q180,
+        "Q270": Q270,
+
+        # Raw U quadrants
+        "U045": U045,
+        "U135": U135,
+        "U225": U225,
+        "U315": U315,
+
+        # Integrated quantities
+        "SigmaQ": SigmaQ,
+        "SigmaU": SigmaU,
+        "SigmaQphi": SigmaQphi,
+        "SigmaP": SigmaP,
+        "P_aperture": P_aperture,
+
+        # Raw differential quantities
+        "dQ000": dQ000,
+        "dQ090": dQ090,
+        "dQ180": dQ180,
+        "dQ270": dQ270,
+
+        "dUplus": dUplus,
+        "dUminus": dUminus,
+
+        # Normalized differential quantities
+        "dQ000_norm": dQ000_norm,
+        "dQ090_norm": dQ090_norm,
+        "dQ180_norm": dQ180_norm,
+        "dQ270_norm": dQ270_norm,
+
+        "dUplus_norm": dUplus_norm,
+        "dUminus_norm": dUminus_norm,
+
+        "valid": valid,
+
+        # Geometry
+        "disk_pa_major_deg": disk_pa_deg,
+        "disk_y_pa_deg": np.rad2deg(w) % 360.0,
+        "flip_disk_y": flip_disk_y,
+
+        # Useful maps
+        "Q_disk": Qd,
+        "U_disk": Ud,
+        "Qphi_disk": Qphi_disk,
+        "Uphi_disk": Uphi_disk,
+        "P_disk": P_disk,
+
+        "X_disk": Xd,
+        "Y_disk": Yd,
+        "R": R,
+        "phi_disk": phi_mod,
+        "aperture": aperture,
+
+        # Coordinate / convention diagnostics
+        "max_Qphi_coordinate_difference": max_qphi_difference,
+        "max_P_coordinate_difference": max_p_difference,
+    }
+
+    # =========================================================
+    # 13. Diagnostic plots
+    # =========================================================
+
+    if plot:
+
+        if roi_mas is None:
+            roi_mas = 1.2 * r_out_mas
+
+        fig, axes = plt.subplots(
+            2,
+            2,
+            figsize=(11, 10),
+            constrained_layout=True
+        )
+
+        axQ = axes[0, 0]
+        axU = axes[0, 1]
+        axQphi = axes[1, 0]
+        axP = axes[1, 1]
+
+        # -----------------------------------------------------
+        # Plot helpers
+        # -----------------------------------------------------
+
+        def draw_radial_line(
+            ax,
+            angle_deg,
+            radius,
+            **kwargs
+        ):
+            """
+            Disk angle measured from +y toward +x.
+            """
+            a = np.deg2rad(angle_deg)
+
+            x_end = radius * np.sin(a)
+            y_end = radius * np.cos(a)
+
+            ax.plot(
+                [0, x_end],
+                [0, y_end],
+                **kwargs
+            )
+
+        def annotate_quadrant(
+            ax,
+            angle_deg,
+            radius,
+            text
+        ):
+            a = np.deg2rad(angle_deg)
+
+            x_text = radius * np.sin(a)
+            y_text = radius * np.cos(a)
+
+            ax.text(
+                x_text,
+                y_text,
+                text,
+                ha="center",
+                va="center",
+                fontsize=9,
+                bbox=dict(
+                    facecolor="white",
+                    alpha=0.75,
+                    edgecolor="none"
+                )
+            )
+
+        def add_aperture(ax):
+            ax.add_patch(
+                Circle(
+                    (0, 0),
+                    r_in_mas,
+                    fill=False,
+                    ls=":",
+                    lw=1.2,
+                    color="k"
+                )
+            )
+
+            ax.add_patch(
+                Circle(
+                    (0, 0),
+                    r_out_mas,
+                    fill=False,
+                    ls="-",
+                    lw=1.2,
+                    color="k"
+                )
+            )
+
+        def format_disk_axes(ax):
+            ax.axhline(
+                0,
+                lw=0.5,
+                alpha=0.35,
+                color="k"
+            )
+
+            ax.axvline(
+                0,
+                lw=0.5,
+                alpha=0.35,
+                color="k"
+            )
+
+            ax.set_xlim(-roi_mas, roi_mas)
+            ax.set_ylim(-roi_mas, roi_mas)
+
+            ax.set_aspect("equal")
+
+            ax.set_xlabel(
+                r"$x_{\rm disk}$ [mas]  (major axis)"
+            )
+
+            ax.set_ylabel(
+                r"$y_{\rm disk}$ [mas]  (minor axis)"
+            )
+
+        # -----------------------------------------------------
+        # Common Q/U scale
+        # -----------------------------------------------------
+
+        qu_values = np.concatenate([
+            np.abs(Qd[np.isfinite(Qd)]),
+            np.abs(Ud[np.isfinite(Ud)])
+        ])
+
+        vmax_qu = np.nanpercentile(
+            qu_values,
+            99
+        )
+
+        if (
+            not np.isfinite(vmax_qu)
+            or vmax_qu == 0
+        ):
+            vmax_qu = 1.0
+
+        # =====================================================
+        # Q_disk
+        # =====================================================
+
+        imQ = axQ.pcolormesh(
+            Xd,
+            Yd,
+            Qd,
+            shading="auto",
+            cmap="RdBu_r",
+            vmin=-vmax_qu,
+            vmax=vmax_qu,
+        )
+
+        # Q centres:
+        # 0, 90, 180, 270
+        #
+        # boundaries:
+        # 45, 135, 225, 315
+        for angle in [45, 135, 225, 315]:
+            draw_radial_line(
+                axQ,
+                angle,
+                r_out_mas,
+                color="k",
+                lw=1,
+                ls="--"
+            )
+
+        add_aperture(axQ)
+
+        r_label = (
+            r_in_mas
+            + 0.68 * (r_out_mas - r_in_mas)
+        )
+
+        annotate_quadrant(
+            axQ, 0, r_label, "Q000"
+        )
+        annotate_quadrant(
+            axQ, 90, r_label, "Q090"
+        )
+        annotate_quadrant(
+            axQ, 180, r_label, "Q180"
+        )
+        annotate_quadrant(
+            axQ, 270, r_label, "Q270"
+        )
+
+        if valid:
+            axQ.set_title(
+                r"$Q_{\rm disk}$"
+                "\n"
+                rf"$\Delta Q_{{000}}/\Sigma Q_\phi"
+                rf"={dQ000_norm:.3f}$, "
+                rf"$090={dQ090_norm:.3f}$"
+                "\n"
+                rf"$180={dQ180_norm:.3f}$, "
+                rf"$270={dQ270_norm:.3f}$"
+            )
+        else:
+            axQ.set_title(
+                r"$Q_{\rm disk}$"
+                "\n"
+                r"$\Sigma Q_\phi \approx 0$"
+            )
+
+        format_disk_axes(axQ)
+
+        fig.colorbar(
+            imQ,
+            ax=axQ,
+            label=r"$Q_{\rm disk}$"
+        )
+
+        # =====================================================
+        # U_disk
+        # =====================================================
+
+        imU = axU.pcolormesh(
+            Xd,
+            Yd,
+            Ud,
+            shading="auto",
+            cmap="RdBu_r",
+            vmin=-vmax_qu,
+            vmax=vmax_qu,
+        )
+
+        # U centres:
+        # 45,135,225,315
+        #
+        # boundaries:
+        # 0,90,180,270
+        for angle in [0, 90, 180, 270]:
+            draw_radial_line(
+                axU,
+                angle,
+                r_out_mas,
+                color="k",
+                lw=1,
+                ls="--"
+            )
+
+        add_aperture(axU)
+
+        annotate_quadrant(
+            axU, 45, r_label, "U045"
+        )
+        annotate_quadrant(
+            axU, 135, r_label, "U135"
+        )
+        annotate_quadrant(
+            axU, 225, r_label, "U225"
+        )
+        annotate_quadrant(
+            axU, 315, r_label, "U315"
+        )
+
+        if valid:
+            axU.set_title(
+                r"$U_{\rm disk}$"
+                "\n"
+                rf"$\Delta U_+/\Sigma Q_\phi"
+                rf"={dUplus_norm:.3f}$, "
+                rf"$\Delta U_-/\Sigma Q_\phi"
+                rf"={dUminus_norm:.3f}$"
+            )
+        else:
+            axU.set_title(
+                r"$U_{\rm disk}$"
+                "\n"
+                r"$\Sigma Q_\phi \approx 0$"
+            )
+
+        format_disk_axes(axU)
+
+        fig.colorbar(
+            imU,
+            ax=axU,
+            label=r"$U_{\rm disk}$"
+        )
+
+        # =====================================================
+        # Q_phi
+        # =====================================================
+
+       
+
+        imQphi = axQphi.pcolormesh(
+            Xd,
+            Yd,
+            Qphi_disk,
+            shading="auto",
+            cmap="inferno",
+        )
+
+        add_aperture(axQphi)
+        format_disk_axes(axQphi)
+
+        axQphi.set_title(
+            r"$Q_\phi$ in disk coordinates"
+            "\n"
+            rf"$\Sigma Q_\phi={SigmaQphi:.3g}$"
+        )
+
+        fig.colorbar(
+            imQphi,
+            ax=axQphi,
+            label=r"$Q_\phi$"
+        )
+
+        # =====================================================
+        # Polarized flux P
+        # =====================================================
+
+        p_values = P_disk[np.isfinite(P_disk)]
+
+        vmax_p = np.nanpercentile(
+            p_values,
+            99
+        )
+
+        if (
+            not np.isfinite(vmax_p)
+            or vmax_p == 0
+        ):
+            vmax_p = 1.0
+
+        imP = axP.pcolormesh(
+            Xd,
+            Yd,
+            P_disk,
+            shading="auto",
+            cmap="inferno"
+        )
+
+        add_aperture(axP)
+        format_disk_axes(axP)
+
+        axP.set_title(
+            r"$P=\sqrt{Q^2+U^2}$ in disk coordinates"
+            "\n"
+            rf"$\Sigma P={SigmaP:.3g}$"
+        )
+
+        fig.colorbar(
+            imP,
+            ax=axP,
+            label=r"$P$"
+        )
+
+        # =====================================================
+        # Overall title
+        # =====================================================
+
+        base_title = (
+            rf"Major-axis PA = {disk_pa_deg:.1f}$^\circ$"
+            rf";  +$y_{{\rm disk}}$ PA = "
+            rf"{np.rad2deg(w) % 360:.1f}$^\circ$"
+        )
+
+        if title is not None:
+            fig.suptitle(
+                title + "\n" + base_title,
+                fontsize=13
+            )
+        else:
+            fig.suptitle(
+                base_title,
+                fontsize=13
+            )
+
+        if save is not None:
+            fig.savefig(
+                save,
+                dpi=200,
+                bbox_inches="tight"
+            )
+
+        plt.show()
+
+    return result
+
+
+
+def plot_quadrant_comparison(
+    results_list,
+    labels=None,
+    figsize=(14, 9),
+    marker_size=60,
+    save=None
+):
+    """
+    Plot all main outputs from differential_quadrants()
+    for observations and/or multiple simulations.
+
+    Parameters
+    ----------
+    results_list : dict or list of dict
+        One or more outputs from differential_quadrants().
+
+    labels : list of str, optional
+        Labels corresponding to results_list.
+
+    figsize : tuple
+        Figure size.
+
+    marker_size : float
+        Scatter marker size.
+    """
+
+    # ---------------------------------------------------------
+    # Input handling
+    # ---------------------------------------------------------
+
+    if isinstance(results_list, dict):
+        results_list = [results_list]
+
+    if labels is None:
+        labels = [f"Dataset {i+1}" for i in range(len(results_list))]
+
+    if len(labels) != len(results_list):
+        raise ValueError(
+            "labels must have the same length as results_list"
+        )
+
+
+    # =========================================================
+    # Define groups
+    # =========================================================
+
+    groups = {
+
+        "Raw quadrant fluxes": [
+            ("Q000", r"$Q_{000}$"),
+            ("Q090", r"$Q_{090}$"),
+            ("Q180", r"$Q_{180}$"),
+            ("Q270", r"$Q_{270}$"),
+            ("U045", r"$U_{045}$"),
+            ("U135", r"$U_{135}$"),
+            ("U225", r"$U_{225}$"),
+            ("U315", r"$U_{315}$"),
+        ],
+
+        "Integrated quantities": [
+            ("SigmaQ", r"$\Sigma Q$"),
+            ("SigmaU", r"$\Sigma U$"),
+            ("SigmaQphi", r"$\Sigma Q_\phi$"),
+            ("SigmaP", r"$\Sigma P$"),
+            ("P_aperture", r"$P(\Sigma)$"),
+        ],
+
+        "Differential quantities": [
+            ("dQ000", r"$\Delta Q_{000}$"),
+            ("dQ090", r"$\Delta Q_{090}$"),
+            ("dQ180", r"$\Delta Q_{180}$"),
+            ("dQ270", r"$\Delta Q_{270}$"),
+            ("dUplus", r"$\Delta U_{+}$"),
+            ("dUminus", r"$\Delta U_{-}$"),
+        ],
+
+        "Normalized differential quantities": [
+            ("dQ000_norm",
+             r"$\Delta Q_{000}/\Sigma Q_\phi$"),
+
+            ("dQ090_norm",
+             r"$\Delta Q_{090}/\Sigma Q_\phi$"),
+
+            ("dQ180_norm",
+             r"$\Delta Q_{180}/\Sigma Q_\phi$"),
+
+            ("dQ270_norm",
+             r"$\Delta Q_{270}/\Sigma Q_\phi$"),
+
+            ("dUplus_norm",
+             r"$\Delta U_{+}/\Sigma Q_\phi$"),
+
+            ("dUminus_norm",
+             r"$\Delta U_{-}/\Sigma Q_\phi$"),
+        ],
+    }
+
+
+    # =========================================================
+    # Figure
+    # =========================================================
+
+    fig, axes = plt.subplots(
+        2, 2,
+        figsize=figsize,
+        constrained_layout=True
+    )
+
+    axes = axes.ravel()
+
+
+    # =========================================================
+    # Plot
+    # =========================================================
+
+    for ax, (title, quantities) in zip(axes, groups.items()):
+
+        keys = [item[0] for item in quantities]
+        ticklabels = [item[1] for item in quantities]
+
+        x = np.arange(len(keys))
+
+        # Small horizontal offsets prevent overlapping points
+        if len(results_list) > 1:
+            offsets = np.linspace(
+                -0.18,
+                0.18,
+                len(results_list)
+            )
+        else:
+            offsets = [0.0]
+
+
+        for result, label, offset in zip(
+            results_list,
+            labels,
+            offsets
+        ):
+
+            values = np.array(
+                [result[key] for key in keys],
+                dtype=float
+            )
+
+            ax.scatter(
+                x + offset,
+                values,
+                s=marker_size,
+                label=label,
+                zorder=3
+            )
+
+
+        # Zero reference
+        ax.axhline(
+            0,
+            ls="--",
+            lw=1,
+            alpha=0.4
+        )
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(
+            ticklabels,
+            rotation=30,
+            ha="right"
+        )
+
+        ax.set_title(title)
+
+        ax.grid(
+            axis="y",
+            alpha=0.2
+        )
+
+
+    # =========================================================
+    # Shared legend
+    # =========================================================
+
+    handles, legend_labels = axes[0].get_legend_handles_labels()
+
+    fig.legend(
+        handles,
+        legend_labels,
+        loc="upper center",
+        ncol=len(labels)
+    )
+    if save is not None:
+        fig.savefig(
+            save,
+            dpi=200,
+            bbox_inches="tight"
+        )
+
+    return fig, axes

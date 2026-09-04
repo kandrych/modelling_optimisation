@@ -607,7 +607,7 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
         run_mcfost_safe(param_path, workdir, logfile="mcfost_temp.log")
     
     if "vis2_1perband" in fidelity["products"]:
-        for w in [1.63, 2.20, 3.50, 10.0]:
+        for w in [1.65, 2.20, 3.50, 10.0]:
             if os.path.exists(str(workdir)+"/data_"+str(w)+"/"):   
                 print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
                 continue
@@ -653,7 +653,7 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
 
 
 
-def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dict[str, Any], args) -> Tuple[float, Dict[str, Any]]:
+def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dict[str, Any], args,cfg) -> Tuple[float, Dict[str, Any]]:
     """
     Read MCFOST outputs and compute a single scalar loss.
     
@@ -712,23 +712,23 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     
     if "vis2_1perband" in fidelity["products"]:
         if args.overresolved_flux_fit_for_interferometry:
-            full_wavelengths=[1.63, 2.2, 3.5, 10.0]
+            full_wavelengths=[1.65, 2.2, 3.5, 10.0]
             wave_for_background=args.overresolved_flux_fit_for_interferometry
             closest = min(full_wavelengths, key=lambda x: abs(x - wave_for_background))
             model_sed=distroi.read_sed_mcfost(str(sed_path))
 
-            container_data=container_data_pionier if closest==1.63 else container_data_gravity if closest ==2.2 else container_data_matisse_l if closest==3.5 else container_data_matisse_n if closest==10.0 else None
+            container_data=container_data_pionier if closest==1.65 else container_data_gravity if closest ==2.2 else container_data_matisse_l if closest==3.5 else container_data_matisse_n if closest==10.0 else None
             img_dir = f"data_{closest}/"
             _, _, _, _, frac_closest_wavelength_optimised= obi.monochromatic_chi_with_background(str(workdir), img_dir=img_dir, container_data=container_data, img_sed=model_sed, wave_for_background=wave_for_background, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=f"Reference for overresolved flux, wavelength {closest}", log_plotv=False)
                 
 
-            chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier, _= obi.monochromatic_chi_with_background(str(workdir), img_dir="data_1.63/", container_data=container_data_pionier,  img_sed=model_sed, wave_for_background=args.overresolved_flux_fit_for_interferometry,frac_for_background=frac_closest_wavelength_optimised, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.63", log_plotv=False)
+            chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier, _= obi.monochromatic_chi_with_background(str(workdir), img_dir="data_1.65/", container_data=container_data_pionier,  img_sed=model_sed, wave_for_background=args.overresolved_flux_fit_for_interferometry,frac_for_background=frac_closest_wavelength_optimised, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.65", log_plotv=False)
             chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity, _= obi.monochromatic_chi_with_background(str(workdir), img_dir="data_2.2/", container_data=container_data_gravity,  img_sed=model_sed, wave_for_background=args.overresolved_flux_fit_for_interferometry, frac_for_background=frac_closest_wavelength_optimised, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY 2.2", log_plotv=False)
             chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l, _= obi.monochromatic_chi_with_background(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,  img_sed=model_sed, wave_for_background=args.overresolved_flux_fit_for_interferometry,frac_for_background=frac_closest_wavelength_optimised,  vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
             chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n, _= obi.monochromatic_chi_with_background(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n,  img_sed=model_sed, wave_for_background=args.overresolved_flux_fit_for_interferometry, frac_for_background=frac_closest_wavelength_optimised, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
 
         else:
-            chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.monochromatic_chi(str(workdir), img_dir="data_1.63/", container_data=container_data_pionier, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.63", log_plotv=False)
+            chi2_pionier, chi2_red_pionier, loglike_pionier, num_points_pionier= obi.monochromatic_chi(str(workdir), img_dir="data_1.65/", container_data=container_data_pionier, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="PIONIER 1.65", log_plotv=False)
             chi2_gravity, chi2_red_gravity, loglike_gravity, num_points_gravity= obi.monochromatic_chi(str(workdir), img_dir="data_2.2/", container_data=container_data_gravity, vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="GRAVITY 2.2", log_plotv=False)
             chi2_matisse_l, chi2_red_matisse_l, loglike_matisse_l, num_points_matisse_l= obi.monochromatic_chi(str(workdir), img_dir="data_3.5/", container_data=container_data_matisse_l,vistype='vis2', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE L 3.5", log_plotv=True)
             chi2_matisse_n, chi2_red_matisse_n, loglike_matisse_n, num_points_matisse_n= obi.monochromatic_chi(str(workdir), img_dir="data_10.0/", container_data=container_data_matisse_n, vistype='vis', plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title="MATISSE N 10.0", log_plotv=False)
@@ -843,6 +843,19 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                                                                                         image_scale='asinh', radial_limit_mas=500.0,
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                         theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Iband')
+            #CHANGES HERE
+            disk_pa_deg=cfg.get('disk_pa', 0)
+            #to avoid machine precision issues due to the small values of Q and U, we can multiply them by representative factor of qphi, because we are interested in normalised values anyway and it is not affecting final differential quadrant results. 
+            max_val_for_order = np.nanmax(np.abs(results_i['mcfost_convolved']['q_phi']))
+            order = np.floor(np.log10(max_val_for_order)) if max_val_for_order > 0 else 0
+            size_convolved_i = results_i['mcfost_convolved']['img_q'].shape[0]
+            r_out_quadrants=(size_convolved_i-1)*results_i['mcfost_convolved']['pixel_scale_mas']/2 #in mas, to avoid issues with the quadrant calculation, we can use the full size of the convolved image
+            quadrant_results_sim_i = obp.differential_quadrants(results_i['mcfost_convolved']['img_q']*10**(-order), results_i['mcfost_convolved']['img_u']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_simulation.png', roi_mas=None)
+            quadrant_results_sim_i_conv_unres_corr = obp.differential_quadrants(results_i['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_i['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_simulation_unresolved_corr.png', roi_mas=None)
+            #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
+            quadrant_results_data_i = obp.differential_quadrants(pdi_data_i['pol_images']['Q']*10**(-order), pdi_data_i['pol_images']['U']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_data.png', roi_mas=None)
+            fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_i, quadrant_results_sim_i, quadrant_results_sim_i_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_i_comparison.png')
+            plt.close(fig)
             
             if args.correct_unresolved_polarimetry:
                 print('[obriy_mcfost] Applying unresolved polarization correction for I band')
@@ -909,6 +922,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 fig.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()
             print(f'[obriy_mcfost] I band metrics: SSIM={metrics_i["ssim"]}, NCC={metrics_i["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
+            
+            
+
             loss_i=1-(metrics_i['ssim']+metrics_i['ncc'])/2 #+ profile_pi_chi2_red # weights can be adjusted
             #Loss based only on profile chi2 to test if it can drive the fit
             #loss_i=profile_pi_chi2_red
@@ -931,7 +947,22 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             results_v=obp.polarimetric_analysis(str(workdir), 0.55, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
                                                                                                         image_scale='asinh', radial_limit_mas=500.0,
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
+             
                                                                                                         theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Vband')
+
+            #CHANGES HERE
+            disk_pa_deg=cfg.get('disk_pa', 0)
+            #to avoid machine precision issues due to the small values of Q and U, we can multiply them by representative factor of qphi, because we are interested in normalised values anyway and it is not affecting final differential quadrant results. 
+            max_val_for_order = np.nanmax(np.abs(results_v['mcfost_convolved']['q_phi']))
+            order = np.floor(np.log10(max_val_for_order)) if max_val_for_order > 0 else 0
+            size_convolved_v = results_v['mcfost_convolved']['img_q'].shape[0]
+            r_out_quadrants=(size_convolved_v-1)*results_v['mcfost_convolved']['pixel_scale_mas']/2 #in mas, to avoid issues with the quadrant calculation, we can use the full size of the convolved image
+            quadrant_results_sim_v = obp.differential_quadrants(results_v['mcfost_convolved']['img_q']*10**(-order), results_v['mcfost_convolved']['img_u']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_simulation.png', roi_mas=None)
+            quadrant_results_sim_v_conv_unres_corr = obp.differential_quadrants(results_v['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_v['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_simulation_unresolved_corr.png', roi_mas=None)
+            #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
+            quadrant_results_data_v = obp.differential_quadrants(pdi_data_v['pol_images']['Q']*10**(-order), pdi_data_v['pol_images']['U']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_data.png', roi_mas=None)
+            fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_v, quadrant_results_sim_v, quadrant_results_sim_v_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_v_comparison.png')
+            plt.close(fig)                                                                                                      
             if args.plot_intermediate:
                 obp.plot_polarimetric_image(results_v['mcfost_convolved_unresolved_corrected']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_q_phi_corr_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
                 obp.plot_polarimetric_image(results_v['mcfost_convolved']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, decon', save=str(workdir)+'/figures'+'/model_q_phi_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
@@ -1015,8 +1046,20 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                                                                                         image_scale='asinh', radial_limit_mas=500.0,
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                         theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Hband')
-            
-           
+            #CHANGES HERE
+            disk_pa_deg=cfg.get('disk_pa', 0)
+            #to avoid machine precision issues due to the small values of Q and U, we can multiply them by representative factor of qphi, because we are interested in normalised values anyway and it is not affecting final differential quadrant results. 
+            max_val_for_order = np.nanmax(np.abs(results_h['mcfost_convolved']['q_phi']))
+            order = np.floor(np.log10(max_val_for_order)) if max_val_for_order > 0 else 0
+            size_convolved_h = results_h['mcfost_convolved']['img_q'].shape[0]
+            r_out_quadrants=(size_convolved_h-1)*12.27/2 #in mas, to avoid issues with the quadrant calculation, we can use the full size of the convolved image
+            quadrant_results_sim_h = obp.differential_quadrants(results_h['mcfost_convolved']['img_q']*10**(-order), results_h['mcfost_convolved']['img_u']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_simulation.png', roi_mas=None)
+            quadrant_results_sim_h_conv_unres_corr = obp.differential_quadrants(results_h['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_h['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_simulation_unresolved_corr.png', roi_mas=None)
+            #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
+            quadrant_results_data_h = obp.differential_quadrants(pdi_data_h['pol_images']['Q']*10**(-order), pdi_data_h['pol_images']['U']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_data.png', roi_mas=None)
+            fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_h, quadrant_results_sim_h, quadrant_results_sim_h_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'],  save=str(workdir)+'/figures/'+'quadrants_h_comparison.png')
+            plt.close(fig)
+                        
             if args.correct_unresolved_polarimetry:
                 print('[obriy_mcfost] Applying unresolved polarization correction for H band')
                 data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pol_images']['Q_phi'], results_h['mcfost_convolved_unresolved_corrected']['q_phi']) 
@@ -1129,13 +1172,20 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         else:
             simulated_itot_as_data=simulated_itot_resc
 
-
+        #previous verison
         residuals_map=(simulated_itot_as_data-alma_cont)**2
         residuals_map_masked = np.where(mask_alma, residuals_map, np.nan)
-        residuals_reduced=np.nansum(residuals_map_masked)/np.sum(mask_alma) #does not have error estimate, so not a proper chi2, but takes into account only 3snr points
+        #residuals_reduced=np.nansum(residuals_map_masked)/np.sum(mask_alma) #does not have error estimate, so not a proper chi2, but takes into account only 3snr points
+             
+
+        #updated version, is normalized by the total flux of the data, so it is more comparable between different models and different datasets
+        residuals_reduced = (
+            np.nansum(residuals_map_masked)/np.nansum(alma_cont[mask_alma]**2)
+        )*100.0  # percentage of the total flux squared, now will match by order with SED and interferometry chi2, so can be used in the total loss function
+
         print(f"[obriy_mcfost] ALMA residuals image snr>=2 = {residuals_reduced}, sum of mask = {np.sum(mask_alma)}")
         print(f"[obriy_mcfost] ALMA total flux: data = {np.nansum(alma_cont)}, model = {np.nansum(simulated_itot_as_data)}")
-
+        
     
         if args.plot_intermediate:
             #do some plotting
@@ -1170,6 +1220,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         except Exception as e:
             print(f"Error computing ALMA chi2: {e}")
             chi2_red_alma_profiles = 1e99
+            profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints = 1e99, 1e99, 1e99, 1e99
         
         #loss_alma= 1-(metrics_alma['ssim']+metrics_alma['ncc'])/2 #
         loss_alma=residuals_reduced 

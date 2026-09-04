@@ -219,6 +219,9 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         stage = "F4"
     if budget >= 5.0:
         stage = "F5"
+
+    if budget >= 9.0:
+        stage = "F9"
     if budget >= 10.0:
         stage = "F10"
     if budget >= 11.0:
@@ -256,6 +259,9 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         img_res = 2
         products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
 
+    elif stage == "F9":
+        img_res = 2
+        products = ["sed"]
     elif stage == "F10":
         img_res = 2
         products = ["sed", "alma"]
@@ -701,7 +707,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         yc = (ny - 1) / 2.0
         R,_,_,X, Y = obp.compute_grid(alma_cont, xc=xc, yc=yc)
         noise_level_alma=np.nanstd(alma_cont[R>(100/ps_alma)])
-        mask_alma = (alma_cont >= 2*noise_level_alma)
+        mask_alma = (alma_cont >= 3*noise_level_alma)
         #local plotting
         plt.imshow(mask_alma, origin='lower')
         plt.savefig(figdir+'/alma_cont_mask_3snr.png', dpi=300)
@@ -778,7 +784,7 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
 
     # Score outputs
 
-    loss, additional_info = obm.load_and_score_outputs(fidelity, trial_dir, data_arg, args)
+    loss, additional_info = obm.load_and_score_outputs(fidelity, trial_dir, data_arg, args,cfg)
     return float(loss), additional_info  # Return loss and additional info for SMAC
 
 
@@ -997,7 +1003,7 @@ def main():
     obm.run_mcfost(fidelity_result,par_path, results_dir, args.puffed_up_rim, incumbent)
     # Score outputs
     args.plot_intermediate=True #to plot final results
-    loss = obm.load_and_score_outputs(fidelity_result, results_dir, data_arg, args)
+    loss = obm.load_and_score_outputs(fidelity_result, results_dir, data_arg, args, incumbent)
 
 
 
