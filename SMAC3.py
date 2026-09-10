@@ -265,7 +265,7 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         img_res = 2
         products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
 
-    if stage == "F5":
+    elif stage == "F5":
         img_res = 10 #mas/pixel
         products = ["sed"]
     elif stage == "F6":

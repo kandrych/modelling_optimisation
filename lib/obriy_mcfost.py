@@ -1315,10 +1315,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         # All finite observation pixels in the circular aperture contribute,
         # including pixels below 3 sigma. The factor of 100 is applied once.
         
-        print(
-            f"[obriy_mcfost] ALMA aperture residual-energy loss = {alma_comparison["residual_energy_loss"]}, "
-            f"pixels = {alma_comparison['aperture_pixel_count']}"
-        )
+        print(f"[obriy_mcfost] ALMA aperture residual-energy loss = {alma_comparison['residual_energy_loss']}, pixels = {alma_comparison['aperture_pixel_count']}")
 
         metrics_alma = obp.full_image_metrics_noshift(
                 alma_cont, simulated_itot_as_data,
@@ -1340,7 +1337,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         additional_info["alma"]["comparison"] = {key: value.tolist() if isinstance(value, np.ndarray) else value
                                                 for key, value in alma_comparison.items()}
 
-        print(f'[obriy_mcfost] ALMA metrics: SSIM={metrics_alma["ssim"]}, NCC={metrics_alma["ncc"]}, chi2_red_alma_profiles={chi2_red_alma_profiles}, aperture residual-energy loss = {residuals_reduced}')
+        print(f'[obriy_mcfost] ALMA metrics: SSIM={metrics_alma["ssim"]}, NCC={metrics_alma["ncc"]}, aperture residual-energy loss = {alma_comparison["residual_energy_loss"]}')
             
         #print(f"ALMA chi2: {chi2_red_alma}")
     
