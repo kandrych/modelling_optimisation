@@ -921,6 +921,9 @@ def main():
     p.add_argument("--overresolved_flux_fit_for_interferometry", type=float, default=None, help="Optional: fit overresolved flux to interferometry at the supplied wavelength [micron]. Disabled by default.")
     p.add_argument("--unresolved-correction-radius-px", type=float, default=None,
                    help="Unresolved-polarisation aperture radius in instrument pixels; required when correction is enabled")
+    p.add_argument("--pdi-constraint-tolerances", type=float, nargs=3, default=(0.05, 0.05, 0.05),
+                   metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Fixed PDI tolerances, not observational errors")
+    p.add_argument("--pdi-radial-bin-mas", type=float, default=25.0, help="Non-overlapping PDI radial bins [mas]")
     args = p.parse_args()
     
     WORK_ROOT = Path(args.working_root).resolve()

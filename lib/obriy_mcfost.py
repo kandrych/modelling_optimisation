@@ -959,11 +959,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             
             
 
-            loss_i=1-(metrics_i['ssim']+metrics_i['ncc'])/2 #+ profile_pi_chi2_red # weights can be adjusted
+            constraint_comparison_i = obp.compare_pdi_constraints(
+                pdi_data_i['pol_images'], results_i[model_polarimetry_key],
+                results_i[model_polarimetry_key]['pixel_scale_mas'],
+                tolerances=getattr(args, 'pdi_constraint_tolerances', (0.05, 0.05, 0.05)),
+                radial_bin_mas=getattr(args, 'pdi_radial_bin_mas', 25.0),
+                disk_pa_deg=disk_pa_deg,
+                output_path=workdir / 'figures' / 'pdi_constraints_i.png', band='I')
+            loss_i = constraint_comparison_i['loss']
             #Loss based only on profile chi2 to test if it can drive the fit
             #loss_i=profile_pi_chi2_red
 
-            additional_info["pdi"] = {'I': {
+            additional_info.setdefault("pdi", {})['I'] = {
                 "ssim": metrics_i.get("ssim"),
                 "ncc": metrics_i.get("ncc"),
                 "profile_pi_chi2_red": profile_pi_chi2_red,
@@ -973,9 +980,10 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 "profile_az_pi_chi2": profile_az_pi_chi2,
                 "profile_az_pi_npoints": profile_az_pi_npoints,
                 "loss": loss_i,
+                "constraints": constraint_comparison_i,
                 "model_unresolved_corrected": correct_unresolved,
                 "unresolved_correction_radius_px": correction_radius_px if correct_unresolved else None,
-            }}
+            }
 
 
         if "pdi_V" in fidelity["products"]:
@@ -1056,10 +1064,17 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 fig.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()
             print(f'[obriy_mcfost] V band metrics: SSIM={metrics_v["ssim"]}, NCC={metrics_v["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
-            loss_v=1-(metrics_v['ssim']+metrics_v['ncc'])/2 #+ profile_pi_chi2_red # weights can be adjusted
+            constraint_comparison_v = obp.compare_pdi_constraints(
+                pdi_data_v['pol_images'], results_v[model_polarimetry_key],
+                results_v[model_polarimetry_key]['pixel_scale_mas'],
+                tolerances=getattr(args, 'pdi_constraint_tolerances', (0.05, 0.05, 0.05)),
+                radial_bin_mas=getattr(args, 'pdi_radial_bin_mas', 25.0),
+                disk_pa_deg=disk_pa_deg,
+                output_path=workdir / 'figures' / 'pdi_constraints_v.png', band='V')
+            loss_v = constraint_comparison_v['loss']
             #Loss based only on profile chi2 to test if it can drive the fit
             #loss_v= profile_pi_chi2_red
-            additional_info["pdi"] = {'V': {
+            additional_info.setdefault("pdi", {})['V'] = {
                             "ssim": metrics_v.get("ssim"),
                             "ncc": metrics_v.get("ncc"),
                             "profile_pi_chi2_red": profile_pi_chi2_red,
@@ -1069,9 +1084,10 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                             "profile_az_pi_chi2": profile_az_pi_chi2,
                             "profile_az_pi_npoints": profile_az_pi_npoints,
                             "loss": loss_v,
+                "constraints": constraint_comparison_v,
                 "model_unresolved_corrected": correct_unresolved,
                 "unresolved_correction_radius_px": correction_radius_px if correct_unresolved else None,
-                        }}
+                        }
 
         if "pdi_H" in fidelity["products"]:
             results_h=obp.polarimetric_analysis(str(workdir), 1.63, unresolved_correction_radius_px=correction_radius_px, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100,
@@ -1149,10 +1165,17 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 fig.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()  
             print(f'[obriy_mcfost] H band metrics: SSIM={metrics_h["ssim"]}, NCC={metrics_h["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
-            loss_h=1-(metrics_h['ssim']+metrics_h['ncc'])/2 #+ profile_pi_chi2_red # weights can be adjusted
+            constraint_comparison_h = obp.compare_pdi_constraints(
+                pdi_data_h['pol_images'], results_h[model_polarimetry_key],
+                results_h[model_polarimetry_key]['pixel_scale_mas'],
+                tolerances=getattr(args, 'pdi_constraint_tolerances', (0.05, 0.05, 0.05)),
+                radial_bin_mas=getattr(args, 'pdi_radial_bin_mas', 25.0),
+                disk_pa_deg=disk_pa_deg,
+                output_path=workdir / 'figures' / 'pdi_constraints_h.png', band='H')
+            loss_h = constraint_comparison_h['loss']
             #Loss based only on profile chi2 to test if it can drive the fit
             #loss_h=profile_pi_chi2_red # weights can be adjusted
-            additional_info["pdi"] = {'H': {
+            additional_info.setdefault("pdi", {})['H'] = {
                             "ssim": metrics_h.get("ssim"),
                             "ncc": metrics_h.get("ncc"),
                             "profile_pi_chi2_red": profile_pi_chi2_red,
@@ -1162,9 +1185,10 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                             "profile_az_pi_chi2": profile_az_pi_chi2,
                             "profile_az_pi_npoints": profile_az_pi_npoints,
                             "loss": loss_h,
+                "constraints": constraint_comparison_h,
                 "model_unresolved_corrected": correct_unresolved,
                 "unresolved_correction_radius_px": correction_radius_px if correct_unresolved else None,
-                        }}
+                        }
 
 
 
