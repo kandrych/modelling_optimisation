@@ -590,7 +590,7 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
     return param_path
 
 
-def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: bool=False, cfg: Dict[str, Any]={}) -> None:
+def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: bool=False, cfg: Dict[str, Any]={},*,alma_spec=None) -> None:
 
     print(f"run mcfost in {workdir}")
     # base
@@ -634,11 +634,44 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
             run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
     
     if "alma" in fidelity["products"]:
-        for w in [870.0]:
-            if os.path.exists(str(workdir)+"/data_"+str(w)+"/"):   
-                print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
-                continue
-            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}", "-casa"], logfile=f"mcfost_{w:.2f}.log")
+        if alma_spec is None:
+            raise ValueError("ALMA products require observation image metadata.")
+
+        # Copy the trial's physical parameters; change only image geometry.
+        alma_parameters = ParaFile(str(param_path))
+        distance_pc = float(alma_parameters.params["distance_pc"])
+
+        if not np.isfinite(distance_pc) or distance_pc <= 0:
+            raise ValueError("Distance must be positive and finite.")
+
+        # Angular size [mas] × distance [pc] / 1000 = physical size [au].
+        map_size_au = alma_spec["fov_mas"] * distance_pc / 1000.0
+
+        alma_parameters.set_param("grid_nx", alma_spec["npix"])
+        alma_parameters.set_param("grid_ny", alma_spec["npix"])
+        alma_parameters.set_param("grid_size", map_size_au)
+
+        alma_param_path = Path(workdir) / "model_alma.para"
+        alma_parameters.save(alma_param_path)
+
+        wavelength_text = f'{alma_spec["wavelength_um"]:.3f}'
+
+        run_mcfost_safe(
+            alma_param_path.resolve(),
+            workdir,
+            options=["-img", wavelength_text, "-casa"],
+            logfile="mcfost_alma.log",
+        )
+
+
+
+
+    #initiall version of the code to run MCFOST for 870 micron image for ALMA data.
+    # for w in [870.0]:
+    #     if os.path.exists(str(workdir)+"/data_"+str(w)+"/"):   
+    #         print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
+    #         continue
+    #     run_mcfost_safe(param_path, workdir, options=["-img", f"{w}", "-casa"], logfile=f"mcfost_{w:.2f}.log")
 
     if "vis2_chromatic" in fidelity["products"]: # all wavelengths for chromatic visibilities (PIONIER, MATISSE, GRAVITY) + full PDI
         for w in [0.55, 0.82, 1.5,1.55,1.6,1.63,1.65,1.7,1.75,1.8,1.85,1.9,
@@ -774,9 +807,10 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         matisse_l_wavelengths = [2.8,2.9,3.0,3.1,3.2,3.3,3.4,3.5,3.6,3.7,3.8,3.9,4.0,4.1,4.2,4.3]
         matisse_n_wavelengths = [7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0]
         full_wavelengths = pionier_wavelengths + gravity_wavelengths + matisse_l_wavelengths + matisse_n_wavelengths
-                              
+
+        model_sed=distroi.read_sed_mcfost(str(sed_path))
+                                          
         if args.overresolved_flux_fit_for_interferometry:
-            model_sed=distroi.read_sed_mcfost(str(sed_path))
             
             wave_for_background=args.overresolved_flux_fit_for_interferometry
             closest = min(full_wavelengths, key=lambda x: abs(x - wave_for_background))
@@ -1155,9 +1189,27 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         data_size_alma = data_alma['image_size']
         wave=data_alma['alma_wavelength']
         mask_alma = data_alma['mask_alma']
+        alma_spec = data_alma['image_spec']
+        wavelength_text = f'{alma_spec["wavelength_um"]:.3f}'
+
+        _, model_header, simulated_itot, _ = oba.load_mcfost_image_alma_casa(str(workdir), wavelength_text)
+
+        model_jybeam_native, model_pixel_mas = oba.convolve_alma_to_jybeam(
+            simulated_itot,
+            model_header,
+            data_alma["header"],
+        )
+
+        simulated_itot_resc = oba.rescale_alma(
+            model_jybeam_native,
+            model_pixel_mas,
+            ps_alma,
+            conserve="surface_brightness",
+        )
+
 
         
-        _, _, simulated_itot, pix_scale = oba.load_mcfost_image_alma_casa(str(workdir), '870.0')  
+        _, _, simulated_itot, pix_scale = oba.load_mcfost_image_alma_casa(str(workdir), wavelength_text)  
         
         if args.plot_intermediate: obp.plot_polarimetric_image(simulated_itot, ps_alma, title=f'Model Itot, alma_cont', save=str(workdir)+'/figures/'+'/model_itot_alma.png', image_scale='asinh', roi_half_size=100)
         simulated_itot_resc=oba.rescale_alma(simulated_itot, pix_scale, ps_alma)
@@ -1165,10 +1217,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         if simulated_itot_resc.shape[0] > alma_cont.shape[0]:
             simulated_itot_as_data=oba.cut_down_alma(simulated_itot_resc, alma_cont)
         elif simulated_itot_resc.shape[0] < alma_cont.shape[0]:
-            print(f"[obriy_mcfost] WARNING: simulated_itot_resc.shape[0] < alma_cont.shape[0], cutting down alma_cont to match simulated_itot_resc")
-            simulated_itot_as_data=simulated_itot_resc
-            alma_cont=oba.cut_down_alma(alma_cont,simulated_itot_as_data)
-            mask_alma=oba.cut_down_alma(mask_alma,simulated_itot_as_data)
+            raise ValueError("ALMA model does not cover the observational image.")
         else:
             simulated_itot_as_data=simulated_itot_resc
 
@@ -1216,7 +1265,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             )
         
         try:
-            chi2_red_alma_profiles, profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints = oba.chi2_ALMA(str(workdir), data_alma=data_alma, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_ALMA_')
+            chi2_red_alma_profiles, profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints = oba.chi2_ALMA(str(workdir), data_alma=data_alma, model_jybeam=simulated_itot_as_data, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_ALMA_')
         except Exception as e:
             print(f"Error computing ALMA chi2: {e}")
             chi2_red_alma_profiles = 1e99

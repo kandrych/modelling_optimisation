@@ -216,7 +216,7 @@ def chi2_SED_with_reddening(
         plot: bool = True,
         description: str = None,
         secondary_component: bool = True #for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
-        ) -> Tuple[float,float, float]:
+        ) -> Tuple[float,float, float, float]:
     """
     Wrapper that loads mcfost SED data, calculate the reduced chi2 between the observed SED data 
     and the MCFOST model SED, including ISM reddening as a free parameter.
@@ -293,10 +293,11 @@ def chi2_SED_with_reddening(
     #open up the observed photometric data, note that the units are in erg/s/cm2/AA
     #cut out the laste points, these often overlap with the next column
     
-    F_model_H = np.interp(1.65, lam, full_sed)
-    F_comp_H  = np.interp(1.65, lam, comp_sed)
+        F_model_H = np.interp(1.65, lam, full_sed)
+        F_comp_H  = np.interp(1.65, lam, comp_sed)
 
-    print("[obriy_sed]Check for the contribution of the secondary component at H-band (1.65 micron) in SED: " + str(F_comp_H / (F_model_H + F_comp_H)))
+        print("[obriy_sed]Check for the contribution of the secondary component at H-band (1.65 micron) in SED: " + str(F_comp_H / (F_model_H + F_comp_H)))
+
     #### plot
     #plotting
     if plot:
@@ -322,29 +323,66 @@ def chi2_SED_with_reddening(
 
 
     #### fit ISM reddening E(B-V)
+    # Fit reddening directly to the measured SED.
+    # E(B-V) is a nuisance parameter fitted independently for each physical model.
+    flux_for_fit = full_sed_with_comp if secondary_component else full_sed
 
-    #run bootstrapping simulation assuming gaussian errorbars on SED data
-    sim_number = 1
-    E_values = np.zeros(sim_number)
-    chi2_values_sim = np.zeros(sim_number)
+    def reddening_objective(ebv_start: np.ndarray) -> float:
+        ebv = float(ebv_start[0])
+        _, chi2_full, _ = chi2reddened(
+            data_wave,
+            data_flux,
+            lam,
+            flux_for_fit,
+            data_err,
+            reddening_law_path,
+            ebv,
+        )
+        return float(chi2_full)
 
-    objective = obg.pick_output(chi2reddened, idx=1, cast=float)
+    reddening_fit = minimize(
+        reddening_objective,
+        x0=[1.4],
+    )
 
-    for i in range (0, sim_number):
-        new_flux = np.zeros(data_wave.size)
-        for j in range(0, data_wave.size):
-            new_flux[j] = data_flux[j]+(random.gauss(0, 1)*data_err[j])
-        
-        par_min = minimize(lambda x: objective(data_wave, new_flux, lam, full_sed if not secondary_component else full_sed_with_comp, data_err,\
-                                                                reddening_law_path, x), 1.4)
-        
-        E_values[i] = par_min["x"][0]
-        _,chi2_values_sim[i],_ = chi2reddened(data_wave, data_flux, lam, full_sed if not secondary_component else full_sed_with_comp, data_err,\
-                                        reddening_law_path, par_min["x"][0])
+    if (
+        not reddening_fit.success
+        or not np.isfinite(reddening_fit.fun)
+        or not np.all(np.isfinite(reddening_fit.x))
+    ):
+        raise RuntimeError(
+            f"SED reddening fit failed: {reddening_fit.message}"
+        )
 
-    E_best = np.mean(E_values)
-    E_std = np.mean(np.std(E_values))
-    #print('Mean value of E(B-V) is: ' + str(E_best))
+    E_best = float(reddening_fit.x[0])
+
+        #HERE is where the bootstrapping simulation is commented out, as it was not used in the final implementation. The code below is kept for reference.
+        # #run bootstrapping simulation assuming gaussian errorbars on SED data
+        # sim_number = 1
+        # E_values = np.zeros(sim_number)
+        # chi2_values_sim = np.zeros(sim_number)
+
+        # objective = obg.pick_output(chi2reddened, idx=1, cast=float)
+
+        # for i in range (0, sim_number):
+        #     new_flux = np.zeros(data_wave.size)
+        #     for j in range(0, data_wave.size):
+        #         new_flux[j] = data_flux[j]+(random.gauss(0, 1)*data_err[j])
+            
+        #     par_min = minimize(lambda x: objective(data_wave, new_flux, lam, full_sed if not secondary_component else full_sed_with_comp, data_err,\
+        #                                                             reddening_law_path, x), 1.4)
+            
+        #     E_values[i] = par_min["x"][0]
+        #     _,chi2_values_sim[i],_ = chi2reddened(data_wave, data_flux, lam, full_sed if not secondary_component else full_sed_with_comp, data_err,\
+        #                                     reddening_law_path, par_min["x"][0])
+
+        # E_best = np.mean(E_values)
+        # E_std = np.mean(np.std(E_values))
+
+
+
+
+    print('Best value of E(B-V) is: ' + str(E_best))
     #print('Standard deviation of E(B-V) is:'  + str(E_std))
 
     #redden the model by found ISM reddenning and plot

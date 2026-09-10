@@ -305,6 +305,9 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
     figdir = Path(work_root)/"data_figures"
     figdir.mkdir(parents=True, exist_ok=True)
     figdir=str(figdir)
+    alma_spec = None
+    alma_header = None
+
     #filename of SED catalogue data file
     if data_root =='demo_mac':
         if  "sed" in fidelity_products: 
@@ -384,15 +387,19 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
                 data_dir_alma, data_file_alma = "/Users/katerynaandrych/Work/lin/Postdoc/Data/ALMA/IRAS08544-4431/", "IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits"
                 alma_cont, alma_header,pix_scale_alma, data_size_alma=oba.Loadimage_alma(data_dir_alma, data_file_alma)
                 ps_alma=pix_scale_alma*1.0
-                #ps_alma=2.0 #mas/pixel from what Maks said
-                alma_wavelength=0.87*1000 #mkm
+                alma_spec = oba.alma_image_spec(alma_header)
+                alma_wavelength = alma_spec["wavelength_um"]
+                
                 print('ALMA data loaded')
+                
             except:
                 print("[main] ALMA data files not found. Please check the path if your budget expects ALMA data.")
                 alma_cont=None
                 ps_alma=None
                 alma_wavelength=None
                 data_size_alma=None
+                alma_spec=None
+
 
 
     elif data_root =='demo_ozstar':
@@ -565,8 +572,8 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             alma_folder = '/fred/oz061/kandrych/Data/ALMA/IRAS08544-4431/'
             alma_cont_file='IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits'
             alma_cont, alma_header, ps_alma, data_size_alma=oba.Loadimage_alma(alma_folder, alma_cont_file)
-            #ps_alma=2 #mas/pixel
-            alma_wavelength=0.87*1000 #mkm
+            alma_spec = oba.alma_image_spec(alma_header)
+            alma_wavelength = alma_spec["wavelength_um"]
             obp.plot_polarimetric_image(alma_cont, ps_alma, title='IRAS08544-4431 ALMA continuum', save=figdir+'/alma_cont.png', image_scale='linear')
             print('ALMA continuum loaded')
         else:
@@ -574,6 +581,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             ps_alma=None
             alma_wavelength=None
             data_size_alma=None
+            alma_spec=None
 
         
 
@@ -723,7 +731,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
     pdi_data_i={'psf': psf_i, 'pol_images': pdi_i, 'radial_profiles': radial_profile_i, 'azimuthal_profiles': azimuthal_profile_i}
     pdi_data_h={'psf': psf_h, 'pol_images': pdi_h, 'radial_profiles': radial_profile_h, 'azimuthal_profiles': azimuthal_profile_h}
 
-    data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma,'image_size': data_size_alma, 'alma_wavelength': alma_wavelength, 
+    data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma,'image_size': data_size_alma, 'alma_wavelength': alma_wavelength, 'image_spec': alma_spec, 'header': alma_header,
                'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma, 'mask_alma': mask_alma, 'noise_level_alma': noise_level_alma}
     data_sed = [data_wave, data_flux, data_err]
     data_arrays = [data_sed, container_data_pionier, container_data_gravity, container_data_matisse_l, container_data_matisse_n,pdi_data_v, pdi_data_i, pdi_data_h, data_alma]
@@ -776,7 +784,7 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
     # Write param file and run MCFOST
     par_path = obm.write_mcfost_paramfile(cfg, fidelity, trial_dir)
     try:
-        obm.run_mcfost(fidelity,par_path, trial_dir, args.puffed_up_rim, cfg)
+        obm.run_mcfost(fidelity,par_path, trial_dir, args.puffed_up_rim, cfg, alma_spec=(data_arg[8]["image_spec"] if "alma" in fidelity["products"] else None))
     except Exception:
         # Trial failed; return a high loss
         print(f"[objective] Trial failed for cfg={cfg}, dir={trial_dir}")
@@ -1000,7 +1008,7 @@ def main():
 
     # Write param file and run MCFOST
     par_path = obm.write_mcfost_paramfile(incumbent, fidelity_result, results_dir)
-    obm.run_mcfost(fidelity_result,par_path, results_dir, args.puffed_up_rim, incumbent)
+    obm.run_mcfost(fidelity_result,par_path, results_dir, args.puffed_up_rim, incumbent, alma_spec=(data_arg[8]["image_spec"] if "alma" in fidelity_result["products"] else None))
     # Score outputs
     args.plot_intermediate=True #to plot final results
     loss = obm.load_and_score_outputs(fidelity_result, results_dir, data_arg, args, incumbent)

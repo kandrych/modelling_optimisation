@@ -20,7 +20,7 @@ hyperparameters:
   log: false
   lower: -2.0
   meta: null
-  name: zone_1_gamma_exp
+  name: zone_1_-gamma_exp
   type: uniform_float
   upper: -0.2
 - default_value: 1.0

@@ -54,7 +54,7 @@ hyperparameters:
     default_value: 1.0
     meta: null
 
-  - name: zone_1_gamma_exp
+  - name: zone_1_-gamma_exp
     type: uniform_float
     lower: -2.0
     upper: 2.0

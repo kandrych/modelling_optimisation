@@ -6,6 +6,12 @@ import numpy as np
 from typing import Literal, Tuple, Dict, Optional, Union, Any, List
 import subprocess
 
+from astropy import units as u
+from astropy.convolution import convolve_fft
+from astropy.wcs import WCS
+from radio_beam import Beam
+
+
 #from distroi.auxiliary import constants
 from distroi.data import image
 from distroi.data import sed
@@ -25,6 +31,90 @@ import lib.obriy_sed as obs
 import lib.obriy_mcfost as obm
 import lib.obriy_polarimetry as obp
 
+from astropy import units as u
+from astropy.constants import c
+
+
+def alma_image_spec(header):
+    """
+    Image requirements for a single-channel ALMA continuum observation.
+    """
+    frequency_axes = [
+        axis
+        for axis in range(1, int(header["NAXIS"]) + 1)
+        if str(header.get(f"CTYPE{axis}", "")).upper().startswith("FREQ")
+    ]
+    if len(frequency_axes) != 1:
+        raise ValueError("Expected one FITS frequency axis.")
+
+    axis = frequency_axes[0]
+    if int(header[f"NAXIS{axis}"]) != 1:
+        raise ValueError("Expected a single-channel continuum image.")
+
+    # Frequency at the sole channel, whose FITS pixel coordinate is 1.
+    frequency_value = (
+        float(header[f"CRVAL{axis}"])
+        + (1.0 - float(header[f"CRPIX{axis}"]))
+        * float(header[f"CDELT{axis}"])
+    )
+    frequency = frequency_value * u.Unit(header[f"CUNIT{axis}"])
+    frequency_hz = frequency.to_value(u.Hz)
+    if not np.isfinite(frequency_hz) or frequency_hz <= 0:
+        raise ValueError("Invalid ALMA observing frequency.")
+
+    wavelength_um = (c / frequency).to_value(u.um)
+
+    pixel_x_mas = (
+        abs(float(header["CDELT1"])) * u.Unit(header["CUNIT1"])
+    ).to_value(u.mas)
+    pixel_y_mas = (
+        abs(float(header["CDELT2"])) * u.Unit(header["CUNIT2"])
+    ).to_value(u.mas)
+
+    if not np.isclose(pixel_x_mas, pixel_y_mas):
+        raise ValueError("This image setup expects square observation pixels.")
+
+    beam_major_mas = (float(header["BMAJ"]) * u.deg).to_value(u.mas)
+    beam_minor_mas = (float(header["BMIN"]) * u.deg).to_value(u.mas)
+    if min(pixel_x_mas, beam_major_mas, beam_minor_mas) <= 0:
+        raise ValueError("Pixel and beam sizes must be positive.")
+
+    # Cover both edges relative to the reference pixel, including pixel edges.
+    # Assumes that the model centre will be aligned with this reference pixel.
+    half_width_x = max(
+        float(header["CRPIX1"]) - 0.5,
+        float(header["NAXIS1"]) + 0.5 - float(header["CRPIX1"]),
+    ) * pixel_x_mas
+    half_width_y = max(
+        float(header["CRPIX2"]) - 0.5,
+        float(header["NAXIS2"]) + 0.5 - float(header["CRPIX2"]),
+    ) * pixel_y_mas
+
+    # Five Gaussian sigma on every side for subsequent beam convolution.
+    beam_sigma_mas = beam_major_mas / np.sqrt(8.0 * np.log(2.0))
+    padding_mas = 5.0 * beam_sigma_mas
+
+    # Sample at least twice as finely as the observations and
+    # with at least eight pixels across the minor beam FWHM.
+    model_pixel_mas = min(pixel_x_mas / 2.0, beam_minor_mas / 8.0)
+    required_fov_mas = 2.0 * (
+        max(half_width_x, half_width_y) + padding_mas
+    )
+
+    npix = int(np.ceil(required_fov_mas / model_pixel_mas))
+    if npix % 2:
+        npix += 1
+
+    return {
+        "frequency_hz": float(frequency_hz),
+        "wavelength_um": float(wavelength_um),
+        "npix": npix,
+        "pixel_mas": float(model_pixel_mas),
+        "fov_mas": float(npix * model_pixel_mas),
+        "beam_major_mas": float(beam_major_mas),
+        "beam_minor_mas": float(beam_minor_mas),
+        "beam_pa_deg": float(header["BPA"])
+    }
 
 
 def Loadimage_alma(dirdat,filename):
@@ -246,7 +336,7 @@ def cut_down_alma(
     return img_tot_res
 
 
-def chi2_ALMA(main_dir, data_alma, plot=False, fig_dir=None, extra_title=""):
+def chi2_ALMA(main_dir, data_alma, model_jybeam, plot=False, fig_dir=None, extra_title=""):
     """
     Compute the chi2 for ALMA data.
     """
@@ -258,8 +348,13 @@ def chi2_ALMA(main_dir, data_alma, plot=False, fig_dir=None, extra_title=""):
     obs_rad_prof = data_alma['radial_profile']
     obs_az_prof = data_alma['azimuthal_profile']
     ps_alma = data_alma['ps_alma']
+    alma_spec = data_alma['image_spec']
+    wavelength_text = f'{alma_spec["wavelength_um"]:.3f}'
     # Load the simulation data for ALMA
-    _, _, simulated_itot, _, _, _, _, _, _, _ = obp.load_mcfost_images_1wave(str(main_dir), '870.0')  
+    simulated_itot = np.asarray(model_jybeam, dtype=float)
+
+    if simulated_itot.shape != data_alma["alma_cont"].shape:
+        raise ValueError("Model and observed image shapes differ.")
     #compute profiles
     if plot:
         obp.plot_polarimetric_image(simulated_itot, ps_alma, title=f'Model Itot, alma_cont', save=str(fig_dir)+'/model_itot_alma.png', image_scale='asinh', roi_half_size=100)
@@ -285,3 +380,131 @@ def chi2_ALMA(main_dir, data_alma, plot=False, fig_dir=None, extra_title=""):
 
 
     return profiles_chi2_red, profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints
+
+
+def convolve_alma_to_jybeam(model_jypixel, model_header, observed_header):
+    """
+    Convolve an intrinsic MCFOST Jy/pixel image with the observed beam.
+
+    Returns
+    -------
+    model_jybeam : ndarray
+        Convolved image on the original model grid, in Jy/beam.
+    model_pixel_mas : float
+        Native model pixel scale.
+
+    Supports square, unrotated pixels with RA decreasing along columns
+    and Dec increasing along rows, as in the supplied MCFOST header.
+    """
+    model = np.asarray(model_jypixel, dtype=float)
+
+    if model.ndim != 2 or not np.all(np.isfinite(model)):
+        raise ValueError("Expected a finite 2D model image.")
+
+    expected_shape = (
+        int(model_header["NAXIS2"]),
+        int(model_header["NAXIS1"]),
+    )
+    if model.shape != expected_shape:
+        raise ValueError("Model array shape does not match its FITS header.")
+
+    def normalized_unit(header):
+        return str(header.get("BUNIT", "")).replace(" ", "").upper()
+
+    if normalized_unit(model_header) != "JY/PIXEL":
+        raise ValueError("The native model must have BUNIT=JY/PIXEL.")
+
+    if normalized_unit(observed_header) != "JY/BEAM":
+        raise ValueError("The observation must have BUNIT=Jy/beam.")
+
+    # This helper applies a full restoring beam to an intrinsic image.
+    # Avoid accidentally convolving an already restored image twice.
+    if any(key in model_header for key in ("BMAJ", "BMIN")):
+        raise ValueError("Model contains beam metadata; inspect before convolving.")
+
+    for key in ("BMAJ", "BMIN", "BPA"):
+        if key not in observed_header:
+            raise ValueError(f"Observation is missing {key}.")
+
+    beam = Beam.from_fits_header(observed_header)
+    beam_values = [
+        beam.major.to_value(u.deg),
+        beam.minor.to_value(u.deg),
+        beam.pa.to_value(u.deg),
+    ]
+    if (
+        not np.all(np.isfinite(beam_values))
+        or not beam_values[0] >= beam_values[1] > 0
+    ):
+        raise ValueError("Invalid observed restoring beam.")
+
+    # Astropy incorporates CDELT and pixel coord/coordinate description into this matrix.
+    # For celestial WCS (world coordinate system) its angular units are degrees.
+    model_wcs = WCS(model_header).celestial
+    if not (
+        model_wcs.wcs.ctype[0].startswith("RA")
+        and model_wcs.wcs.ctype[1].startswith("DEC")
+    ):
+        raise ValueError("Expected RA, Dec spatial axes.")
+
+    matrix = np.asarray(model_wcs.pixel_scale_matrix, dtype=float)
+    dx_deg = matrix[0, 0]
+    dy_deg = matrix[1, 1]
+
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError("Invalid spatial WCS.")
+
+    if not np.allclose(
+        matrix,
+        np.diag([dx_deg, dy_deg]),
+        rtol=0.0,
+        atol=1e-12,
+    ):
+        raise ValueError("Rotated or skewed model grids need a WCS-aware kernel.")
+
+    if not (
+        dx_deg < 0 < dy_deg
+        and np.isclose(abs(dx_deg), dy_deg, rtol=1e-6, atol=0.0)
+    ):
+        raise ValueError(
+            "Expected square pixels, RA decreasing and Dec increasing."
+        )
+
+    pixel_scale = abs(dx_deg) * u.deg
+    pixel_area = abs(np.linalg.det(matrix)) * u.deg**2
+
+    # Explicit support consistent with the five-sigma image padding.
+    sigma_major_pixels = (
+        beam.major / pixel_scale
+    ).to_value(u.dimensionless_unscaled) / np.sqrt(8.0 * np.log(2.0))
+    kernel_size = 2 * int(np.ceil(5.0 * sigma_major_pixels)) + 1
+
+    # as_kernel adds the PA-to-array-axis rotation internally.
+    # Do not negate BPA or add another 90 degrees.
+    kernel = beam.as_kernel(
+        pixel_scale,
+        x_size=kernel_size,
+        y_size=kernel_size,
+        mode="center",
+    )
+
+    convolved_jypixel = convolve_fft(
+        model,
+        kernel,
+        normalize_kernel=True,
+        boundary="fill",
+        fill_value=0.0,
+        nan_treatment="fill",
+        fft_pad=True,
+        psf_pad=True,
+        crop=True,
+    )
+
+    # Unit-sum convolution retains Jy/native pixel.
+    # Convert using native pixel area, before resampling.
+    pixels_per_beam = (
+        beam.sr / pixel_area.to(u.sr)
+    ).to_value(u.dimensionless_unscaled)
+
+    model_jybeam = convolved_jypixel * pixels_per_beam
+    return model_jybeam, pixel_scale.to_value(u.mas)
