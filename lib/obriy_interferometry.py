@@ -430,7 +430,53 @@ def oi_container_plot_data_vs_model(
 
 
 
-def chi2_for_optimisation_overresolved(frac, ref_wavelength, container_data, img_ffts) -> Tuple[float, float, float, int]:
+def calc_observables_with_secondary(container_data, img_ffts, img_sed,
+                                    background_fraction=None, background_wavelength=None):
+    """Add the accretion disc with the same intrinsic normalisation as the SED.
+
+    Its 3.9% fraction at 1.65 micron excludes optional overresolved emission.
+    Distroi requires component fractions of the final total at a shared reference;
+    convert those fractions without changing the absolute accretion-disc flux.
+    """
+    from lib.obriy_sed import add_blackbody_component
+
+    if img_sed is None:
+        raise ValueError("The unmodified MCFOST SED is required to normalise the secondary.")
+    reference = 1.65 if background_fraction is None else background_wavelength
+    if reference is None or not np.isfinite(reference) or reference <= 0:
+        raise ValueError("A positive background reference wavelength is required.")
+    waves = np.asarray(img_sed.wavelengths)
+    if not waves.min() <= 1.65 <= waves.max():
+        raise ValueError("The MCFOST SED must cover 1.65 micron.")
+    # Reuse the photometric lambda*F_lambda interpolation and blackbody exactly.
+    order = np.argsort(waves)
+    lam_flam = waves * np.asarray(img_sed.flam)
+    query = np.unique(np.append(waves, reference))
+    base = np.interp(query, waves[order], lam_flam[order])
+    _, component = add_blackbody_component(query, base)
+    frequency = constants.SPEED_OF_LIGHT / (reference * constants.MICRON2M)
+    secondary_jy = np.interp(reference, query, component) * 1e23 / frequency
+    base_jy = float(img_sed.get_flux(x=frequency, flux_form="fnu"))
+    if not np.isfinite(base_jy) or base_jy <= 0:
+        raise ValueError("The reference MCFOST flux must be finite and positive.")
+    secondary = distroi.PointSource(
+        coords=(0.0, 0.0),
+        sp_dep=distroi.BlackBodySpecDep(temp=4000.0))
+    components = [secondary]
+    fractions = [secondary_jy / (base_jy + secondary_jy)]
+    if background_fraction is not None:
+        fraction = float(background_fraction)
+        if not np.isfinite(fraction) or not 0 <= fraction < 1:
+            raise ValueError("Background fraction must be finite and in [0, 1).")
+        # B/(M+S+B)=fraction; S remains fixed as B varies.
+        components.insert(0, distroi.Overresolved(sp_dep=distroi.FlatSpecDep(flux_form="flam")))
+        fractions = [fraction, (1 - fraction) * fractions[0]]
+    return distroi.oi_container_calc_image_fft_observables(
+        container_data, img_ffts, img_sed=img_sed, geom_comps=components,
+        geom_comp_flux_fracs=fractions, ref_wavelength=reference)
+
+
+def chi2_for_optimisation_overresolved(frac, ref_wavelength, container_data, img_ffts, img_sed=None) -> Tuple[float, float, float, int]:
     """
     Adding the background component to the model and calculating the reduced chi2 between the observed interferometric data and the model with an overresolved background component.
     
@@ -455,14 +501,8 @@ def chi2_for_optimisation_overresolved(frac, ref_wavelength, container_data, img
     Int 
         Number of data points
     """
-    frac = float(frac) 
-    background = distroi.Overresolved(sp_dep=distroi.FlatSpecDep(flux_form="flam"))
-    #this is fixed for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
-    accretion_secondary = distroi.PointSource(coords=(0.0, 0.0), sp_dep=distroi.spec_dep.BlackBodySpecDep(temp=4000.0, flux_form="flam"))
-    
-    container_model = distroi.oi_container_calc_image_fft_observables(
-        container_data, img_ffts, geom_comps=[background, accretion_secondary], geom_comp_flux_fracs=[frac, 0.039], ref_wavelength=ref_wavelength)
-
+    container_model = calc_observables_with_secondary(
+        container_data, img_ffts, img_sed, float(frac), ref_wavelength)
 
     chi2, chi2_red, loglike, n_data=oi_container_chi2(container_data, container_model)
     return chi2, chi2_red, loglike, n_data
@@ -514,7 +554,8 @@ def monochromatic_chi(
     """
   
     img_ffts=distroi.read_image_list(simulation_dir, img_dir)
-    container_model = distroi.oi_container_calc_image_fft_observables(container_data, img_ffts)
+    img_sed = distroi.read_sed_mcfost(str(Path(simulation_dir) / "data_th" / "sed_rt.fits.gz"))
+    container_model = calc_observables_with_secondary(container_data, img_ffts, img_sed)
     chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 
     if plot:    
@@ -531,12 +572,13 @@ def monochromatic_chi(
     return chi2, chi2_red, likelihood, num_points
 
 
-def background_objective(frac: float, ref_wavelength: float, container_data: Any, img_ffts: Any) -> float:
+def background_objective(frac: float, ref_wavelength: float, container_data: Any, img_ffts: Any, img_sed=None) -> float:
     _, chi2_red, _, _ = chi2_for_optimisation_overresolved(
         frac=frac,
         ref_wavelength=ref_wavelength,
         container_data=container_data,
         img_ffts=img_ffts,
+        img_sed=img_sed,
     )
     return float(chi2_red)
 
@@ -566,7 +608,7 @@ def monochromatic_chi_with_background(
     container_data : OIContainer
         Container with data observables.
     img_sed : distroi.data.sed.SED, optional
-        SED object containing the model SED to scale for the overresolved flux. Default is None and means that the SED is not used for scaling.
+        SED object containing the model SED to scale for the overresolved flux. If None, load the unmodified MCFOST SED from the simulation directory.
     wave_for_background : float
         Wavelength in micrometer for which the background is calculated.
     frac_for_background : float, optional
@@ -597,19 +639,12 @@ def monochromatic_chi_with_background(
     
     
     img_ffts = distroi.read_image_list(simulation_dir, img_dir)
-    background = distroi.Overresolved(sp_dep=distroi.FlatSpecDep(flux_form="flam"))
-
-    #this is fixed for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
-    accretion_secondary = distroi.PointSource(coords=(0.0, 0.0), sp_dep=distroi.spec_dep.BlackBodySpecDep(temp=4000.0, flux_form="flam"))
-
-
-    
-
-    #objective = obg.pick_output(chi2_for_optimisation_overresolved, idx=2, cast=float)
+    if img_sed is None:
+        img_sed = distroi.read_sed_mcfost(str(Path(simulation_dir) / "data_th" / "sed_rt.fits.gz"))
 
     if frac_for_background is None:
         frac_min = minimize_scalar(
-            lambda x: background_objective(x, ref_wavelength=wave_for_background, container_data=container_data, img_ffts=img_ffts),
+            lambda x: background_objective(x, ref_wavelength=wave_for_background, container_data=container_data, img_ffts=img_ffts, img_sed=img_sed),
             bounds=(0.0, 0.5),
             method="bounded",
             options={"xatol": 1e-4}
@@ -618,9 +653,8 @@ def monochromatic_chi_with_background(
     else:
         frac_best = frac_for_background
     
-    container_model = distroi.oi_container_calc_image_fft_observables(
-        container_data, img_ffts, img_sed=img_sed, geom_comps=[background, accretion_secondary], geom_comp_flux_fracs=[frac_best, 0.039], ref_wavelength=wave_for_background
-    )
+    container_model = calc_observables_with_secondary(
+        container_data, img_ffts, img_sed, frac_best, wave_for_background)
 
     chi2, chi2_red,loglike, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 
@@ -672,7 +706,7 @@ def chromatic_chi(
     vistype : {'vis2', 'vis', 'fcorr'}, optional
         Type of visibility to be used in the chi2 calculation. Default is 'vis2'.
     img_sed : distroi.data.sed.SED, optional
-        SED object containing the model SED to scale for the overresolved flux. Default is None and means that the SED is not used for scaling.
+        SED object containing the model SED to scale for the overresolved flux. If None, load the unmodified MCFOST SED from the simulation directory.
     wave_for_background : float, optional
         Wavelength in micrometer for which the background is calculated. Default is None and means that there is no background (overresolved) flux.
     frac_for_background : float, optional
@@ -699,6 +733,8 @@ def chromatic_chi(
         Number of data points used in the chi2 calculation.
      """
 
+    if img_sed is None:
+        img_sed = distroi.read_sed_mcfost(str(Path(simulation_dir) / "data_th" / "sed_rt.fits.gz"))
     img_dir = [img_dir] if isinstance(img_dir, str) else list(img_dir)
     img_ffts=[]
     wavelengths=[]
@@ -717,16 +753,13 @@ def chromatic_chi(
     
     wavelengths, img_ffts = list(zip(*sorted(zip(wavelengths, img_ffts))))  # sort the objects in wavelength
 
-    #this is fixed for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
-    accretion_secondary = distroi.PointSource(coords=(0.0, 0.0), sp_dep=distroi.spec_dep.BlackBodySpecDep(temp=4000.0, flux_form="flam"))
 
 
     if wave_for_background is not None:
-        background = distroi.Overresolved(sp_dep=distroi.FlatSpecDep(flux_form="flam"))
 
         if frac_for_background is None:
             frac_min = minimize_scalar(
-                lambda x: background_objective(x, ref_wavelength=wave_for_background, container_data=container_data, img_ffts=img_ffts),
+                lambda x: background_objective(x, ref_wavelength=wave_for_background, container_data=container_data, img_ffts=img_ffts, img_sed=img_sed),
                 bounds=(0.0, 0.5),
                 method="bounded",
                 options={"xatol": 1e-4}
@@ -735,12 +768,11 @@ def chromatic_chi(
         else:
             frac_best = frac_for_background
         
-        container_model = distroi.oi_container_calc_image_fft_observables(
-            container_data, img_ffts, img_sed=img_sed, geom_comps=[background, accretion_secondary], geom_comp_flux_fracs=[frac_best, 0.039], ref_wavelength=wave_for_background
-        )
+        container_model = calc_observables_with_secondary(
+            container_data, img_ffts, img_sed, frac_best, wave_for_background)
     else:
         # No background component, just the accretion secondary that is fixed for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
-        container_model = distroi.oi_container_calc_image_fft_observables(container_data, img_ffts, img_sed=img_sed, geom_comps=[accretion_secondary], geom_comp_flux_fracs=[0.039], ref_wavelength=1.65)
+        container_model = calc_observables_with_secondary(container_data, img_ffts, img_sed)
       
     
     chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)

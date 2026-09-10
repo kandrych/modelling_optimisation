@@ -714,18 +714,22 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         xc = (nx - 1) / 2.0
         yc = (ny - 1) / 2.0
         R,_,_,X, Y = obp.compute_grid(alma_cont, xc=xc, yc=yc)
-        noise_level_alma=np.nanstd(alma_cont[R>(100/ps_alma)])
-        mask_alma = (alma_cont >= 3*noise_level_alma)
-        #local plotting
-        plt.imshow(mask_alma, origin='lower')
-        plt.savefig(figdir+'/alma_cont_mask_3snr.png', dpi=300)
-        plt.close()
+        noise_level_alma=np.nanstd(alma_cont[R>(150/ps_alma)])#here we take the noise level from the outer part of the image, where there is no emission
+        # The 3-sigma criterion now selects the outer radius in compare_alma_images.
+        # Retained for reference: former individual-pixel scoring mask and plot.
+        # mask_alma = (alma_cont >= 3*noise_level_alma)
+        # #local plotting
+        # plt.imshow(mask_alma, origin='lower')
+        # plt.savefig(figdir+'/alma_cont_mask_3snr.png', dpi=300)
+        # plt.close()
+        mask_alma = None  # Retained dictionary key for compatibility; not used for scoring.
         
     else:
         radial_profile_alma=None
         azimuthal_profile_alma=None
         mask_alma = None
         noise_level_alma = None 
+        noise_level_alma = None
 
     pdi_data_v={'psf': psf_v, 'pol_images': pdi_v, 'radial_profiles': radial_profile_v, 'azimuthal_profiles': azimuthal_profile_v}
     pdi_data_i={'psf': psf_i, 'pol_images': pdi_i, 'radial_profiles': radial_profile_i, 'azimuthal_profiles': azimuthal_profile_i}

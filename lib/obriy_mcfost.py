@@ -1188,7 +1188,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         ps_alma = data_alma['ps_alma']
         data_size_alma = data_alma['image_size']
         wave=data_alma['alma_wavelength']
-        mask_alma = data_alma['mask_alma']
+        # mask_alma = data_alma['mask_alma']  # Former per-pixel 3-sigma scoring mask.
         alma_spec = data_alma['image_spec']
         wavelength_text = f'{alma_spec["wavelength_um"]:.3f}'
 
@@ -1207,13 +1207,6 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             conserve="surface_brightness",
         )
 
-
-        
-        _, _, simulated_itot, pix_scale = oba.load_mcfost_image_alma_casa(str(workdir), wavelength_text)  
-        
-        if args.plot_intermediate: obp.plot_polarimetric_image(simulated_itot, ps_alma, title=f'Model Itot, alma_cont', save=str(workdir)+'/figures/'+'/model_itot_alma.png', image_scale='asinh', roi_half_size=100)
-        simulated_itot_resc=oba.rescale_alma(simulated_itot, pix_scale, ps_alma)
-
         if simulated_itot_resc.shape[0] > alma_cont.shape[0]:
             simulated_itot_as_data=oba.cut_down_alma(simulated_itot_resc, alma_cont)
         elif simulated_itot_resc.shape[0] < alma_cont.shape[0]:
@@ -1221,41 +1214,92 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         else:
             simulated_itot_as_data=simulated_itot_resc
 
-        #previous verison
-        residuals_map=(simulated_itot_as_data-alma_cont)**2
-        residuals_map_masked = np.where(mask_alma, residuals_map, np.nan)
-        #residuals_reduced=np.nansum(residuals_map_masked)/np.sum(mask_alma) #does not have error estimate, so not a proper chi2, but takes into account only 3snr points
-             
 
-        #updated version, is normalized by the total flux of the data, so it is more comparable between different models and different datasets
-        residuals_reduced = (
-            np.nansum(residuals_map_masked)/np.nansum(alma_cont[mask_alma]**2)
-        )*100.0  # percentage of the total flux squared, now will match by order with SED and interferometry chi2, so can be used in the total loss function
-
-        print(f"[obriy_mcfost] ALMA residuals image snr>=2 = {residuals_reduced}, sum of mask = {np.sum(mask_alma)}")
-        print(f"[obriy_mcfost] ALMA total flux: data = {np.nansum(alma_cont)}, model = {np.nansum(simulated_itot_as_data)}")
-        
-    
         if args.plot_intermediate:
-            #do some plotting
-            fig, ax = plt.subplots(1, 3, figsize=(16,6))
-            fig.subplots_adjust(wspace=0.5)
-
-            color_map = 'viridis' #'afmhot'
-            im0=ax[0].imshow(alma_cont, color_map, extent=[+alma_cont.shape[0]/2, -alma_cont.shape[0]/2, -alma_cont.shape[1]/2, alma_cont.shape[1]/2])
-            ax[0].set_title("Data I$_{tot}$")
-            obg.add_colorbar(fig, ax[0], im0)
-            im1=ax[1].imshow(simulated_itot_as_data, color_map, extent=[+simulated_itot_as_data.shape[0]/2, -simulated_itot_as_data.shape[0]/2, -simulated_itot_as_data.shape[1]/2, simulated_itot_as_data.shape[1]/2])
-            ax[1].set_title('Simulated I$_{tot}$')
-            obg.add_colorbar(fig, ax[1], im1)
-            im2=ax[2].imshow(residuals_map_masked, color_map,extent=[+alma_cont.shape[0]/2, -alma_cont.shape[0]/2, -alma_cont.shape[1]/2, alma_cont.shape[1]/2])
-            ax[2].set_title("Residual I$_{tot}$")
-            obg.add_colorbar(fig, ax[2], im2)
-            plt.suptitle("ALMA, "+str(wave)+"$\mu m$, reduces chi2 "+ residuals_reduced.astype(str)) #does not have error estimate, so not a proper chi2
-            fig.savefig(str(workdir)+'_alma_sim_vs_data_'+str(wave)+'.png', dpi= 150, bbox_inches='tight')
-            plt.close(fig)
+            obp.plot_polarimetric_image(
+                simulated_itot_as_data,
+                ps_alma,
+                title="ALMA model [Jy/beam]",
+                save=str(workdir / "figures" / "model_itot_alma.png"),
+                image_scale="asinh",
+                roi_half_size=100)
 
 
+
+        observed_header = data_alma["header"]
+
+        # Explicit initial assumption: source centre is the FITS reference pixel.
+        # FITS coordinates are one-based; NumPy coordinates are zero-based.
+        center_xy = (
+            float(observed_header["CRPIX1"]) - 1.0,
+            float(observed_header["CRPIX2"]) - 1.0,
+        )
+
+        alma_comparison = oba.compare_alma_images(
+            alma_cont,
+            simulated_itot_as_data,
+            observed_header,
+            ps_alma,
+            center_xy=center_xy,
+            aperture_radius_mas=None,
+            snr_threshold=3.0,
+            aperture_padding_pixels=3.0,
+            noise_rms_jybeam=data_alma["noise_level_alma"],
+            save_path=workdir / "figures" / "alma_comparison.png",
+        )
+
+        print(
+            "[obriy_mcfost] ALMA aperture flux: "
+            f"data={alma_comparison['observed_flux_jy']:.6g} Jy, "
+            f"model={alma_comparison['model_flux_jy']:.6g} Jy, "
+            f"model−data={alma_comparison['flux_difference_jy']:.6g} Jy"
+        )
+
+
+        # Retained for reference: old per-pixel SNR mask and squared-residual plot.
+        # #previous verison
+        # residuals_map=(simulated_itot_as_data-alma_cont)**2
+        # residuals_map_masked = np.where(mask_alma, residuals_map, np.nan)
+        # #residuals_reduced=np.nansum(residuals_map_masked)/np.sum(mask_alma) #does not have error estimate, so not a proper chi2, but takes into account only 3snr points
+        #      
+        # 
+        # #updated version, is normalized by the total flux of the data, so it is more comparable between different models and different datasets
+        # residuals_reduced = (
+        #     np.nansum(residuals_map_masked)/np.nansum(alma_cont[mask_alma]**2)
+        # )*100.0  # percentage of the total flux squared, now will match by order with SED and interferometry chi2, so can be used in the total loss function
+        # 
+        # print(f"[obriy_mcfost] ALMA residuals image snr>=2 = {residuals_reduced}, sum of mask = {np.sum(mask_alma)}")
+        # 
+        #     
+        # if args.plot_intermediate:
+        #     #do some plotting
+        #     fig, ax = plt.subplots(1, 3, figsize=(16,6))
+        #     fig.subplots_adjust(wspace=0.5)
+        # 
+        #     color_map = 'viridis' #'afmhot'
+        #     im0=ax[0].imshow(alma_cont, color_map, extent=[+alma_cont.shape[0]/2, -alma_cont.shape[0]/2, -alma_cont.shape[1]/2, alma_cont.shape[1]/2])
+        #     ax[0].set_title("Data I$_{tot}$")
+        #     obg.add_colorbar(fig, ax[0], im0)
+        #     im1=ax[1].imshow(simulated_itot_as_data, color_map, extent=[+simulated_itot_as_data.shape[0]/2, -simulated_itot_as_data.shape[0]/2, -simulated_itot_as_data.shape[1]/2, simulated_itot_as_data.shape[1]/2])
+        #     ax[1].set_title('Simulated I$_{tot}$')
+        #     obg.add_colorbar(fig, ax[1], im1)
+        #     im2=ax[2].imshow(residuals_map_masked, color_map,extent=[+alma_cont.shape[0]/2, -alma_cont.shape[0]/2, -alma_cont.shape[1]/2, alma_cont.shape[1]/2])
+        #     ax[2].set_title("Residual I$_{tot}$")
+        #     obg.add_colorbar(fig, ax[2], im2)
+        #     plt.suptitle("ALMA, "+str(wave)+"$\mu m$, reduces chi2 "+ residuals_reduced.astype(str)) #does not have error estimate, so not a proper chi2
+        #     fig.savefig(str(workdir)+'_alma_sim_vs_data_'+str(wave)+'.png', dpi= 150, bbox_inches='tight')
+        #     plt.close(fig)
+        # 
+        # 
+        # 
+
+        # All finite observation pixels in the circular aperture contribute,
+        # including pixels below 3 sigma. The factor of 100 is applied once.
+        
+        print(
+            f"[obriy_mcfost] ALMA aperture residual-energy loss = {alma_comparison["residual_energy_loss"]}, "
+            f"pixels = {alma_comparison['aperture_pixel_count']}"
+        )
 
         metrics_alma = obp.full_image_metrics_noshift(
                 alma_cont, simulated_itot_as_data,
@@ -1264,30 +1308,20 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 return_pixel_chi2=True
             )
         
-        try:
-            chi2_red_alma_profiles, profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints = oba.chi2_ALMA(str(workdir), data_alma=data_alma, model_jybeam=simulated_itot_as_data, plot=args.plot_intermediate, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_ALMA_')
-        except Exception as e:
-            print(f"Error computing ALMA chi2: {e}")
-            chi2_red_alma_profiles = 1e99
-            profile_rad_pi_chi2, profile_az_pi_chi2, profile_rad_pi_npoints, profile_az_pi_npoints = 1e99, 1e99, 1e99, 1e99
-        
         #loss_alma= 1-(metrics_alma['ssim']+metrics_alma['ncc'])/2 #
-        loss_alma=residuals_reduced 
+        loss_alma=alma_comparison["residual_energy_loss"] 
         #loss_alma=chi2_red_alma_profiles
 
         additional_info["alma"] = {
             "ssim": metrics_alma.get("ssim"),
             "ncc": metrics_alma.get("ncc"),
-            "chi2_red_alma_profiles": chi2_red_alma_profiles,
-            "profile_rad_pi_chi2": profile_rad_pi_chi2,
-            "profile_az_pi_chi2": profile_az_pi_chi2,
-            "profile_rad_pi_npoints": profile_rad_pi_npoints,
-            "profile_az_pi_npoints": profile_az_pi_npoints,
-            "residuals_reduced": residuals_reduced,
             "loss": loss_alma
         }
 
-        print(f'[obriy_mcfost] ALMA metrics: SSIM={metrics_alma["ssim"]}, NCC={metrics_alma["ncc"]}, chi2_red_alma_profiles={chi2_red_alma_profiles}, residuals image snr>=3 = {residuals_reduced}')
+        additional_info["alma"]["comparison"] = {key: value.tolist() if isinstance(value, np.ndarray) else value
+                                                for key, value in alma_comparison.items()}
+
+        print(f'[obriy_mcfost] ALMA metrics: SSIM={metrics_alma["ssim"]}, NCC={metrics_alma["ncc"]}, chi2_red_alma_profiles={chi2_red_alma_profiles}, aperture residual-energy loss = {residuals_reduced}')
             
         #print(f"ALMA chi2: {chi2_red_alma}")
     

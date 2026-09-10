@@ -350,6 +350,7 @@ def chi2_ALMA(main_dir, data_alma, model_jybeam, plot=False, fig_dir=None, extra
     ps_alma = data_alma['ps_alma']
     alma_spec = data_alma['image_spec']
     wavelength_text = f'{alma_spec["wavelength_um"]:.3f}'
+
     # Load the simulation data for ALMA
     simulated_itot = np.asarray(model_jybeam, dtype=float)
 
@@ -508,3 +509,268 @@ def convolve_alma_to_jybeam(model_jypixel, model_header, observed_header):
 
     model_jybeam = convolved_jypixel * pixels_per_beam
     return model_jybeam, pixel_scale.to_value(u.mas)
+
+
+def alma_snr_aperture_radius(observed_jybeam, noise_rms_jybeam, *, center_xy,
+                             snr_threshold=3.0, padding_pixels=3.0):
+    """Return max(R[data > threshold * RMS]) + padding, in pixels.
+
+    Use the full observed image, before cropping, so the aperture is independent
+    of model brightness. All detected pixels contribute, including isolated ones.
+    """
+    observed = np.asarray(observed_jybeam, dtype=float)
+    if observed.ndim != 2:
+        raise ValueError("Expected a 2D observed image.")
+    if noise_rms_jybeam is None:
+        raise ValueError("An observed background RMS is required for an SNR aperture.")
+    noise = float(noise_rms_jybeam)
+    if not np.all(np.isfinite([noise, snr_threshold, padding_pixels])):
+        raise ValueError("RMS, SNR threshold and padding must be finite.")
+    if noise <= 0 or snr_threshold <= 0 or padding_pixels < 0:
+        raise ValueError("RMS and SNR threshold must be positive; padding nonnegative.")
+    xc, yc = map(float, center_xy)
+    if not np.all(np.isfinite([xc, yc])):
+        raise ValueError("Aperture centre must be finite.")
+    detected = np.isfinite(observed) & (observed > snr_threshold * noise)
+    if not detected.any():
+        raise ValueError("No observed pixels exceed the requested SNR threshold.")
+    y, x = np.indices(observed.shape)
+    radius_pixels = np.hypot(x - xc, y - yc)
+    return float(np.max(radius_pixels[detected]) + padding_pixels)
+
+
+def compare_alma_images(
+    observed_jybeam,
+    model_jybeam,
+    observed_header,
+    pixel_scale_mas,
+    *,
+    center_xy,
+    aperture_radius_mas=None,
+    snr_threshold=3.0,
+    aperture_padding_pixels=3.0,
+    radial_bin_width_mas=None,
+    noise_rms_jybeam=None,
+    save_path=None,
+):
+    """
+    Diagnostics for ALMA images already matched in beam, units and pixel grid.
+
+    center_xy uses zero-based array coordinates: (column, row).
+    No amplitude normalisation or positional adjustment is performed.
+    With aperture_radius_mas=None, use max(R[observed > snr_threshold * RMS])
+    plus aperture_padding_pixels. Pass the full observation for this selection.
+    An explicit radius retains the fixed-aperture behaviour.
+    """
+    observed = np.asarray(observed_jybeam, dtype=float)
+    model = np.asarray(model_jybeam, dtype=float)
+
+    if observed.ndim != 2 or observed.shape != model.shape:
+        raise ValueError("Expected matching 2D observed and model images.")
+    if not np.all(np.isfinite(model)):
+        raise ValueError("Model contains non-finite pixels.")
+    if not np.isfinite(pixel_scale_mas) or pixel_scale_mas <= 0:
+        raise ValueError("Pixel scale must be positive and finite.")
+    automatic_aperture = aperture_radius_mas is None
+    if automatic_aperture:
+        aperture_radius_mas = pixel_scale_mas * alma_snr_aperture_radius(
+            observed, noise_rms_jybeam, center_xy=center_xy,
+            snr_threshold=snr_threshold, padding_pixels=aperture_padding_pixels,
+        )
+    if not np.isfinite(aperture_radius_mas) or aperture_radius_mas <= 0:
+        raise ValueError("Pixel scale and aperture radius must be positive.")
+
+    beam = Beam.from_fits_header(observed_header)
+
+    # Approximately one beam per radial bin.
+    if radial_bin_width_mas is None:
+        radial_bin_width_mas = beam.major.to_value(u.mas)
+    if radial_bin_width_mas <= 0:
+        raise ValueError("Radial bin width must be positive.")
+
+    ny, nx = observed.shape
+    xc, yc = map(float, center_xy)
+
+    # Ensure the entire circular aperture lies inside the image.
+    available_radius_mas = min(
+        xc + 0.5,
+        nx - 0.5 - xc,
+        yc + 0.5,
+        ny - 0.5 - yc,
+    ) * pixel_scale_mas
+    if aperture_radius_mas > available_radius_mas:
+        raise ValueError("The requested aperture extends outside the image.")
+
+    y, x = np.indices(observed.shape)
+    radius_mas = np.hypot(x - xc, y - yc) * pixel_scale_mas
+
+    # Keep faint and negative data inside the circle. Exclude invalid observation
+    # pixels from both images; invalid model values are rejected above.
+    aperture = (radius_mas < aperture_radius_mas) & np.isfinite(observed)
+    if not aperture.any():
+        raise ValueError("No finite observed pixels within the aperture.")
+
+    # Positive residual means the model underpredicts the observation.
+    residual = observed - model
+    observed_energy = float(np.sum(observed[aperture]**2))
+    residual_energy = float(np.sum(residual[aperture]**2))
+    if not np.isfinite(observed_energy) or observed_energy <= 0:
+        raise ValueError("Observed aperture energy must be positive and finite.")
+    residual_energy_loss = 100.0 * residual_energy / observed_energy
+    if not np.isfinite(residual_energy_loss):
+        raise ValueError("ALMA aperture residual-energy loss is not finite.")
+
+    # Jy/beam → integrated Jy over the same fixed aperture.
+    pixel_area = (pixel_scale_mas * u.mas)**2
+    pixel_to_beam = (
+        pixel_area.to(u.sr) / beam.sr
+    ).to_value(u.dimensionless_unscaled)
+
+    observed_flux = float(observed[aperture].sum() * pixel_to_beam)
+    model_flux = float(model[aperture].sum() * pixel_to_beam)
+
+    # Disjoint annuli. Retain absolute Jy/beam brightness.
+    edges = np.arange(
+        0.0, aperture_radius_mas, radial_bin_width_mas
+    )
+    edges = np.append(edges, aperture_radius_mas)
+
+    radii = []
+    observed_profile = []
+    model_profile = []
+    counts = []
+
+    for inner, outer in zip(edges[:-1], edges[1:]):
+        annulus = (radius_mas >= inner) & (radius_mas < outer) & aperture
+        count = int(annulus.sum())
+        if count == 0:
+            continue
+
+        radii.append(0.5 * (inner + outer))
+        observed_profile.append(float(observed[annulus].mean()))
+        model_profile.append(float(model[annulus].mean()))
+        counts.append(count)
+
+    result = {
+        "residual_energy_loss": residual_energy_loss,
+        "observed_energy": observed_energy,
+        "residual_energy": residual_energy,
+        "aperture_pixel_count": int(aperture.sum()),
+        "observed_flux_jy": observed_flux,
+        "model_flux_jy": model_flux,
+        "flux_difference_jy": model_flux - observed_flux,
+        "model_to_observed_flux": (
+            model_flux / observed_flux if observed_flux != 0 else None
+        ),
+        "radius_mas": np.asarray(radii),
+        "observed_profile_jybeam": np.asarray(observed_profile),
+        "model_profile_jybeam": np.asarray(model_profile),
+        "annulus_pixel_counts": np.asarray(counts),
+        "residual_rms_jybeam": float(
+            np.sqrt(np.mean(residual[aperture]**2))
+        ),
+        "aperture_radius_mas": float(aperture_radius_mas),
+        "aperture_radius_pixels": float(aperture_radius_mas / pixel_scale_mas),
+        "aperture_selection": "observed_snr" if automatic_aperture else "explicit_radius",
+    }
+
+    if save_path is not None:
+        fig, axes = plt.subplots(
+            1, 4, figsize=(20, 4), constrained_layout=True
+        )
+
+        # Array coordinates relative to the chosen centre.
+        # For the supplied orientation, east is towards decreasing columns.
+        extent = [
+            (-0.5 - xc) * pixel_scale_mas,
+            (nx - 0.5 - xc) * pixel_scale_mas,
+            (-0.5 - yc) * pixel_scale_mas,
+            (ny - 0.5 - yc) * pixel_scale_mas,
+        ]
+
+        values = np.concatenate([observed[aperture], model[aperture]])
+        vmin = min(0.0, float(values.min()))
+        vmax = max(0.0, float(values.max()))
+        if vmax <= vmin:
+            vmax = vmin + 1.0
+
+        for ax, image, title in zip(
+            axes[:2],
+            [observed, model],
+            ["Observed", "Model"],
+        ):
+            im = ax.imshow(
+                image,
+                origin="lower",
+                extent=extent,
+                cmap="inferno",
+                vmin=vmin,
+                vmax=vmax,
+            )
+            fig.colorbar(im, ax=ax, label="Jy/beam")
+            ax.set_title(title)
+
+        residual_display = residual
+        residual_label = "Observed − model [Jy/beam]"
+
+        if noise_rms_jybeam is not None:
+            noise = float(noise_rms_jybeam)
+            if not np.isfinite(noise) or noise <= 0:
+                plt.close(fig)
+                raise ValueError("Noise RMS must be positive and finite.")
+            residual_display = residual / noise
+            residual_label = "(Observed − model) / background RMS"
+
+        limit = float(np.max(np.abs(residual_display[aperture])))
+        if limit == 0:
+            limit = 1.0
+
+        im = axes[2].imshow(
+            residual_display,
+            origin="lower",
+            extent=extent,
+            cmap="RdBu_r",
+            vmin=-limit,
+            vmax=limit,
+        )
+        fig.colorbar(im, ax=axes[2], label=residual_label)
+        axes[2].set_title("Signed residual")
+
+        for ax in axes[:3]:
+            ax.set_xlim(-aperture_radius_mas, aperture_radius_mas)
+            ax.set_ylim(-aperture_radius_mas, aperture_radius_mas)
+            ax.set_xlabel("Column offset [mas; west-positive]")
+            ax.set_ylabel("Row offset [mas; north-positive]")
+            ax.add_patch(plt.Circle(
+                (0, 0), aperture_radius_mas,
+                fill=False, color="cyan", linestyle="--",
+            ))
+
+        axes[3].plot(
+            result["radius_mas"],
+            result["observed_profile_jybeam"],
+            "o-", label="Observed",
+        )
+        axes[3].plot(
+            result["radius_mas"],
+            result["model_profile_jybeam"],
+            "o-", label="Model",
+        )
+        axes[3].set_xlabel("Radius [mas]")
+        axes[3].set_ylabel("Annular mean [Jy/beam]")
+        axes[3].legend()
+        axes[3].set_title("Absolute radial brightness")
+
+        fig.suptitle(
+            f"Aperture radius: {aperture_radius_mas:g} mas | "
+            f"Observed flux: {observed_flux:.5g} Jy | "
+            f"Model flux: {model_flux:.5g} Jy | "
+            f"Residual-energy loss: {residual_energy_loss:.4g}"
+        )
+
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150)
+        plt.close(fig)
+
+    return result
