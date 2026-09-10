@@ -913,7 +913,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
 
             metrics_i = obp.full_image_metrics_noshift(
-                np.arcsinh(data_cropped_i), np.arcsinh(model_cropped_i),
+                data_cropped_i, model_cropped_i,
                 normalize="zscore",          # good default for morphology
                 ssim_win=None,                 # 7–15 is typical
                 return_pixel_chi2=True
@@ -1021,7 +1021,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
 
             metrics_v = obp.full_image_metrics_noshift(
-                np.arcsinh(data_cropped_v), np.arcsinh(model_cropped_v),
+                data_cropped_v, model_cropped_v,
                 normalize="zscore",          # good default for morphology
                 ssim_win=None,                 # 7–15 is typical
                 return_pixel_chi2=True
@@ -1113,7 +1113,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
 
             metrics_h = obp.full_image_metrics_noshift(
-                np.arcsinh(data_cropped_h), np.arcsinh(model_cropped_h),
+                data_cropped_h, model_cropped_h,
                 normalize="zscore",          # good default for morphology
                 ssim_win=None,                 # 7–15 is typical
                 return_pixel_chi2=True
