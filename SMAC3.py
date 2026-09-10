@@ -219,6 +219,13 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         stage = "F4"
     if budget >= 5.0:
         stage = "F5"
+    if budget >= 6.0:
+        stage = "F6"
+    if budget >= 7.0:
+        stage = "F7"
+    if budget >= 8.0:
+        stage = "F8"
+  
 
     if budget >= 9.0:
         stage = "F9"
@@ -226,8 +233,7 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         stage = "F10"
     if budget >= 11.0:
         stage = "F11"
-    if budget >= 12.0:
-        stage = "F12"
+    
    
     if budget >= 14.0:
         stage = "F14"
@@ -259,6 +265,17 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         img_res = 2
         products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
 
+    if stage == "F5":
+        img_res = 10 #mas/pixel
+        products = ["sed"]
+    elif stage == "F6":
+        img_res = 2 #mas/pixel
+        products = ["sed", "vis2_1perband"]
+    elif stage == "F7":
+        img_res = 2
+        products = ["sed", "vis2_chromatic"]
+
+
     elif stage == "F9":
         img_res = 2
         products = ["sed"]
@@ -268,9 +285,7 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
     elif stage == "F11":
         img_res = 2
         products = ["sed", "pdi_V", "pdi_I", "pdi_H", "alma"]
-    elif stage == "F12":
-        img_res = 2
-        products = ["sed", "vis2_chromatic"]
+
 
     elif stage == "F14":
         img_res = 2
@@ -919,10 +934,8 @@ def main():
     p.add_argument("--puffed-up-rim", action="store_true", help="Enable puffed up rim feature")
     p.add_argument("--tapered-edge-p1-eq-p2", action="store_true", help="Enable tapered edge with p1=p2")
     p.add_argument("--overresolved_flux_fit_for_interferometry", type=float, default=None, help="Optional: fit overresolved flux to interferometry at the supplied wavelength [micron]. Disabled by default.")
-    p.add_argument("--unresolved-correction-radius-px", type=float, default=None,
-                   help="Unresolved-polarisation aperture radius in instrument pixels; required when correction is enabled")
-    p.add_argument("--pdi-constraint-tolerances", type=float, nargs=3, default=(0.05, 0.05, 0.05),
-                   metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Fixed PDI tolerances, not observational errors")
+    p.add_argument("--unresolved-correction-radius-px", type=float, default=None, help="Unresolved-polarisation aperture radius in instrument pixels; required when correction is enabled")
+    p.add_argument("--pdi-constraint-tolerances", type=float, nargs=3, default=(0.05, 0.05, 0.05), metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Fixed PDI tolerances, not observational errors")
     p.add_argument("--pdi-radial-bin-mas", type=float, default=25.0, help="Non-overlapping PDI radial bins [mas]")
     args = p.parse_args()
     
