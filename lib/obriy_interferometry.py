@@ -1,3 +1,4 @@
+import copy
 import distroi
 import numpy as np
 import pandas as pd
@@ -181,7 +182,8 @@ def oi_container_plot_data_vs_model(
     plot_vistype: Literal["vis2", "vis", "fcorr"] = "vis2",
     show_plots: bool = True,
     chi_plot: str = None,
-    extra_title: str = None
+    extra_title: str = None,
+    comparison_model: OIContainer = None
 ) -> None:
     """
     Plots the data against the model OI observables. Currently, plots uv coverage, a (squared) visibility curve and
@@ -306,7 +308,7 @@ def oi_container_plot_data_vs_model(
     ax[0].scatter(
         basedata,
         vismod,
-        label="model",
+        label="model" if comparison_model is None else "MCFOST + secondary",
         marker="o",
         facecolor="white",
         edgecolor="r",
@@ -322,6 +324,15 @@ def oi_container_plot_data_vs_model(
         s=4,
         alpha=0.6,
     )
+
+    if comparison_model is not None:
+        comparison_values = comparison_model.v2 if plot_vistype == "vis2" else comparison_model.v
+        ax[0].scatter(basedata, comparison_values, label="MCFOST alone",
+                      marker="o", facecolor="white", edgecolor="k", s=4, alpha=0.6)
+        ax[1].scatter(basedata, (comparison_values - visdata) / viserrdata,
+                      marker="o", facecolor="white", edgecolor="k", s=4, alpha=0.6)
+        # Include both predictions when setting the plot limits below.
+        vismod = np.maximum(vismod, comparison_values)
 
     ax[0].set_ylabel(vislabel)
     ax[0].legend()
@@ -430,24 +441,62 @@ def oi_container_plot_data_vs_model(
 
 
 
+def _float64_wavelengths(container):
+    """Prevent float32 overflow in Distroi's blackbody frequency cubing."""
+    result = copy.copy(container)
+    for field in ("v_wave", "v2_wave", "t3_wave"):
+        values = getattr(container, field, None)
+        if values is not None:
+            setattr(result, field, np.asarray(values, dtype=np.float64))
+    return result
+
+
+def plot_secondary_comparison(container_data, img_ffts, img_sed, fig_dir,
+                              vistype, extra_title, log_plotv, ebminv, reddening_law):
+    """Additional comparison using the existing visibility plotting style."""
+    from lib.obriy_sed import redden_flux
+    data = _float64_wavelengths(container_data)
+    baseline = distroi.oi_container_calc_image_fft_observables(data, img_ffts, img_sed=img_sed)
+    if baseline.vis_in_fcorr and ebminv != 0:
+        law = reddening_law or str(Path(__file__).resolve().parent.parent
+                                  / "utils" / "ISMreddening_law_Cardelli1989.dat")
+        baseline.v = redden_flux(baseline.v_wave, baseline.v, law, ebminv)
+    secondary = calc_observables_with_secondary(
+        data, img_ffts, img_sed, ebminv=ebminv, reddening_law=reddening_law)
+    _, reduced, _, _ = oi_container_chi2(data, secondary, vistype=vistype)
+    output = str(Path(fig_dir) / "secondary_comparison") if fig_dir is not None else None
+    oi_container_plot_data_vs_model(
+        data, secondary, fig_dir=output, log_plotv=log_plotv,
+        plot_vistype=vistype, show_plots=False, chi_plot=reduced,
+        extra_title=extra_title, comparison_model=baseline)
+    return {"MCFOST only": baseline, "+ secondary": secondary}
+
+
 def calc_observables_with_secondary(container_data, img_ffts, img_sed,
-                                    background_fraction=None, background_wavelength=None):
+                                    background_fraction=None, background_wavelength=None,
+                                    ebminv=0.0, reddening_law=None):
     """Add the accretion disc with the same intrinsic normalisation as the SED.
 
     Its 3.9% fraction at 1.65 micron excludes optional overresolved emission.
     Distroi requires component fractions of the final total at a shared reference;
     convert those fractions without changing the absolute accretion-disc flux.
     """
-    from lib.obriy_sed import add_blackbody_component
+    from lib.obriy_sed import add_blackbody_component, redden_flux
+
+    if not np.isfinite(ebminv) or ebminv < 0:
+        raise ValueError("Foreground E(B-V) must be finite and non-negative.")
 
     if img_sed is None:
         raise ValueError("The unmodified MCFOST SED is required to normalise the secondary.")
     reference = 1.65 if background_fraction is None else background_wavelength
+
     if reference is None or not np.isfinite(reference) or reference <= 0:
         raise ValueError("A positive background reference wavelength is required.")
+
     waves = np.asarray(img_sed.wavelengths)
     if not waves.min() <= 1.65 <= waves.max():
         raise ValueError("The MCFOST SED must cover 1.65 micron.")
+
     # Reuse the photometric lambda*F_lambda interpolation and blackbody exactly.
     order = np.argsort(waves)
     lam_flam = waves * np.asarray(img_sed.flam)
@@ -457,6 +506,7 @@ def calc_observables_with_secondary(container_data, img_ffts, img_sed,
     frequency = constants.SPEED_OF_LIGHT / (reference * constants.MICRON2M)
     secondary_jy = np.interp(reference, query, component) * 1e23 / frequency
     base_jy = float(img_sed.get_flux(x=frequency, flux_form="fnu"))
+
     if not np.isfinite(base_jy) or base_jy <= 0:
         raise ValueError("The reference MCFOST flux must be finite and positive.")
     secondary = distroi.PointSource(
@@ -464,6 +514,7 @@ def calc_observables_with_secondary(container_data, img_ffts, img_sed,
         sp_dep=distroi.BlackBodySpecDep(temp=4000.0))
     components = [secondary]
     fractions = [secondary_jy / (base_jy + secondary_jy)]
+
     if background_fraction is not None:
         fraction = float(background_fraction)
         if not np.isfinite(fraction) or not 0 <= fraction < 1:
@@ -471,12 +522,24 @@ def calc_observables_with_secondary(container_data, img_ffts, img_sed,
         # B/(M+S+B)=fraction; S remains fixed as B varies.
         components.insert(0, distroi.Overresolved(sp_dep=distroi.FlatSpecDep(flux_form="flam")))
         fractions = [fraction, (1 - fraction) * fractions[0]]
-    return distroi.oi_container_calc_image_fft_observables(
-        container_data, img_ffts, img_sed=img_sed, geom_comps=components,
+
+    resulting=distroi.oi_container_calc_image_fft_observables(
+        _float64_wavelengths(container_data), img_ffts, img_sed=img_sed, geom_comps=components,
         geom_comp_flux_fracs=fractions, ref_wavelength=reference)
 
+    # Apply the common foreground screen after combining all intrinsic components.
+    # It cancels in normalised visibility, but attenuates correlated flux in Jy.
+    if resulting.vis_in_fcorr and ebminv != 0:
+        if reddening_law is None:
+            reddening_law = str(Path(__file__).resolve().parent.parent
+                                / "utils" / "ISMreddening_law_Cardelli1989.dat")
+        resulting.v = redden_flux(
+            resulting.v_wave, resulting.v, reddening_law, ebminv)
+    return resulting
 
-def chi2_for_optimisation_overresolved(frac, ref_wavelength, container_data, img_ffts, img_sed=None) -> Tuple[float, float, float, int]:
+
+def chi2_for_optimisation_overresolved(frac, ref_wavelength, container_data, img_ffts, img_sed=None,
+                                      vistype="vis2", ebminv=0.0, reddening_law=None) -> Tuple[float, float, float, int]:
     """
     Adding the background component to the model and calculating the reduced chi2 between the observed interferometric data and the model with an overresolved background component.
     
@@ -502,9 +565,10 @@ def chi2_for_optimisation_overresolved(frac, ref_wavelength, container_data, img
         Number of data points
     """
     container_model = calc_observables_with_secondary(
-        container_data, img_ffts, img_sed, float(frac), ref_wavelength)
+        container_data, img_ffts, img_sed, float(frac), ref_wavelength,
+        ebminv=ebminv, reddening_law=reddening_law)
 
-    chi2, chi2_red, loglike, n_data=oi_container_chi2(container_data, container_model)
+    chi2, chi2_red, loglike, n_data=oi_container_chi2(container_data, container_model, vistype=vistype)
     return chi2, chi2_red, loglike, n_data
 
 def monochromatic_chi(
@@ -515,7 +579,9 @@ def monochromatic_chi(
         plot: bool=False,
         fig_dir: str=None,
         extra_title: str=None,
-        log_plotv: bool=False
+        log_plotv: bool=False,
+        ebminv: float=0.0,
+        reddening_law: str=None
 ) -> Tuple[float, float,float, int]:
     """
     Wrapper to calculate chi2 and reduced chi2 for a monochromatic model without background.
@@ -555,7 +621,7 @@ def monochromatic_chi(
   
     img_ffts=distroi.read_image_list(simulation_dir, img_dir)
     img_sed = distroi.read_sed_mcfost(str(Path(simulation_dir) / "data_th" / "sed_rt.fits.gz"))
-    container_model = calc_observables_with_secondary(container_data, img_ffts, img_sed)
+    container_model = calc_observables_with_secondary(container_data, img_ffts, img_sed, ebminv=ebminv, reddening_law=reddening_law)
     chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 
     if plot:    
@@ -569,16 +635,23 @@ def monochromatic_chi(
             chi_plot=chi2_red,
             extra_title=extra_title)
 
+    if plot:
+        plot_secondary_comparison(
+            container_data, img_ffts, img_sed, fig_dir, vistype,
+            extra_title, log_plotv, ebminv, reddening_law)
+
     return chi2, chi2_red, likelihood, num_points
 
 
-def background_objective(frac: float, ref_wavelength: float, container_data: Any, img_ffts: Any, img_sed=None) -> float:
+def background_objective(frac: float, ref_wavelength: float, container_data: Any, img_ffts: Any, img_sed=None,
+                         vistype="vis2", ebminv=0.0, reddening_law=None) -> float:
     _, chi2_red, _, _ = chi2_for_optimisation_overresolved(
         frac=frac,
         ref_wavelength=ref_wavelength,
         container_data=container_data,
         img_ffts=img_ffts,
         img_sed=img_sed,
+        vistype=vistype, ebminv=ebminv, reddening_law=reddening_law,
     )
     return float(chi2_red)
 
@@ -593,7 +666,9 @@ def monochromatic_chi_with_background(
         plot: bool=False,
         fig_dir: str=None,
         extra_title: str=None,
-        log_plotv: bool=False
+        log_plotv: bool=False,
+        ebminv: float=0.0,
+        reddening_law: str=None
 ) -> Tuple[float, float, float, int, float]:
     """
     Calculate chi2 and reduced chi2 for a monochromatic model with background.
@@ -644,7 +719,7 @@ def monochromatic_chi_with_background(
 
     if frac_for_background is None:
         frac_min = minimize_scalar(
-            lambda x: background_objective(x, ref_wavelength=wave_for_background, container_data=container_data, img_ffts=img_ffts, img_sed=img_sed),
+            lambda x: background_objective(x, ref_wavelength=wave_for_background, container_data=container_data, img_ffts=img_ffts, img_sed=img_sed, vistype=vistype, ebminv=ebminv, reddening_law=reddening_law),
             bounds=(0.0, 0.5),
             method="bounded",
             options={"xatol": 1e-4}
@@ -654,7 +729,8 @@ def monochromatic_chi_with_background(
         frac_best = frac_for_background
     
     container_model = calc_observables_with_secondary(
-        container_data, img_ffts, img_sed, frac_best, wave_for_background)
+        container_data, img_ffts, img_sed, frac_best, wave_for_background,
+            ebminv=ebminv, reddening_law=reddening_law)
 
     chi2, chi2_red,loglike, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 
@@ -669,6 +745,11 @@ def monochromatic_chi_with_background(
             chi_plot=chi2_red,
             extra_title=extra_title+f" with background fraction {frac_best:.3f}"
         )
+
+    if plot:
+        plot_secondary_comparison(
+            container_data, img_ffts, img_sed, fig_dir, vistype,
+            extra_title, log_plotv, ebminv, reddening_law)
 
     return chi2, chi2_red, loglike, num_points, frac_best
 
@@ -746,7 +827,6 @@ def chromatic_chi(
         img_file_paths = sorted(glob.glob(f"{simulation_dir}/{directory}/**/*RT.fits.gz", recursive=True))
         for img_path in img_file_paths:
             img= distroi.read_image_mcfost(img_path)
-            img=distroi_redden_copy(img, ebminv=ebminv, reddening_law_path=reddening_law)  # redden the Image object
             img_ffts.append(img)  # append to the list of Image objects
             wavelengths.append(img.wavelength)  # append wavelength
        
@@ -759,7 +839,7 @@ def chromatic_chi(
 
         if frac_for_background is None:
             frac_min = minimize_scalar(
-                lambda x: background_objective(x, ref_wavelength=wave_for_background, container_data=container_data, img_ffts=img_ffts, img_sed=img_sed),
+                lambda x: background_objective(x, ref_wavelength=wave_for_background, container_data=container_data, img_ffts=img_ffts, img_sed=img_sed, vistype=vistype, ebminv=ebminv, reddening_law=reddening_law),
                 bounds=(0.0, 0.5),
                 method="bounded",
                 options={"xatol": 1e-4}
@@ -769,10 +849,11 @@ def chromatic_chi(
             frac_best = frac_for_background
         
         container_model = calc_observables_with_secondary(
-            container_data, img_ffts, img_sed, frac_best, wave_for_background)
+            container_data, img_ffts, img_sed, frac_best, wave_for_background,
+            ebminv=ebminv, reddening_law=reddening_law)
     else:
         # No background component, just the accretion secondary that is fixed for IRAS08 based on Hillen et al 2016. For other objects, this should be changed to a more appropriate value or made a free parameter in the optimisation.
-        container_model = calc_observables_with_secondary(container_data, img_ffts, img_sed)
+        container_model = calc_observables_with_secondary(container_data, img_ffts, img_sed, ebminv=ebminv, reddening_law=reddening_law)
       
     
     chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
@@ -787,6 +868,11 @@ def chromatic_chi(
             show_plots=False,
             chi_plot=chi2_red,
             extra_title=extra_title)
+
+    if plot:
+        plot_secondary_comparison(
+            container_data, img_ffts, img_sed, fig_dir, vistype,
+            extra_title, log_plotv, ebminv, reddening_law)
 
     return chi2, chi2_red, likelihood, num_points
 

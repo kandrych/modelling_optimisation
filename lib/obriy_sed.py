@@ -206,6 +206,63 @@ def chi2reddened(lam, flux, lam_model, flux_model, flux_error, path, E, sigma_sy
 
 
 
+def fit_sed_reddening(data_wave, data_flux, data_err, lam, flux_for_fit, reddening_law_path):
+    """Fit the production non-negative foreground E(B-V), without plotting or I/O."""
+    def reddening_objective(ebv_start: np.ndarray) -> float:
+        ebv = float(ebv_start[0])
+        _, chi2_full, _ = chi2reddened(
+            data_wave,
+            data_flux,
+            lam,
+            flux_for_fit,
+            data_err,
+            reddening_law_path,
+            ebv,
+        )
+        return float(chi2_full)
+
+    reddening_fit = minimize(
+        reddening_objective,
+        x0=[1.4],
+        bounds=[(0.0, None)],  # A foreground screen cannot brighten the source.
+    )
+
+    if (
+        not reddening_fit.success
+        or not np.isfinite(reddening_fit.fun)
+        or not np.all(np.isfinite(reddening_fit.x))
+    ):
+        raise RuntimeError(
+            f"SED reddening fit failed: {reddening_fit.message}"
+        )
+
+    return float(reddening_fit.x[0])
+
+
+def plot_sed_secondary_comparison(data_wave, data_flux, data_err, lam, full_sed,
+                                  full_sed_with_comp, reddening_law_path, E_best, output_path):
+    """Save the standard SED comparison at a common foreground extinction."""
+    full_sed_red = redden_flux(lam, full_sed_with_comp, reddening_law_path, E_best)
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.errorbar(data_wave, data_flux, data_err, label='data', fmt='bd',
+                mfc='white', capsize=5, zorder=1000)
+    baseline_red = redden_flux(lam, full_sed, reddening_law_path, E_best)
+    ax.plot(lam, baseline_red, ls='-', c='k', label='MCFOST alone', zorder=1)
+    ax.plot(lam, full_sed_red, ls='--', c='r', label='MCFOST + secondary', zorder=1)
+    ax.set_xlabel(r"$\lambda \, \mathrm{[\mu m]}$")
+    ax.set_ylabel(r"$\lambda F_{\lambda} \, \mathrm{[erg \, cm^{-2} \, s^{-1}]}$")
+    ax.set_xlim(np.min(lam), np.max(lam))
+    ax.set_ylim(full_sed[np.isfinite(full_sed)].min(), full_sed[np.isfinite(full_sed)].max()*10)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    fig.suptitle("SED, secondary comparison", fontsize=16, y=0.96)
+    ax.set_title(f"Common foreground E(B-V) = {E_best:.4g}")
+    ax.legend()
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+
+
 def chi2_SED_with_reddening(
         folder_sim: str, 
         main_dir: str, 
@@ -327,34 +384,8 @@ def chi2_SED_with_reddening(
     # E(B-V) is a nuisance parameter fitted independently for each physical model.
     flux_for_fit = full_sed_with_comp if secondary_component else full_sed
 
-    def reddening_objective(ebv_start: np.ndarray) -> float:
-        ebv = float(ebv_start[0])
-        _, chi2_full, _ = chi2reddened(
-            data_wave,
-            data_flux,
-            lam,
-            flux_for_fit,
-            data_err,
-            reddening_law_path,
-            ebv,
-        )
-        return float(chi2_full)
-
-    reddening_fit = minimize(
-        reddening_objective,
-        x0=[1.4],
-    )
-
-    if (
-        not reddening_fit.success
-        or not np.isfinite(reddening_fit.fun)
-        or not np.all(np.isfinite(reddening_fit.x))
-    ):
-        raise RuntimeError(
-            f"SED reddening fit failed: {reddening_fit.message}"
-        )
-
-    E_best = float(reddening_fit.x[0])
+    E_best = fit_sed_reddening(
+        data_wave, data_flux, data_err, lam, flux_for_fit, reddening_law_path)
 
         #HERE is where the bootstrapping simulation is commented out, as it was not used in the final implementation. The code below is kept for reference.
         # #run bootstrapping simulation assuming gaussian errorbars on SED data
@@ -430,6 +461,13 @@ def chi2_SED_with_reddening(
 
         fig.savefig(simulation_dir+'SED_Akke_model1_MCFOST.png', dpi= 300, bbox_inches='tight')
         plt.close(fig)
+
+        # Separate component comparison; the original figure above is unchanged.
+        if secondary_component:
+            plot_sed_secondary_comparison(
+                data_wave, data_flux, data_err, lam, full_sed, full_sed_with_comp,
+                reddening_law_path, E_best, simulation_dir+'SED_secondary_comparison.png')
+
         
     
     return  chi2, chi2_red, loglike, E_best
