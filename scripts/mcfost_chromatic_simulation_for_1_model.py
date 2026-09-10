@@ -43,6 +43,8 @@ p = argparse.ArgumentParser(description="SMAC3 + Dask(SLURM) + Multi-fidelity fo
 p.add_argument("--seed", type=int, default=-1)# Random seed for SMAC
 p.add_argument("--correct-unresolved-polarimetry", action="store_true", help="Apply correction for unresolved central source polarimetry")
 
+p.add_argument("--unresolved-correction-radius-px", type=float, default=None,
+               help="Unresolved-polarisation aperture radius in instrument pixels; required when correction is enabled")
 args = p.parse_args()
 work_root=f'/fred/oz061/kandrych/smac/polarimetry_sed/full_chromatic_for_best/' #distance_sublimationF #distance660  #original
 fidelity={}

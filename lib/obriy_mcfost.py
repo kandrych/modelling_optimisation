@@ -870,10 +870,16 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         loss_v=np.nan
         loss_h=np.nan
 
+        correct_unresolved = bool(args.correct_unresolved_polarimetry)
+        correction_radius_px = obp.unresolved_correction_radius(
+            correct_unresolved, getattr(args, 'unresolved_correction_radius_px', None))
+        model_polarimetry_key = (
+            'mcfost_convolved_unresolved_corrected' if correct_unresolved else 'mcfost_convolved')
+
         print('[obriy_mcfost] Polarimetric analysis started')
         if "pdi_I" in fidelity["products"]:
     
-            results_i=obp.polarimetric_analysis(str(workdir), 0.82, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'], psf_cut=100, 
+            results_i=obp.polarimetric_analysis(str(workdir), 0.82, unresolved_correction_radius_px=correction_radius_px, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'], psf_cut=100,
                                                                                                         image_scale='asinh', radial_limit_mas=500.0,
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                         theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Iband')
@@ -891,17 +897,11 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_i, quadrant_results_sim_i, quadrant_results_sim_i_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_i_comparison.png')
             plt.close(fig)
             
-            if args.correct_unresolved_polarimetry:
-                print('[obriy_mcfost] Applying unresolved polarization correction for I band')
-                data_cropped_i, model_cropped_i= obp.crop_to_same_size(pdi_data_i['pol_images']['Q_phi'], results_i['mcfost_convolved_unresolved_corrected']['q_phi'])
-                model_rad_prof= results_i['mcfost_convolved_unresolved_corrected']['radial_profiles']['q_phi']
-                model_azimuthal_prof= results_i['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']['q_phi']
-                
-            else:
-                print('[obriy_mcfost] No unresolved polarization correction applied for I band')
-                data_cropped_i, model_cropped_i= obp.crop_to_same_size(pdi_data_i['pol_images']['Q_phi'], results_i['mcfost_convolved']['q_phi'])
-                model_rad_prof= results_i['mcfost_convolved']['radial_profiles']['q_phi']
-                model_azimuthal_prof= results_i['mcfost_convolved']['azimuthal_profiles']['q_phi']
+            print(f'[obriy_mcfost] I band comparison uses {model_polarimetry_key}')
+            data_cropped_i, model_cropped_i = obp.crop_to_same_size(
+                pdi_data_i['pol_images']['Q_phi'], results_i[model_polarimetry_key]['q_phi'])
+            model_rad_prof = results_i[model_polarimetry_key]['radial_profiles']['q_phi']
+            model_azimuthal_prof = results_i[model_polarimetry_key]['azimuthal_profiles']['q_phi']
                    
             # Calculate metrics for arcsinh-scaled images to highlight morphology
             obs_rad_prof_pi, obs_az_prof_pi = pdi_data_i['radial_profiles']['Q_phi'], pdi_data_i['azimuthal_profiles']['Q_phi']
@@ -927,7 +927,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             obp.save_band_metrics(
                         workdir,
                         band="I",
-                        analysis_metrics=results_i['mcfost_convolved_unresolved_corrected']['metrics'],
+                        analysis_metrics=results_i[model_polarimetry_key]['metrics'],
                         ssim_score=metrics_i.get("ssim"),
                         ncc_score=metrics_i.get("ncc"),
                         extras={"ps_mas": 3.6, "notes": "zscore"}
@@ -972,13 +972,15 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 "profile_rad_pi_npoints": profile_rad_pi_npoints,
                 "profile_az_pi_chi2": profile_az_pi_chi2,
                 "profile_az_pi_npoints": profile_az_pi_npoints,
-                "loss": loss_i
+                "loss": loss_i,
+                "model_unresolved_corrected": correct_unresolved,
+                "unresolved_correction_radius_px": correction_radius_px if correct_unresolved else None,
             }}
 
 
         if "pdi_V" in fidelity["products"]:
     
-            results_v=obp.polarimetric_analysis(str(workdir), 0.55, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100, 
+            results_v=obp.polarimetric_analysis(str(workdir), 0.55, unresolved_correction_radius_px=correction_radius_px, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100,
                                                                                                         image_scale='asinh', radial_limit_mas=500.0,
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
              
@@ -1001,17 +1003,11 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 obp.plot_polarimetric_image(results_v['mcfost_convolved_unresolved_corrected']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_q_phi_corr_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
                 obp.plot_polarimetric_image(results_v['mcfost_convolved']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, decon', save=str(workdir)+'/figures'+'/model_q_phi_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
             
-            if args.correct_unresolved_polarimetry:
-                print('[obriy_mcfost] Applying unresolved polarization correction for I band')
-                data_cropped_v, model_cropped_v= obp.crop_to_same_size(pdi_data_v['pol_images']['Q_phi'], results_v['mcfost_convolved_unresolved_corrected']['q_phi'])
-                model_rad_prof= results_v['mcfost_convolved_unresolved_corrected']['radial_profiles']['q_phi']
-                model_azimuthal_prof= results_v['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']['q_phi']
-                 
-            else:
-                print('[obriy_mcfost] No unresolved polarization correction applied for I band')
-                data_cropped_v, model_cropped_v= obp.crop_to_same_size(pdi_data_v['pol_images']['Q_phi'], results_v['mcfost_convolved']['q_phi'])   
-                model_rad_prof= results_v['mcfost_convolved']['radial_profiles']['q_phi']
-                model_azimuthal_prof= results_v['mcfost_convolved']['azimuthal_profiles']['q_phi']
+            print(f'[obriy_mcfost] V band comparison uses {model_polarimetry_key}')
+            data_cropped_v, model_cropped_v = obp.crop_to_same_size(
+                pdi_data_v['pol_images']['Q_phi'], results_v[model_polarimetry_key]['q_phi'])
+            model_rad_prof = results_v[model_polarimetry_key]['radial_profiles']['q_phi']
+            model_azimuthal_prof = results_v[model_polarimetry_key]['azimuthal_profiles']['q_phi']
             #CHANGE HERE for profiles that are already calculated in loading data initially to avoid recalculating them and speed up the process
             obs_rad_prof, obs_az_prof= pdi_data_v['radial_profiles']['Q_phi'], pdi_data_v['azimuthal_profiles']['Q_phi']
             
@@ -1032,7 +1028,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             obp.save_band_metrics(
                         workdir,
                         band="V",
-                        analysis_metrics=results_v['mcfost_convolved_unresolved_corrected']['metrics'],
+                        analysis_metrics=results_v[model_polarimetry_key]['metrics'],
                         ssim_score=metrics_v.get("ssim"),
                         ncc_score=metrics_v.get("ncc"),
                         extras={"ps_mas": 3.6, "notes": "zscore"}
@@ -1072,11 +1068,13 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                             "profile_rad_pi_npoints": profile_rad_pi_npoints,
                             "profile_az_pi_chi2": profile_az_pi_chi2,
                             "profile_az_pi_npoints": profile_az_pi_npoints,
-                            "loss": loss_v
+                            "loss": loss_v,
+                "model_unresolved_corrected": correct_unresolved,
+                "unresolved_correction_radius_px": correction_radius_px if correct_unresolved else None,
                         }}
 
         if "pdi_H" in fidelity["products"]:
-            results_h=obp.polarimetric_analysis(str(workdir), 1.63, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100, 
+            results_h=obp.polarimetric_analysis(str(workdir), 1.63, unresolved_correction_radius_px=correction_radius_px, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100,
                                                                                                         image_scale='asinh', radial_limit_mas=500.0,
                                                                                                         deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
                                                                                                         theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Hband')
@@ -1094,16 +1092,11 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_h, quadrant_results_sim_h, quadrant_results_sim_h_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'],  save=str(workdir)+'/figures/'+'quadrants_h_comparison.png')
             plt.close(fig)
                         
-            if args.correct_unresolved_polarimetry:
-                print('[obriy_mcfost] Applying unresolved polarization correction for H band')
-                data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pol_images']['Q_phi'], results_h['mcfost_convolved_unresolved_corrected']['q_phi']) 
-                model_rad_prof= results_h['mcfost_convolved_unresolved_corrected']['radial_profiles']['q_phi']
-                model_azimuthal_prof= results_h['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']['q_phi']
-            else:
-                print('[obriy_mcfost] No unresolved polarization correction applied for H band')
-                data_cropped_h, model_cropped_h= obp.crop_to_same_size(pdi_data_h['pol_images']['Q_phi'], results_h['mcfost_convolved']['q_phi']) 
-                model_rad_prof= results_h['mcfost_convolved']['radial_profiles']['q_phi']
-                model_azimuthal_prof= results_h['mcfost_convolved']['azimuthal_profiles']['q_phi']
+            print(f'[obriy_mcfost] H band comparison uses {model_polarimetry_key}')
+            data_cropped_h, model_cropped_h = obp.crop_to_same_size(
+                pdi_data_h['pol_images']['Q_phi'], results_h[model_polarimetry_key]['q_phi'])
+            model_rad_prof = results_h[model_polarimetry_key]['radial_profiles']['q_phi']
+            model_azimuthal_prof = results_h[model_polarimetry_key]['azimuthal_profiles']['q_phi']
             
             obs_rad_prof_pi, obs_az_prof_pi = pdi_data_h['radial_profiles']['Q_phi'], pdi_data_h['azimuthal_profiles']['Q_phi']     
             profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 12.27, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_h_")
@@ -1123,7 +1116,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             obp.save_band_metrics(
                         workdir,
                         band="H",
-                        analysis_metrics=results_h['mcfost_convolved_unresolved_corrected']['metrics'],
+                        analysis_metrics=results_h[model_polarimetry_key]['metrics'],
                         ssim_score=metrics_h.get("ssim"),
                         ncc_score=metrics_h.get("ncc"),
                         extras={"ps_mas": 12.27, "notes": "zscore"}
@@ -1168,7 +1161,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                             "profile_rad_pi_npoints": profile_rad_pi_npoints,
                             "profile_az_pi_chi2": profile_az_pi_chi2,
                             "profile_az_pi_npoints": profile_az_pi_npoints,
-                            "loss": loss_h
+                            "loss": loss_h,
+                "model_unresolved_corrected": correct_unresolved,
+                "unresolved_correction_radius_px": correction_radius_px if correct_unresolved else None,
                         }}
 
 

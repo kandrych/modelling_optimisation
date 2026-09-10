@@ -306,6 +306,19 @@ def find_FWHM (PSF,n):             #resolution
 
 
 
+def unresolved_correction_radius(enabled, radius_px):
+    """Validate the explicit aperture for a selected unresolved correction."""
+    if radius_px is None:
+        if enabled:
+            raise ValueError("Unresolved correction requires --unresolved-correction-radius-px "
+                             "matching the observational reduction (instrument pixels).")
+        return 3.0  # Existing corrected diagnostics only; not selected for scoring.
+    radius = float(radius_px)
+    if not np.isfinite(radius) or radius <= 0:
+        raise ValueError("Unresolved correction radius must be finite and positive.")
+    return radius
+
+
 def calculate_unresolved(correction_radius, q, u,i,ps,R,normlim):
     """
     Calculate the degree and angle of unresolved polarisation and correct Q and U images.   
@@ -1735,7 +1748,7 @@ def polarimetric_analysis(
     folder_psf: Optional[str]=None,                # FOlder where PSF file is, required if psf_source == "file"
     psf_cut: Optional[int] = 100,               # optional crop for PSF
     image_scale: Literal["linear", "asinh"] = "asinh",
-    unresolved_correction_radius_px: int = 3,   # radius (in px of rescaled image)
+    unresolved_correction_radius_px: float = 3.0,   # radius (in px of rescaled image)
     background_annulus_mas: Optional[Tuple[float, float]] = (200, 250),
     radial_limit_mas: float = 1000.0,
     deprojection: Tuple[float, float]=(0.0,0.0), # whether to deproject image for radial/azimuthal profiles, tuple of (incl_deg, pa_deg)

@@ -913,12 +913,14 @@ def main():
     p.add_argument("--max-budget", type=float, default=3.0)
     p.add_argument("--n-trials", type=int, default=80)
     p.add_argument("--seed", type=int, default=-1)# Random seed for SMAC
-    p.add_argument("--correct-unresolved-polarimetry", action="store_true", help="Apply correction for unresolved central source polarimetry")
+    p.add_argument("--correct-unresolved-polarimetry", action="store_true", help="Use unresolved-corrected model images and profiles for polarimetry comparisons; requires --unresolved-correction-radius-px")
     p.add_argument("--warmstart", type=str, default=None, help="Path to previous SMAC run directory to warmstart from")
     p.add_argument("--plot-intermediate", action="store_true", help="Plot intermediate results during scoring")
     p.add_argument("--puffed-up-rim", action="store_true", help="Enable puffed up rim feature")
     p.add_argument("--tapered-edge-p1-eq-p2", action="store_true", help="Enable tapered edge with p1=p2")
     p.add_argument("--overresolved_flux_fit_for_interferometry", type=float, default=None, help="Optional: fit overresolved flux to interferometry at the supplied wavelength [micron]. Disabled by default.")
+    p.add_argument("--unresolved-correction-radius-px", type=float, default=None,
+                   help="Unresolved-polarisation aperture radius in instrument pixels; required when correction is enabled")
     args = p.parse_args()
     
     WORK_ROOT = Path(args.working_root).resolve()
