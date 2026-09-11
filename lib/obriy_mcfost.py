@@ -303,7 +303,7 @@ def run_mcfost_image(wavelength, folder):
         print(f"Image at {wavelength} micron already exists in {folder+'data_'+str(wavelength)+'/'} folder. Skipping simulation.")
     
     else:
-        run_mcfost_safe(Path(folder+'/simulation.para'), Path(folder), options=["-img", f"{wavelength}"])
+        run_mcfost_safe(Path(folder+'/model.para'), Path(folder), options=["-img", f"{wavelength}"])
 
         
 
@@ -598,13 +598,13 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
 
     
     if puffed_up_rim:
-        run_mcfost_safe(param_path, workdir, options=["-disk_struct","-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_base_struct.log")
         run_mcfost_safe(param_path, workdir, options=["-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_temp.log")
-               
+        run_mcfost_safe(param_path, workdir, options=["-disk_struct","-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_base_struct.log")
+                
     else:
-        
-        run_mcfost_safe(param_path, workdir, options=["-disk_struct"], logfile="mcfost_base_struct.log")
         run_mcfost_safe(param_path, workdir, logfile="mcfost_temp.log")
+        run_mcfost_safe(param_path, workdir, options=["-disk_struct"], logfile="mcfost_base_struct.log")
+        
     
     if "vis2_1perband" in fidelity["products"]:
         for w in [1.65, 2.20, 3.50, 10.0]:
