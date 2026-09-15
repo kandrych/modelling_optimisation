@@ -222,17 +222,18 @@ def load_mcfost_image_alma_casa(
         
         if ploting==True:
             #do some plotting
-            fig, ax = plt.subplots(1, 1, figsize=(7,7))
-            color_map = 'viridis' #'afmhot'
-            ax.imshow(img_tot, color_map, extent=[+img_tot.shape[0]/2, -img_tot.shape[0]/2, -img_tot.shape[1]/2, img_tot.shape[1]/2])
-            ax.set_title("I$_{tot}$")
-            plt.suptitle(str(wave)+"$\mu m$, "+title_addition)
-            #plt.tight_layout()
-            #plt.show()
-            #save the plots
-            if save_plots:
-                fig.savefig(save_plots+title_addition+' image_decomp_'+str(wave)+'.png', dpi= 150, bbox_inches='tight')
-            plt.close(fig)
+            with obg.diagnostic_plot("ALMA model image decomposition"):
+                fig, ax = plt.subplots(1, 1, figsize=(7,7))
+                color_map = 'viridis' #'afmhot'
+                ax.imshow(img_tot, color_map, extent=[+img_tot.shape[0]/2, -img_tot.shape[0]/2, -img_tot.shape[1]/2, img_tot.shape[1]/2])
+                ax.set_title("I$_{tot}$")
+                plt.suptitle(str(wave)+"$\mu m$, "+title_addition)
+                #plt.tight_layout()
+                #plt.show()
+                #save the plots
+                if save_plots:
+                    fig.savefig(save_plots+title_addition+' image_decomp_'+str(wave)+'.png', dpi= 150, bbox_inches='tight')
+                plt.close(fig)
         return img_array, header_data, img_tot, pix_scale
 
 
@@ -358,7 +359,8 @@ def chi2_ALMA(main_dir, data_alma, model_jybeam, plot=False, fig_dir=None, extra
         raise ValueError("Model and observed image shapes differ.")
     #compute profiles
     if plot:
-        obp.plot_polarimetric_image(simulated_itot, ps_alma, title=f'Model Itot, alma_cont', save=str(fig_dir)+'/model_itot_alma.png', image_scale='asinh', roi_half_size=100)
+        with obg.diagnostic_plot("ALMA model intensity"):
+            obp.plot_polarimetric_image(simulated_itot, ps_alma, title=f'Model Itot, alma_cont', save=str(fig_dir)+'/model_itot_alma.png', image_scale='asinh', roi_half_size=100)
           
     radial_profile_alma_model, azimuthal_profile_alma_model = obp.profiles(simulated_itot, ps_alma, 
                                                 profile_type="both",
@@ -675,102 +677,103 @@ def compare_alma_images(
     }
 
     if save_path is not None:
-        fig, axes = plt.subplots(
-            1, 4, figsize=(20, 4), constrained_layout=True
-        )
+        with obg.diagnostic_plot("ALMA data, model and residual comparison"):
+            fig, axes = plt.subplots(
+                1, 4, figsize=(20, 4), constrained_layout=True
+            )
 
-        # Array coordinates relative to the chosen centre.
-        # For the supplied orientation, east is towards decreasing columns.
-        extent = [
-            (-0.5 - xc) * pixel_scale_mas,
-            (nx - 0.5 - xc) * pixel_scale_mas,
-            (-0.5 - yc) * pixel_scale_mas,
-            (ny - 0.5 - yc) * pixel_scale_mas,
-        ]
+            # Array coordinates relative to the chosen centre.
+            # For the supplied orientation, east is towards decreasing columns.
+            extent = [
+                (-0.5 - xc) * pixel_scale_mas,
+                (nx - 0.5 - xc) * pixel_scale_mas,
+                (-0.5 - yc) * pixel_scale_mas,
+                (ny - 0.5 - yc) * pixel_scale_mas,
+            ]
 
-        values = np.concatenate([observed[aperture], model[aperture]])
-        vmin = min(0.0, float(values.min()))
-        vmax = max(0.0, float(values.max()))
-        if vmax <= vmin:
-            vmax = vmin + 1.0
+            values = np.concatenate([observed[aperture], model[aperture]])
+            vmin = min(0.0, float(values.min()))
+            vmax = max(0.0, float(values.max()))
+            if vmax <= vmin:
+                vmax = vmin + 1.0
 
-        for ax, image, title in zip(
-            axes[:2],
-            [observed, model],
-            ["Observed", "Model"],
-        ):
-            im = ax.imshow(
-                image,
+            for ax, image, title in zip(
+                axes[:2],
+                [observed, model],
+                ["Observed", "Model"],
+            ):
+                im = ax.imshow(
+                    image,
+                    origin="lower",
+                    extent=extent,
+                    cmap="inferno",
+                    vmin=vmin,
+                    vmax=vmax,
+                )
+                fig.colorbar(im, ax=ax, label="Jy/beam")
+                ax.set_title(title)
+
+            residual_display = residual
+            residual_label = "Observed − model [Jy/beam]"
+
+            if noise_rms_jybeam is not None:
+                noise = float(noise_rms_jybeam)
+                if not np.isfinite(noise) or noise <= 0:
+                    plt.close(fig)
+                    raise ValueError("Noise RMS must be positive and finite.")
+                residual_display = residual / noise
+                residual_label = "(Observed − model) / background RMS"
+
+            limit = float(np.max(np.abs(residual_display[aperture])))
+            if limit == 0:
+                limit = 1.0
+
+            im = axes[2].imshow(
+                residual_display,
                 origin="lower",
                 extent=extent,
-                cmap="inferno",
-                vmin=vmin,
-                vmax=vmax,
+                cmap="RdBu_r",
+                vmin=-limit,
+                vmax=limit,
             )
-            fig.colorbar(im, ax=ax, label="Jy/beam")
-            ax.set_title(title)
+            fig.colorbar(im, ax=axes[2], label=residual_label)
+            axes[2].set_title("Signed residual")
 
-        residual_display = residual
-        residual_label = "Observed − model [Jy/beam]"
+            for ax in axes[:3]:
+                ax.set_xlim(-aperture_radius_mas, aperture_radius_mas)
+                ax.set_ylim(-aperture_radius_mas, aperture_radius_mas)
+                ax.set_xlabel("Column offset [mas; west-positive]")
+                ax.set_ylabel("Row offset [mas; north-positive]")
+                ax.add_patch(plt.Circle(
+                    (0, 0), aperture_radius_mas,
+                    fill=False, color="cyan", linestyle="--",
+                ))
 
-        if noise_rms_jybeam is not None:
-            noise = float(noise_rms_jybeam)
-            if not np.isfinite(noise) or noise <= 0:
-                plt.close(fig)
-                raise ValueError("Noise RMS must be positive and finite.")
-            residual_display = residual / noise
-            residual_label = "(Observed − model) / background RMS"
+            axes[3].plot(
+                result["radius_mas"],
+                result["observed_profile_jybeam"],
+                "o-", label="Observed",
+            )
+            axes[3].plot(
+                result["radius_mas"],
+                result["model_profile_jybeam"],
+                "o-", label="Model",
+            )
+            axes[3].set_xlabel("Radius [mas]")
+            axes[3].set_ylabel("Annular mean [Jy/beam]")
+            axes[3].legend()
+            axes[3].set_title("Absolute radial brightness")
 
-        limit = float(np.max(np.abs(residual_display[aperture])))
-        if limit == 0:
-            limit = 1.0
+            fig.suptitle(
+                f"Aperture radius: {aperture_radius_mas:g} mas | "
+                f"Observed flux: {observed_flux:.5g} Jy | "
+                f"Model flux: {model_flux:.5g} Jy | "
+                f"Residual-energy loss: {residual_energy_loss:.4g}"
+            )
 
-        im = axes[2].imshow(
-            residual_display,
-            origin="lower",
-            extent=extent,
-            cmap="RdBu_r",
-            vmin=-limit,
-            vmax=limit,
-        )
-        fig.colorbar(im, ax=axes[2], label=residual_label)
-        axes[2].set_title("Signed residual")
-
-        for ax in axes[:3]:
-            ax.set_xlim(-aperture_radius_mas, aperture_radius_mas)
-            ax.set_ylim(-aperture_radius_mas, aperture_radius_mas)
-            ax.set_xlabel("Column offset [mas; west-positive]")
-            ax.set_ylabel("Row offset [mas; north-positive]")
-            ax.add_patch(plt.Circle(
-                (0, 0), aperture_radius_mas,
-                fill=False, color="cyan", linestyle="--",
-            ))
-
-        axes[3].plot(
-            result["radius_mas"],
-            result["observed_profile_jybeam"],
-            "o-", label="Observed",
-        )
-        axes[3].plot(
-            result["radius_mas"],
-            result["model_profile_jybeam"],
-            "o-", label="Model",
-        )
-        axes[3].set_xlabel("Radius [mas]")
-        axes[3].set_ylabel("Annular mean [Jy/beam]")
-        axes[3].legend()
-        axes[3].set_title("Absolute radial brightness")
-
-        fig.suptitle(
-            f"Aperture radius: {aperture_radius_mas:g} mas | "
-            f"Observed flux: {observed_flux:.5g} Jy | "
-            f"Model flux: {model_flux:.5g} Jy | "
-            f"Residual-energy loss: {residual_energy_loss:.4g}"
-        )
-
-        save_path = Path(save_path)
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save_path, dpi=150)
-        plt.close(fig)
+            save_path = Path(save_path)
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            fig.savefig(save_path, dpi=150)
+            plt.close(fig)
 
     return result

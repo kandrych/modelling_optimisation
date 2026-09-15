@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 #from distroi.auxiliary import constants
 from astropy import units as u
 from functools import wraps
@@ -124,3 +125,18 @@ def record(
             f"{wmin:<10} {wmax:<10} {chi2:<12.6g} {chi2_red:<12.6g} {num_points:<10}\n"
         )
 
+
+
+@contextmanager
+def diagnostic_plot(label):
+    """Keep plot-only failures from rejecting a scored model; never wrap scoring."""
+    import matplotlib.pyplot as plt
+
+    existing_figures = set(plt.get_fignums())
+    try:
+        yield
+    except Exception as error:
+        print(f"[diagnostic plot] {label} failed; continuing: "
+              f"{type(error).__name__}: {error}")
+        for number in set(plt.get_fignums()) - existing_figures:
+            plt.close(number)

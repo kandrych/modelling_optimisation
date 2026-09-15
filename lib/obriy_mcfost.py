@@ -699,8 +699,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     additional_info = {}
 
     if args.plot_intermediate:
-        if not os.path.exists(str(workdir)+'/figures/'):
-            os.makedirs(str(workdir)+'/figures/')
+        with obg.diagnostic_plot("Figure directory creation"):
+            if not os.path.exists(str(workdir)+'/figures/'):
+                os.makedirs(str(workdir)+'/figures/')
 
     if "sed" in fidelity["products"]:
        data_sed = data_arg[0]
@@ -730,9 +731,25 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         print(f"Temperature file {sed_path} not found.")
         # trial ran but produced no SED -> invalid config or earlier failure
         return 1e99, additional_info
-    plot_mcfost_disk_structure(str(workdir.parent)+'/', simulation_name,  az_disk=0)
-
-    plot_mcfost_density_temperature_cuts(workdir, reference_radius_au=cfg.get("zone_1_Rc"))
+    # These plots are diagnostics, not objective inputs. A missing or incompatible
+    # structure output must not discard an otherwise scoreable trial.
+    if args.plot_intermediate:
+        for plot_function, plot_args, plot_kwargs in (
+            (plot_mcfost_disk_structure, (str(workdir.parent) + '/', simulation_name),
+             {"az_disk": 0}),
+            (plot_mcfost_density_temperature_cuts, (workdir,),
+             {"reference_radius_au": cfg.get("zone_1_Rc")}),
+        ):
+            existing_figures = set(plt.get_fignums())
+            try:
+                plot_function(*plot_args, **plot_kwargs)
+            except Exception as error:
+                message = f"{plot_function.__name__}: {type(error).__name__}: {error}"
+                print(f"[obriy_mcfost] Diagnostic plot failed; continuing scoring: {message}")
+                additional_info.setdefault("diagnostic_plot_errors", []).append(message)
+            finally:
+                for figure_number in set(plt.get_fignums()) - existing_figures:
+                    plt.close(figure_number)
 
     ebminv_sed=0.0
     if "sed" in fidelity["products"]:
@@ -896,18 +913,20 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             quadrant_results_sim_i_conv_unres_corr = obp.differential_quadrants(results_i['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_i['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_simulation_unresolved_corr.png', roi_mas=None)
             #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
             quadrant_results_data_i = obp.differential_quadrants(pdi_data_i['pol_images']['Q']*10**(-order), pdi_data_i['pol_images']['U']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_data.png', roi_mas=None)
-            fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_i, quadrant_results_sim_i, quadrant_results_sim_i_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_i_comparison.png')
-            plt.close(fig)
+            with obg.diagnostic_plot("I-band quadrant comparison"):
+                fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_i, quadrant_results_sim_i, quadrant_results_sim_i_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_i_comparison.png')
+                plt.close(fig)
             
             print(f'[obriy_mcfost] I band comparison uses {model_polarimetry_key}')
             data_cropped_i, model_cropped_i = obp.crop_to_same_size(
                 pdi_data_i['pol_images']['Q_phi'], results_i[model_polarimetry_key]['q_phi'])
             if args.plot_intermediate:
-                model_rad_prof = results_i[model_polarimetry_key]['radial_profiles']['q_phi']
-                model_azimuthal_prof = results_i[model_polarimetry_key]['azimuthal_profiles']['q_phi']
+                with obg.diagnostic_plot("I-band profile preparation"):
+                    model_rad_prof = results_i[model_polarimetry_key]['radial_profiles']['q_phi']
+                    model_azimuthal_prof = results_i[model_polarimetry_key]['azimuthal_profiles']['q_phi']
                    
-                # Calculate metrics for arcsinh-scaled images to highlight morphology
-                obs_rad_prof_pi, obs_az_prof_pi = pdi_data_i['radial_profiles']['Q_phi'], pdi_data_i['azimuthal_profiles']['Q_phi']
+                    # Calculate metrics for arcsinh-scaled images to highlight morphology
+                    obs_rad_prof_pi, obs_az_prof_pi = pdi_data_i['radial_profiles']['Q_phi'], pdi_data_i['azimuthal_profiles']['Q_phi']
             
             # Disabled legacy profile scores: neither scored nor plotted; small profiles can fail.
             # profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 3.6, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_i_")
@@ -915,26 +934,29 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             # profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
             # profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
             if args.plot_intermediate:
-                obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 3.6, profile_type="radial", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_i_")
-                obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_i_")
+                with obg.diagnostic_plot("I-band radial and azimuthal profile comparison"):
+                    obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 3.6, profile_type="radial", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_i_")
+                    obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_i_")
 
 
             # SSIM is needed only for the optional diagnostic image.
             metrics_i = {}
             if args.plot_intermediate:
-                metrics_i = obp.full_image_metrics_noshift(
-                    data_cropped_i, model_cropped_i,
-                    normalize="zscore",          # good default for morphology
-                    ssim_win=None,                 # 7–15 is typical
-                    # return_pixel_chi2=True  # Unused by scoring and plots.
-                    calculate_ncc=False,  # NCC is neither scored nor plotted.
-                    return_pixel_chi2=False
-                )
+                with obg.diagnostic_plot("I-band SSIM calculation"):
+                    metrics_i = obp.full_image_metrics_noshift(
+                        data_cropped_i, model_cropped_i,
+                        normalize="zscore",          # good default for morphology
+                        ssim_win=None,                 # 7–15 is typical
+                        # return_pixel_chi2=True  # Unused by scoring and plots.
+                        calculate_ncc=False,  # NCC is neither scored nor plotted.
+                        return_pixel_chi2=False
+                    )
             if args.plot_intermediate:
-                obp.plot_polarimetric_image(results_i['mcfost_convolved_unresolved_corrected']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_q_phi_corr_conv_deconv_I.png', image_scale='asinh', roi_half_size=100)
-                obp.plot_polarimetric_image(results_i['mcfost_convolved']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, decon', save=str(workdir)+'/figures'+'/model_q_phi_conv_deconv_I.png', image_scale='asinh', roi_half_size=100)
+                with obg.diagnostic_plot("I-band deconvolved Qphi and SSIM images"):
+                    obp.plot_polarimetric_image(results_i['mcfost_convolved_unresolved_corrected']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_q_phi_corr_conv_deconv_I.png', image_scale='asinh', roi_half_size=100)
+                    obp.plot_polarimetric_image(results_i['mcfost_convolved']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, decon', save=str(workdir)+'/figures'+'/model_q_phi_conv_deconv_I.png', image_scale='asinh', roi_half_size=100)
 
-                obp.plot_polarimetric_image(metrics_i["ssim_image"], 3.6, title=f'ssim, score {metrics_i["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_I.png', image_scale='linear', roi_half_size=50)
+                    obp.plot_polarimetric_image(metrics_i["ssim_image"], 3.6, title=f'ssim, score {metrics_i["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_I.png', image_scale='linear', roi_half_size=50)
 
             # Disabled legacy metric logging: these diagnostics are neither scored nor plotted.
             # obp.save_band_metrics(
@@ -947,27 +969,28 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             # )
             
             if args.plot_intermediate:
-                images_list = [np.arcsinh(data_cropped_i), np.arcsinh(model_cropped_i)]
+                with obg.diagnostic_plot("I-band data/model images"):
+                    images_list = [np.arcsinh(data_cropped_i), np.arcsinh(model_cropped_i)]
                     
-                titles = ['Data', 'Model']
+                    titles = ['Data', 'Model']
                 
-                fig, axs = obp.plot_image_grid(
-                                images=images_list,
-                                ps_mas=3.6,
-                                nrows=1,
-                                ncols=2,
-                                titles=titles,
-                                group_headers=[(0.5, 'I-band')],
-                                scale="linear",
-                                roi_half_size=60,          
-                                per_panel_autoscale=True,
-                                normalize_image=True,
-                                colorbar="individual",
-                                figsize=(8, 4),
-                                show=False
-                                )
-                fig.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
-                plt.close()
+                    fig, axs = obp.plot_image_grid(
+                                    images=images_list,
+                                    ps_mas=3.6,
+                                    nrows=1,
+                                    ncols=2,
+                                    titles=titles,
+                                    group_headers=[(0.5, 'I-band')],
+                                    scale="linear",
+                                    roi_half_size=60,
+                                    per_panel_autoscale=True,
+                                    normalize_image=True,
+                                    colorbar="individual",
+                                    figsize=(8, 4),
+                                    show=False
+                                    )
+                    fig.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
+                    plt.close()
             # print(f'[obriy_mcfost] I band metrics: SSIM={metrics_i["ssim"]}, NCC={metrics_i["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
             
             
@@ -1019,20 +1042,23 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             quadrant_results_sim_v_conv_unres_corr = obp.differential_quadrants(results_v['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_v['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_simulation_unresolved_corr.png', roi_mas=None)
             #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
             quadrant_results_data_v = obp.differential_quadrants(pdi_data_v['pol_images']['Q']*10**(-order), pdi_data_v['pol_images']['U']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_data.png', roi_mas=None)
-            fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_v, quadrant_results_sim_v, quadrant_results_sim_v_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_v_comparison.png')
-            plt.close(fig)                                                                                                      
+            with obg.diagnostic_plot("V-band quadrant comparison"):
+                fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_v, quadrant_results_sim_v, quadrant_results_sim_v_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_v_comparison.png')
+                plt.close(fig)
             if args.plot_intermediate:
-                obp.plot_polarimetric_image(results_v['mcfost_convolved_unresolved_corrected']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_q_phi_corr_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
-                obp.plot_polarimetric_image(results_v['mcfost_convolved']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, decon', save=str(workdir)+'/figures'+'/model_q_phi_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
+                with obg.diagnostic_plot("V-band deconvolved Qphi images"):
+                    obp.plot_polarimetric_image(results_v['mcfost_convolved_unresolved_corrected']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_q_phi_corr_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
+                    obp.plot_polarimetric_image(results_v['mcfost_convolved']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, decon', save=str(workdir)+'/figures'+'/model_q_phi_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
             
             print(f'[obriy_mcfost] V band comparison uses {model_polarimetry_key}')
             data_cropped_v, model_cropped_v = obp.crop_to_same_size(
                 pdi_data_v['pol_images']['Q_phi'], results_v[model_polarimetry_key]['q_phi'])
             if args.plot_intermediate:
-                model_rad_prof = results_v[model_polarimetry_key]['radial_profiles']['q_phi']
-                model_azimuthal_prof = results_v[model_polarimetry_key]['azimuthal_profiles']['q_phi']
-                #CHANGE HERE for profiles that are already calculated in loading data initially to avoid recalculating them and speed up the process
-                obs_rad_prof, obs_az_prof= pdi_data_v['radial_profiles']['Q_phi'], pdi_data_v['azimuthal_profiles']['Q_phi']
+                with obg.diagnostic_plot("V-band profile preparation"):
+                    model_rad_prof = results_v[model_polarimetry_key]['radial_profiles']['q_phi']
+                    model_azimuthal_prof = results_v[model_polarimetry_key]['azimuthal_profiles']['q_phi']
+                    #CHANGE HERE for profiles that are already calculated in loading data initially to avoid recalculating them and speed up the process
+                    obs_rad_prof, obs_az_prof= pdi_data_v['radial_profiles']['Q_phi'], pdi_data_v['azimuthal_profiles']['Q_phi']
             
             # Disabled legacy profile scores: neither scored nor plotted; small profiles can fail.
             # profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof, model_rad_prof, 3.6, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_v_")
@@ -1040,22 +1066,25 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             # profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
             # profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
             if args.plot_intermediate:
-                obp.profile_chi2(obs_rad_prof, model_rad_prof, 3.6, profile_type="radial", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_v_")
-                obp.profile_chi2(obs_az_prof, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_v_")
+                with obg.diagnostic_plot("V-band radial and azimuthal profile comparison"):
+                    obp.profile_chi2(obs_rad_prof, model_rad_prof, 3.6, profile_type="radial", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_v_")
+                    obp.profile_chi2(obs_az_prof, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_v_")
 
             # SSIM is needed only for the optional diagnostic image.
             metrics_v = {}
             if args.plot_intermediate:
-                metrics_v = obp.full_image_metrics_noshift(
-                    data_cropped_v, model_cropped_v,
-                    normalize="zscore",          # good default for morphology
-                    ssim_win=None,                 # 7–15 is typical
-                    # return_pixel_chi2=True  # Unused by scoring and plots.
-                    calculate_ncc=False,  # NCC is neither scored nor plotted.
-                    return_pixel_chi2=False
-                )
+                with obg.diagnostic_plot("V-band SSIM calculation"):
+                    metrics_v = obp.full_image_metrics_noshift(
+                        data_cropped_v, model_cropped_v,
+                        normalize="zscore",          # good default for morphology
+                        ssim_win=None,                 # 7–15 is typical
+                        # return_pixel_chi2=True  # Unused by scoring and plots.
+                        calculate_ncc=False,  # NCC is neither scored nor plotted.
+                        return_pixel_chi2=False
+                    )
             if args.plot_intermediate:
-                obp.plot_polarimetric_image(metrics_v["ssim_image"], 3.6, title=f'ssim, score {metrics_v["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_V.png', image_scale='linear', roi_half_size=50)
+                with obg.diagnostic_plot("V-band SSIM image"):
+                    obp.plot_polarimetric_image(metrics_v["ssim_image"], 3.6, title=f'ssim, score {metrics_v["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_V.png', image_scale='linear', roi_half_size=50)
 
             # Disabled legacy metric logging: these diagnostics are neither scored nor plotted.
             # obp.save_band_metrics(
@@ -1067,27 +1096,28 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             # extras={"ps_mas": 3.6, "notes": "zscore"}
             # )
             if args.plot_intermediate:
-                images_list = [np.arcsinh(data_cropped_v), np.arcsinh(model_cropped_v)]
+                with obg.diagnostic_plot("V-band data/model images"):
+                    images_list = [np.arcsinh(data_cropped_v), np.arcsinh(model_cropped_v)]
                     
-                titles = ['Data', 'Model']
+                    titles = ['Data', 'Model']
                 
-                fig, axs = obp.plot_image_grid(
-                                images=images_list,
-                                ps_mas=3.6,
-                                nrows=1,
-                                ncols=2,
-                                titles=titles,
-                                group_headers=[(0.5, 'V-band')],
-                                scale="linear",
-                                roi_half_size=60,          
-                                per_panel_autoscale=True,
-                                normalize_image=True,
-                                colorbar="individual",
-                                figsize=(8, 4),
-                                show=False
-                                )
-                fig.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
-                plt.close()
+                    fig, axs = obp.plot_image_grid(
+                                    images=images_list,
+                                    ps_mas=3.6,
+                                    nrows=1,
+                                    ncols=2,
+                                    titles=titles,
+                                    group_headers=[(0.5, 'V-band')],
+                                    scale="linear",
+                                    roi_half_size=60,
+                                    per_panel_autoscale=True,
+                                    normalize_image=True,
+                                    colorbar="individual",
+                                    figsize=(8, 4),
+                                    show=False
+                                    )
+                    fig.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
+                    plt.close()
             # print(f'[obriy_mcfost] V band metrics: SSIM={metrics_v["ssim"]}, NCC={metrics_v["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
             constraint_comparison_v = obp.compare_pdi_constraints(
                 pdi_data_v['pol_images'], results_v[model_polarimetry_key],
@@ -1131,40 +1161,45 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             quadrant_results_sim_h_conv_unres_corr = obp.differential_quadrants(results_h['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_h['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_simulation_unresolved_corr.png', roi_mas=None)
             #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
             quadrant_results_data_h = obp.differential_quadrants(pdi_data_h['pol_images']['Q']*10**(-order), pdi_data_h['pol_images']['U']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_data.png', roi_mas=None)
-            fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_h, quadrant_results_sim_h, quadrant_results_sim_h_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'],  save=str(workdir)+'/figures/'+'quadrants_h_comparison.png')
-            plt.close(fig)
+            with obg.diagnostic_plot("H-band quadrant comparison"):
+                fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_h, quadrant_results_sim_h, quadrant_results_sim_h_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'],  save=str(workdir)+'/figures/'+'quadrants_h_comparison.png')
+                plt.close(fig)
                         
             print(f'[obriy_mcfost] H band comparison uses {model_polarimetry_key}')
             data_cropped_h, model_cropped_h = obp.crop_to_same_size(
                 pdi_data_h['pol_images']['Q_phi'], results_h[model_polarimetry_key]['q_phi'])
             if args.plot_intermediate:
-                model_rad_prof = results_h[model_polarimetry_key]['radial_profiles']['q_phi']
-                model_azimuthal_prof = results_h[model_polarimetry_key]['azimuthal_profiles']['q_phi']
+                with obg.diagnostic_plot("H-band profile preparation"):
+                    model_rad_prof = results_h[model_polarimetry_key]['radial_profiles']['q_phi']
+                    model_azimuthal_prof = results_h[model_polarimetry_key]['azimuthal_profiles']['q_phi']
             
-                obs_rad_prof_pi, obs_az_prof_pi = pdi_data_h['radial_profiles']['Q_phi'], pdi_data_h['azimuthal_profiles']['Q_phi']
+                    obs_rad_prof_pi, obs_az_prof_pi = pdi_data_h['radial_profiles']['Q_phi'], pdi_data_h['azimuthal_profiles']['Q_phi']
             # Disabled legacy profile scores: neither scored nor plotted; small profiles can fail.
             # profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 12.27, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_h_")
             # profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 12.27, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_h_")
             # profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
             # profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
             if args.plot_intermediate:
-                obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 12.27, profile_type="radial", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_h_")
-                obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 12.27, profile_type="azimuthal", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_h_")
+                with obg.diagnostic_plot("H-band radial and azimuthal profile comparison"):
+                    obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 12.27, profile_type="radial", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_h_")
+                    obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 12.27, profile_type="azimuthal", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_h_")
 
 
             # SSIM is needed only for the optional diagnostic image.
             metrics_h = {}
             if args.plot_intermediate:
-                metrics_h = obp.full_image_metrics_noshift(
-                    data_cropped_h, model_cropped_h,
-                    normalize="zscore",          # good default for morphology
-                    ssim_win=None,                 # 7–15 is typical
-                    # return_pixel_chi2=True  # Unused by scoring and plots.
-                    calculate_ncc=False,  # NCC is neither scored nor plotted.
-                    return_pixel_chi2=False
-                )
+                with obg.diagnostic_plot("H-band SSIM calculation"):
+                    metrics_h = obp.full_image_metrics_noshift(
+                        data_cropped_h, model_cropped_h,
+                        normalize="zscore",          # good default for morphology
+                        ssim_win=None,                 # 7–15 is typical
+                        # return_pixel_chi2=True  # Unused by scoring and plots.
+                        calculate_ncc=False,  # NCC is neither scored nor plotted.
+                        return_pixel_chi2=False
+                    )
             if args.plot_intermediate:
-                obp.plot_polarimetric_image(metrics_h["ssim_image"], 12.27, title=f'ssim, score {metrics_h["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_H.png', image_scale='linear', roi_half_size=30)
+                with obg.diagnostic_plot("H-band SSIM image"):
+                    obp.plot_polarimetric_image(metrics_h["ssim_image"], 12.27, title=f'ssim, score {metrics_h["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_H.png', image_scale='linear', roi_half_size=30)
             # Disabled legacy metric logging: these diagnostics are neither scored nor plotted.
             # obp.save_band_metrics(
             # workdir,
@@ -1180,27 +1215,28 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         #     model_cropped_h= np.zeros((10,10))
         #     metrics_h={'ssim':-1.0,'ncc':-1.0} #        
             if args.plot_intermediate:
-                images_list = [data_cropped_h, model_cropped_h]
-                titles = [
-                        'Data', 'Model']
+                with obg.diagnostic_plot("H-band data/model images"):
+                    images_list = [data_cropped_h, model_cropped_h]
+                    titles = [
+                            'Data', 'Model']
                 
-                fig, axs = obp.plot_image_grid(
-                                images=images_list,
-                                ps_mas=12.27,
-                                nrows=1,
-                                ncols=2,
-                                titles=titles,
-                                group_headers=[(0.5, 'H-band')],
-                                scale="linear",
-                                roi_half_size=50,          
-                                per_panel_autoscale=True,
-                                normalize_image=True,
-                                colorbar="individual",
-                                figsize=(8, 4),
-                                show=False
-                                )
-                fig.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
-                plt.close()  
+                    fig, axs = obp.plot_image_grid(
+                                    images=images_list,
+                                    ps_mas=12.27,
+                                    nrows=1,
+                                    ncols=2,
+                                    titles=titles,
+                                    group_headers=[(0.5, 'H-band')],
+                                    scale="linear",
+                                    roi_half_size=50,
+                                    per_panel_autoscale=True,
+                                    normalize_image=True,
+                                    colorbar="individual",
+                                    figsize=(8, 4),
+                                    show=False
+                                    )
+                    fig.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
+                    plt.close()
             # print(f'[obriy_mcfost] H band metrics: SSIM={metrics_h["ssim"]}, NCC={metrics_h["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
             constraint_comparison_h = obp.compare_pdi_constraints(
                 pdi_data_h['pol_images'], results_h[model_polarimetry_key],
@@ -1276,13 +1312,14 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
 
         if args.plot_intermediate:
-            obp.plot_polarimetric_image(
-                simulated_itot_as_data,
-                ps_alma,
-                title="ALMA model [Jy/beam]",
-                save=str(workdir / "figures" / "model_itot_alma.png"),
-                image_scale="asinh",
-                roi_half_size=100)
+            with obg.diagnostic_plot("ALMA matched model image"):
+                obp.plot_polarimetric_image(
+                    simulated_itot_as_data,
+                    ps_alma,
+                    title="ALMA model [Jy/beam]",
+                    save=str(workdir / "figures" / "model_itot_alma.png"),
+                    image_scale="asinh",
+                    roi_half_size=100)
 
 
 
@@ -1445,7 +1482,7 @@ def plot_mcfost_density_temperature_cuts(
 
     Assumes the existing reader's cylindrical grid layout:
         grid: (2, n_az, n_z, n_rad), coordinates in au
-        quantities: (n_az, n_z, n_rad)
+        quantities: (n_az, n_z, n_rad), or (n_z, n_rad) when n_az=1
 
     Midplane uses the cell nearest z=0.
     Other cuts interpolate vertically without extrapolation.
@@ -1479,6 +1516,10 @@ def plot_mcfost_density_temperature_cuts(
         ("temperature", "data_th/Temperature.fits"),
     ):
         values = read_array(path)
+        # Some axisymmetric outputs omit the singleton azimuth axis. Restore
+        # only that axis, and only when the grid confirms an exact spatial match.
+        if spatial_shape[0] == 1 and values.shape == spatial_shape[1:]:
+            values = values[np.newaxis, ...]
         if values.shape != spatial_shape:
             raise ValueError(
                 f"{name}: expected {spatial_shape}, got {values.shape}. "

@@ -625,20 +625,22 @@ def monochromatic_chi(
     chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 
     if plot:    
-        oi_container_plot_data_vs_model(
-            container_data,
-            container_model,
-            fig_dir=fig_dir,
-            log_plotv=log_plotv,
-            plot_vistype=vistype,
-            show_plots=False,
-            chi_plot=chi2_red,
-            extra_title=extra_title)
+        with obg.diagnostic_plot("Monochromatic interferometry data/model comparison"):
+            oi_container_plot_data_vs_model(
+                container_data,
+                container_model,
+                fig_dir=fig_dir,
+                log_plotv=log_plotv,
+                plot_vistype=vistype,
+                show_plots=False,
+                chi_plot=chi2_red,
+                extra_title=extra_title)
 
     if plot:
-        plot_secondary_comparison(
-            container_data, img_ffts, img_sed, fig_dir, vistype,
-            extra_title, log_plotv, ebminv, reddening_law)
+        with obg.diagnostic_plot("Monochromatic interferometry secondary comparison"):
+            plot_secondary_comparison(
+                container_data, img_ffts, img_sed, fig_dir, vistype,
+                extra_title, log_plotv, ebminv, reddening_law)
 
     return chi2, chi2_red, likelihood, num_points
 
@@ -735,21 +737,23 @@ def monochromatic_chi_with_background(
     chi2, chi2_red,loglike, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 
     if plot:
-        oi_container_plot_data_vs_model(
-            container_data,
-            container_model,
-            fig_dir=fig_dir,
-            log_plotv=log_plotv,
-            plot_vistype=vistype,
-            show_plots=False,
-            chi_plot=chi2_red,
-            extra_title=extra_title+f" with background fraction {frac_best:.3f}"
-        )
+        with obg.diagnostic_plot("Monochromatic interferometry with background comparison"):
+            oi_container_plot_data_vs_model(
+                container_data,
+                container_model,
+                fig_dir=fig_dir,
+                log_plotv=log_plotv,
+                plot_vistype=vistype,
+                show_plots=False,
+                chi_plot=chi2_red,
+                extra_title=extra_title+f" with background fraction {frac_best:.3f}"
+            )
 
     if plot:
-        plot_secondary_comparison(
-            container_data, img_ffts, img_sed, fig_dir, vistype,
-            extra_title, log_plotv, ebminv, reddening_law)
+        with obg.diagnostic_plot("Monochromatic interferometry secondary comparison with background enabled"):
+            plot_secondary_comparison(
+                container_data, img_ffts, img_sed, fig_dir, vistype,
+                extra_title, log_plotv, ebminv, reddening_law)
 
     return chi2, chi2_red, loglike, num_points, frac_best
 
@@ -859,20 +863,22 @@ def chromatic_chi(
     chi2, chi2_red, likelihood, num_points=oi_container_chi2(container_data, container_model, vistype=vistype)
 
     if plot:    
-        oi_container_plot_data_vs_model(
-            container_data,
-            container_model,
-            fig_dir=fig_dir,
-            log_plotv=log_plotv,
-            plot_vistype=vistype,
-            show_plots=False,
-            chi_plot=chi2_red,
-            extra_title=extra_title)
+        with obg.diagnostic_plot("Chromatic interferometry data/model comparison"):
+            oi_container_plot_data_vs_model(
+                container_data,
+                container_model,
+                fig_dir=fig_dir,
+                log_plotv=log_plotv,
+                plot_vistype=vistype,
+                show_plots=False,
+                chi_plot=chi2_red,
+                extra_title=extra_title)
 
     if plot:
-        plot_secondary_comparison(
-            container_data, img_ffts, img_sed, fig_dir, vistype,
-            extra_title, log_plotv, ebminv, reddening_law)
+        with obg.diagnostic_plot("Chromatic interferometry secondary comparison"):
+            plot_secondary_comparison(
+                container_data, img_ffts, img_sed, fig_dir, vistype,
+                extra_title, log_plotv, ebminv, reddening_law)
 
     return chi2, chi2_red, likelihood, num_points
 

@@ -192,33 +192,34 @@ def load_mcfost_images_1wave(
         
         if ploting==True:
             #do some plotting
-            fig, ax = plt.subplots(2, 4, figsize=(14,7))
-            color_map = 'viridis' #'afmhot'
-            ax[0][0].imshow(img_tot, color_map, extent=[+img_tot.shape[0]/2, -img_tot.shape[0]/2, -img_tot.shape[1]/2, img_tot.shape[1]/2])
-            ax[0][0].set_title("I$_{tot}$")
-            ax[0][1].imshow(img_q, color_map)
-            ax[0][1].set_title('Q')
-            ax[0][2].imshow(img_u, color_map)
-            ax[0][2].set_title('U')
-            ax[0][3].imshow(img_v, color_map)
-            ax[0][3].set_title('V')
-            ax[1][0].imshow(img_tot-img_star, color_map,extent=[+img_tot.shape[0]/2, -img_tot.shape[0]/2, -img_tot.shape[1]/2, img_tot.shape[1]/2])
-            ax[1][0].set_title("I$_{disk}$")
-            #ax[1][0].set_xlim([-img_tot.shape[0]/6, img_tot.shape[0]/6])
-            #ax[1][0].set_ylim([-img_tot.shape[1]/6, img_tot.shape[1]/6])
-            ax[1][1].imshow(img_disk_th, color_map)
-            ax[1][1].set_title("I$_{disk,th}$")
-            ax[1][2].imshow(img_star_sct, color_map)
-            ax[1][2].set_title("I$_{disk,scat,*}$")
-            ax[1][3].imshow(img_disk_th_sct, color_map)
-            ax[1][3].set_title("I$_{disk,scat,th}$")
-            plt.suptitle(str(wave)+"$\mu m$, "+title_addition)
-            #plt.tight_layout()
-            #plt.show()
-            #save the plots
-            if save_plots:
-                fig.savefig(save_plots+title_addition+' image_decomp_'+str(wave)+'.png', dpi= 150, bbox_inches='tight')
-            plt.close(fig)
+            with obg.diagnostic_plot("MCFOST Stokes image decomposition"):
+                fig, ax = plt.subplots(2, 4, figsize=(14,7))
+                color_map = 'viridis' #'afmhot'
+                ax[0][0].imshow(img_tot, color_map, extent=[+img_tot.shape[0]/2, -img_tot.shape[0]/2, -img_tot.shape[1]/2, img_tot.shape[1]/2])
+                ax[0][0].set_title("I$_{tot}$")
+                ax[0][1].imshow(img_q, color_map)
+                ax[0][1].set_title('Q')
+                ax[0][2].imshow(img_u, color_map)
+                ax[0][2].set_title('U')
+                ax[0][3].imshow(img_v, color_map)
+                ax[0][3].set_title('V')
+                ax[1][0].imshow(img_tot-img_star, color_map,extent=[+img_tot.shape[0]/2, -img_tot.shape[0]/2, -img_tot.shape[1]/2, img_tot.shape[1]/2])
+                ax[1][0].set_title("I$_{disk}$")
+                #ax[1][0].set_xlim([-img_tot.shape[0]/6, img_tot.shape[0]/6])
+                #ax[1][0].set_ylim([-img_tot.shape[1]/6, img_tot.shape[1]/6])
+                ax[1][1].imshow(img_disk_th, color_map)
+                ax[1][1].set_title("I$_{disk,th}$")
+                ax[1][2].imshow(img_star_sct, color_map)
+                ax[1][2].set_title("I$_{disk,scat,*}$")
+                ax[1][3].imshow(img_disk_th_sct, color_map)
+                ax[1][3].set_title("I$_{disk,scat,th}$")
+                plt.suptitle(str(wave)+"$\mu m$, "+title_addition)
+                #plt.tight_layout()
+                #plt.show()
+                #save the plots
+                if save_plots:
+                    fig.savefig(save_plots+title_addition+' image_decomp_'+str(wave)+'.png', dpi= 150, bbox_inches='tight')
+                plt.close(fig)
         return img_array, header_data, img_tot, img_q, img_u, img_v, img_star, img_star_sct, img_disk_th, img_disk_th_sct
 
 
@@ -1157,10 +1158,11 @@ def convolve_polarimetric_images(
     
     # --- Optional plots ---
     if plot:
-        plot_polarimetric_image(Q_conv,   ps, title="Q Conv",     roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
-        plot_polarimetric_image(Q_phi_conv, ps, title="Q_phi Conv", roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
-        plot_polarimetric_image(I_conv,   ps, title="I Conv",     roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
-        plot_polarimetric_image(PI_conv,  ps, title="PI Conv",    roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
+        with obg.diagnostic_plot("Convolved polarimetric images"):
+            plot_polarimetric_image(Q_conv,   ps, title="Q Conv",     roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
+            plot_polarimetric_image(Q_phi_conv, ps, title="Q_phi Conv", roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
+            plot_polarimetric_image(I_conv,   ps, title="I Conv",     roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
+            plot_polarimetric_image(PI_conv,  ps, title="PI Conv",    roi_half_size=roi_half_size, image_scale=image_scale, save=save, show=False)
 
     return kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv
         
@@ -1431,76 +1433,77 @@ def radial_br_profile(
 
     if plot:
         #plot profile+image
-        fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(16,6))
-        ax1.errorbar(i_rad_mas,means, yerr = errors,ecolor='blue',color='black',fmt='o')
+        with obg.diagnostic_plot("Radial brightness profile"):
+            fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(16,6))
+            ax1.errorbar(i_rad_mas,means, yerr = errors,ecolor='blue',color='black',fmt='o')
         
-        # Reference for signal decreasing as r^-2
-        # if means.size:
-        #     k = int(np.argmax(means))
-        #     r0 = i_rad_mas[k]
-        #     if r0 > 0 and k < i_rad_mas.size - 1:
-        #         ref = (np.max(means) / (i_rad_mas[k:] / r0) ** 2)
-        #         ax1.plot(i_rad_mas[k:], ref, color="grey")
+            # Reference for signal decreasing as r^-2
+            # if means.size:
+            #     k = int(np.argmax(means))
+            #     r0 = i_rad_mas[k]
+            #     if r0 > 0 and k < i_rad_mas.size - 1:
+            #         ref = (np.max(means) / (i_rad_mas[k:] / r0) ** 2)
+            #         ax1.plot(i_rad_mas[k:], ref, color="grey")
         
-        ax1.set_ylabel('Normalised intensity', fontsize=24) 
-        ax1.set_xlabel('Distance from the star, mas', fontsize=24)
+            ax1.set_ylabel('Normalised intensity', fontsize=24)
+            ax1.set_xlabel('Distance from the star, mas', fontsize=24)
 
-        # Inset image 
+            # Inset image
         
-        if image_scale == "linear":
-            img_disp = img_rotated
-        elif image_scale == "asinh":
-            img_disp = np.arcsinh(img_rotated)
-        else:
-            raise ValueError("image_scale must be 'linear' or 'asinh'.")
+            if image_scale == "linear":
+                img_disp = img_rotated
+            elif image_scale == "asinh":
+                img_disp = np.arcsinh(img_rotated)
+            else:
+                raise ValueError("image_scale must be 'linear' or 'asinh'.")
 
-        d = (img.shape[0] - 1) * ps / 2.0
-        img2 = ax2.imshow(img_disp, vmax=np.nanmax(img_disp), extent=(-d, d, d / cosi, -d / cosi))    
-
-        
-        ax2.plot(xc*ps-d, yc*ps-d, "*", color='red')
+            d = (img.shape[0] - 1) * ps / 2.0
+            img2 = ax2.imshow(img_disp, vmax=np.nanmax(img_disp), extent=(-d, d, d / cosi, -d / cosi))
 
         
-        ax2.set_xlim(-roi_half_size*ps, roi_half_size*ps)
-        ax2.set_ylim(-roi_half_size*ps, roi_half_size*ps)
-        ax2.set_xlabel('mas', fontsize=24)
-        ax2.set_ylabel('mas', fontsize=24)
-        ax2.xaxis.set_tick_params(labelsize=20)
-        ax2.yaxis.set_tick_params(labelsize=20)       
-        ax1.xaxis.set_tick_params(labelsize=20)
-        ax1.yaxis.set_tick_params(labelsize=20)
-        divider = make_axes_locatable(ax2)
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        cbar=fig.colorbar(img2, cax=cax, orientation='vertical')
-        cbar.ax.tick_params(labelsize=20)
-        plt.savefig(save+'radial_profile_linear+.jpeg',bbox_inches='tight', pad_inches=0.1)  
-        
-        ax1.set_yscale('log')
-        ax1.set_ylabel('Normalised intensity, log units', fontsize=24)
-        ax1.set_xlabel('Distance from the star, mas', fontsize=24)
-        
-        plt.savefig(save+'radial_profile_log+.jpeg',bbox_inches='tight', pad_inches=0.1) 
-        #plt.show(block=True)
-        plt.close(fig)
+            ax2.plot(xc*ps-d, yc*ps-d, "*", color='red')
 
         
-        # Plot just profile
-        plt.errorbar(i_rad_mas, means, yerr=errors, ecolor="blue", color="black", fmt="o")
-        if means.size:
-            k = int(np.argmax(means))
-            r0 = i_rad_mas[k]
-            if r0 > 0 and k < i_rad_mas.size - 1:
-                ref = (np.max(means) / (i_rad_mas[k:] / r0) ** 2)
-                plt.plot(i_rad_mas[k:], ref, color="grey")
-        plt.ylabel('Normalised intensity', fontsize=24) 
-        plt.xlabel('Distance from the star, mas', fontsize=24)
+            ax2.set_xlim(-roi_half_size*ps, roi_half_size*ps)
+            ax2.set_ylim(-roi_half_size*ps, roi_half_size*ps)
+            ax2.set_xlabel('mas', fontsize=24)
+            ax2.set_ylabel('mas', fontsize=24)
+            ax2.xaxis.set_tick_params(labelsize=20)
+            ax2.yaxis.set_tick_params(labelsize=20)
+            ax1.xaxis.set_tick_params(labelsize=20)
+            ax1.yaxis.set_tick_params(labelsize=20)
+            divider = make_axes_locatable(ax2)
+            cax = divider.append_axes('right', size='5%', pad=0.05)
+            cbar=fig.colorbar(img2, cax=cax, orientation='vertical')
+            cbar.ax.tick_params(labelsize=20)
+            plt.savefig(save+'radial_profile_linear+.jpeg',bbox_inches='tight', pad_inches=0.1)
         
-        plt.savefig(save+ "radial_profile_linear.jpeg",bbox_inches='tight', pad_inches=0.1)
-        plt.yscale('log')
+            ax1.set_yscale('log')
+            ax1.set_ylabel('Normalised intensity, log units', fontsize=24)
+            ax1.set_xlabel('Distance from the star, mas', fontsize=24)
         
-        plt.savefig(save+'radial_profile_log.jpeg',bbox_inches='tight', pad_inches=0.1) 
-        #plt.show(block=True)
-        plt.close()
+            plt.savefig(save+'radial_profile_log+.jpeg',bbox_inches='tight', pad_inches=0.1)
+            #plt.show(block=True)
+            plt.close(fig)
+
+        
+            # Plot just profile
+            plt.errorbar(i_rad_mas, means, yerr=errors, ecolor="blue", color="black", fmt="o")
+            if means.size:
+                k = int(np.argmax(means))
+                r0 = i_rad_mas[k]
+                if r0 > 0 and k < i_rad_mas.size - 1:
+                    ref = (np.max(means) / (i_rad_mas[k:] / r0) ** 2)
+                    plt.plot(i_rad_mas[k:], ref, color="grey")
+            plt.ylabel('Normalised intensity', fontsize=24)
+            plt.xlabel('Distance from the star, mas', fontsize=24)
+        
+            plt.savefig(save+ "radial_profile_linear.jpeg",bbox_inches='tight', pad_inches=0.1)
+            plt.yscale('log')
+        
+            plt.savefig(save+'radial_profile_log.jpeg',bbox_inches='tight', pad_inches=0.1)
+            #plt.show(block=True)
+            plt.close()
     
     return profile
    
@@ -1657,69 +1660,70 @@ def azimuthal_profile(
 
     if plot:
         # ---------------- Figure 1: Cartesian profile + image overlay ----------------
-        fig1, (ax_prof, ax_img) = plt.subplots(1, 2, figsize=(14, 5))
+        with obg.diagnostic_plot("Azimuthal brightness profile"):
+            fig1, (ax_prof, ax_img) = plt.subplots(1, 2, figsize=(14, 5))
 
-        # Profile
-        ax_prof.errorbar(out["theta_deg_centers"], value, yerr=stderr, fmt="o", ms=3, lw=1)
-        ax_prof.set_xlabel("Position angle [deg]")
-        ax_prof.set_ylabel("Intensity [arb. units]")
-        ax_prof.set_xlim(0, 360)
-        ax_prof.grid(True, alpha=0.3)
-        ax_prof.set_title("Azimuthal profile")
+            # Profile
+            ax_prof.errorbar(out["theta_deg_centers"], value, yerr=stderr, fmt="o", ms=3, lw=1)
+            ax_prof.set_xlabel("Position angle [deg]")
+            ax_prof.set_ylabel("Intensity [arb. units]")
+            ax_prof.set_xlim(0, 360)
+            ax_prof.grid(True, alpha=0.3)
+            ax_prof.set_title("Azimuthal profile")
 
-        # Image with highlighted annulus + θ0
-        # Display in mas coordinates using extent
-        d_x = (nx - 1) * ps / 2.0
-        d_y = (ny - 1) * ps / 2.0
-        img_disp = img  # linear display; adjust if you prefer asinh
+            # Image with highlighted annulus + θ0
+            # Display in mas coordinates using extent
+            d_x = (nx - 1) * ps / 2.0
+            d_y = (ny - 1) * ps / 2.0
+            img_disp = img  # linear display; adjust if you prefer asinh
 
-        im = ax_img.imshow(
-            img_disp,
-            extent=(-d_x, d_x, d_y, -d_y),  # y inverted to match image coords
-            vmax=np.nanmax(img_disp),
-        )
-        ax_img.set_xlabel("mas")
-        ax_img.set_ylabel("mas")
-        ax_img.set_title("Polarimetric image")
+            im = ax_img.imshow(
+                img_disp,
+                extent=(-d_x, d_x, d_y, -d_y),  # y inverted to match image coords
+                vmax=np.nanmax(img_disp),
+            )
+            ax_img.set_xlabel("mas")
+            ax_img.set_ylabel("mas")
+            ax_img.set_title("Polarimetric image")
 
-        # Draw annulus as two circles (in *pixels*, converted to mas via scale)
-        r_in_px = r_in_mas / ps
-        r_out_px = r_out_mas / ps
+            # Draw annulus as two circles (in *pixels*, converted to mas via scale)
+            r_in_px = r_in_mas / ps
+            r_out_px = r_out_mas / ps
 
-        # Convert center in pixels -> mas for plotting
-        cx_mas = xc * ps - d_x
-        cy_mas = yc * ps - d_y
+            # Convert center in pixels -> mas for plotting
+            cx_mas = xc * ps - d_x
+            cy_mas = yc * ps - d_y
 
-        cin = Circle((cx_mas, cy_mas), radius=r_in_mas, fill=False, color="orange", lw=2)
-        cout = Circle((cx_mas, cy_mas), radius=r_out_mas, fill=False, color="orange", lw=2, ls="--")
-        ax_img.add_patch(cin)
-        ax_img.add_patch(cout)
+            cin = Circle((cx_mas, cy_mas), radius=r_in_mas, fill=False, color="orange", lw=2)
+            cout = Circle((cx_mas, cy_mas), radius=r_out_mas, fill=False, color="orange", lw=2, ls="--")
+            ax_img.add_patch(cin)
+            ax_img.add_patch(cout)
 
-        # θ0 arrow: from center toward outer radius along θ0 (radians)
-        theta0_rad = theta0
-        x_end = cx_mas + r_out_mas * math.cos(theta0_rad)
-        y_end = cy_mas + r_out_mas * math.sin(theta0_rad)
-        ax_img.plot([cx_mas, x_end], [cy_mas, y_end], color="yellow", lw=2)
-        ax_img.plot([x_end], [y_end], marker="o", color="yellow", ms=5)
+            # θ0 arrow: from center toward outer radius along θ0 (radians)
+            theta0_rad = theta0
+            x_end = cx_mas + r_out_mas * math.cos(theta0_rad)
+            y_end = cy_mas + r_out_mas * math.sin(theta0_rad)
+            ax_img.plot([cx_mas, x_end], [cy_mas, y_end], color="yellow", lw=2)
+            ax_img.plot([x_end], [y_end], marker="o", color="yellow", ms=5)
 
-        fig1.tight_layout()
+            fig1.tight_layout()
             
-        fig1.savefig(save + "azimuthal_profile_cartesian.jpeg", bbox_inches="tight", pad_inches=0.1)
-        #plt.show()
-        plt.close(fig1)
+            fig1.savefig(save + "azimuthal_profile_cartesian.jpeg", bbox_inches="tight", pad_inches=0.1)
+            #plt.show()
+            plt.close(fig1)
 
-        # ---------------- Figure 2: Polar profile (separate figure) ----------------
-        fig2 = plt.figure(figsize=(6, 6))
-        ax_polar = fig2.add_subplot(111, projection="polar")
-        ax_polar.errorbar(
-            np.radians(out["theta_deg_centers"]), value, yerr=stderr, fmt="o", ms=3, lw=1
-        )
-        ax_polar.set_title("Azimuthal profile (Polar)")
-        fig2.tight_layout()
+            # ---------------- Figure 2: Polar profile (separate figure) ----------------
+            fig2 = plt.figure(figsize=(6, 6))
+            ax_polar = fig2.add_subplot(111, projection="polar")
+            ax_polar.errorbar(
+                np.radians(out["theta_deg_centers"]), value, yerr=stderr, fmt="o", ms=3, lw=1
+            )
+            ax_polar.set_title("Azimuthal profile (Polar)")
+            fig2.tight_layout()
         
-        fig2.savefig(save + "azimuthal_profile_polar.jpeg", bbox_inches="tight", pad_inches=0.1)
-        #plt.show()
-        plt.close()
+            fig2.savefig(save + "azimuthal_profile_polar.jpeg", bbox_inches="tight", pad_inches=0.1)
+            #plt.show()
+            plt.close()
  
 
 
@@ -1856,20 +1860,21 @@ def polarimetric_analysis(
     az_prof={}
     # Legacy profiles are plotted only; scoring measures its own profiles.
     if plot:
-        for ft in ['pi',"q_phi",'img_tot']:
-            rad_prof[ft], az_prof[ft] = profiles(results['mcfost_original'][ft], native_ps_mas,
-                                                profile_type="both",
-                                                mode="sum",
-                                                radial_limit_mas=radial_limit_mas,
-                                                plot=plot,
-                                                save_prefix=fig_dir + extra_title + "mcfost_original_",
-                                                deprojection_inc_pa_deg=deprojection,
-                                                center=None,
-                                                az_nbins=azimuthal_nbins,
-                                                azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                theta0=theta0
-                                                )
+        with obg.diagnostic_plot("Original MCFOST profiles"):
+            for ft in ['pi',"q_phi",'img_tot']:
+                rad_prof[ft], az_prof[ft] = profiles(results['mcfost_original'][ft], native_ps_mas,
+                                                    profile_type="both",
+                                                    mode="sum",
+                                                    radial_limit_mas=radial_limit_mas,
+                                                    plot=plot,
+                                                    save_prefix=fig_dir + extra_title + "mcfost_original_",
+                                                    deprojection_inc_pa_deg=deprojection,
+                                                    center=None,
+                                                    az_nbins=azimuthal_nbins,
+                                                    azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                    azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                    theta0=theta0
+                                                    )
     results['mcfost_original']['radial_profiles']=rad_prof
     results['mcfost_original']['azimuthal_profiles']=az_prof
           
@@ -1904,20 +1909,21 @@ def polarimetric_analysis(
     az_prof={}
     # Legacy profiles are plotted only; scoring measures its own profiles.
     if plot:
-        for ft in ['pi',"q_phi",'img_tot']:
-            rad_prof[ft], az_prof[ft] = profiles(results['mcfost_rescaled'][ft], inst_ps_mas,
-                                                    profile_type="both",
-                                                    mode="sum",
-                                                    radial_limit_mas=radial_limit_mas,
-                                                    plot=plot,
-                                                    save_prefix=fig_dir + extra_title + "mcfost_rescaled_",
-                                                    deprojection_inc_pa_deg=deprojection,
-                                                    center=None,
-                                                    az_nbins=azimuthal_nbins,
-                                                    azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                    azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                    theta0=theta0
-                                                    )
+        with obg.diagnostic_plot("Rescaled MCFOST profiles"):
+            for ft in ['pi',"q_phi",'img_tot']:
+                rad_prof[ft], az_prof[ft] = profiles(results['mcfost_rescaled'][ft], inst_ps_mas,
+                                                        profile_type="both",
+                                                        mode="sum",
+                                                        radial_limit_mas=radial_limit_mas,
+                                                        plot=plot,
+                                                        save_prefix=fig_dir + extra_title + "mcfost_rescaled_",
+                                                        deprojection_inc_pa_deg=deprojection,
+                                                        center=None,
+                                                        az_nbins=azimuthal_nbins,
+                                                        azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                        azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                        theta0=theta0
+                                                        )
     results['mcfost_rescaled']['radial_profiles']=rad_prof
     results['mcfost_rescaled']['azimuthal_profiles']=az_prof
           
@@ -1948,8 +1954,9 @@ def polarimetric_analysis(
             pi_conv_decon = q_phi_conv_decon = None
             # Deconvolution is diagnostic only; scoring uses the convolved images.
             if plot:
-                pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
-                q_phi_conv_decon=deconvolution(Q_phi_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
+                with obg.diagnostic_plot("Convolved polarimetric image deconvolution"):
+                    pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
+                    q_phi_conv_decon=deconvolution(Q_phi_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
             
             results['mcfost_convolved']={'img_q':Q_conv,
                                             'img_u':U_conv,
@@ -1967,20 +1974,21 @@ def polarimetric_analysis(
             az_prof={}
             # Legacy profiles are plotted only; scoring measures its own profiles.
             if plot:
-                for ft in ['pi',"q_phi",'img_tot']:
-                    rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved'][ft], inst_ps_mas,
-                                                    profile_type="both",
-                                                    mode="sum",
-                                                    radial_limit_mas=radial_limit_mas,
-                                                    plot=plot,
-                                                    save_prefix=fig_dir + extra_title + "mcfost_convolved_",
-                                                    deprojection_inc_pa_deg=deprojection,
-                                                    center=None,
-                                                    az_nbins=azimuthal_nbins,
-                                                    azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                    azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                    theta0=theta0
-                                                    )
+                with obg.diagnostic_plot("Convolved MCFOST profiles"):
+                    for ft in ['pi',"q_phi",'img_tot']:
+                        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved'][ft], inst_ps_mas,
+                                                        profile_type="both",
+                                                        mode="sum",
+                                                        radial_limit_mas=radial_limit_mas,
+                                                        plot=plot,
+                                                        save_prefix=fig_dir + extra_title + "mcfost_convolved_",
+                                                        deprojection_inc_pa_deg=deprojection,
+                                                        center=None,
+                                                        az_nbins=azimuthal_nbins,
+                                                        azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                        azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                        theta0=theta0
+                                                        )
             results['mcfost_convolved']['radial_profiles']=rad_prof
             results['mcfost_convolved']['azimuthal_profiles']=az_prof
             
@@ -1989,14 +1997,15 @@ def polarimetric_analysis(
 
 
     if plot:
-            plot_polarimetric_image(img_q_rescaled, inst_ps_mas, title='Q Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-            plot_polarimetric_image(q_phi_rescaled, inst_ps_mas, title='Q_phi Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+            with obg.diagnostic_plot("Rescaled and convolved polarimetric images"):
+                plot_polarimetric_image(img_q_rescaled, inst_ps_mas, title='Q Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+                plot_polarimetric_image(q_phi_rescaled, inst_ps_mas, title='Q_phi Rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
 
-            plot_polarimetric_image(img_tot_original, native_ps_mas, title='I tot, original from mcfost', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-            plot_polarimetric_image(img_total_rescaled, inst_ps_mas, title='I tot rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-            plot_polarimetric_image(I_conv, inst_ps_mas, title='I tot conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-            plot_polarimetric_image(PI_conv, inst_ps_mas, title='I pol conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-            plot_polarimetric_image(pi_conv_decon, inst_ps_mas, title='I pol conv deconvolved', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+                plot_polarimetric_image(img_tot_original, native_ps_mas, title='I tot, original from mcfost', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+                plot_polarimetric_image(img_total_rescaled, inst_ps_mas, title='I tot rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+                plot_polarimetric_image(I_conv, inst_ps_mas, title='I tot conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+                plot_polarimetric_image(PI_conv, inst_ps_mas, title='I pol conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+                plot_polarimetric_image(pi_conv_decon, inst_ps_mas, title='I pol conv deconvolved', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
 
     # Unresolved correction
     R_rescaled,_,_,_,_=compute_grid(img_q_rescaled)
@@ -2021,20 +2030,21 @@ def polarimetric_analysis(
     az_prof={}
     # Legacy profiles are plotted only; scoring measures its own profiles.
     if plot:
-        for ft in ['pi',"q_phi"]:
-            rad_prof[ft], az_prof[ft] = profiles(results['mcfost_not_convolved_unresolved_corrected'][ft], inst_ps_mas,
-                                                    profile_type="both",
-                                                    mode="sum",
-                                                    radial_limit_mas=radial_limit_mas,
-                                                    plot=plot,
-                                                    save_prefix=fig_dir + extra_title + "mcfost_not_convolved_unresolved_corrected_",
-                                                    deprojection_inc_pa_deg=deprojection,
-                                                    center=None,
-                                                    az_nbins=azimuthal_nbins,
-                                                    azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                    azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                    theta0=theta0
-                                                    )
+        with obg.diagnostic_plot("Unresolved-corrected profiles before convolution"):
+            for ft in ['pi',"q_phi"]:
+                rad_prof[ft], az_prof[ft] = profiles(results['mcfost_not_convolved_unresolved_corrected'][ft], inst_ps_mas,
+                                                        profile_type="both",
+                                                        mode="sum",
+                                                        radial_limit_mas=radial_limit_mas,
+                                                        plot=plot,
+                                                        save_prefix=fig_dir + extra_title + "mcfost_not_convolved_unresolved_corrected_",
+                                                        deprojection_inc_pa_deg=deprojection,
+                                                        center=None,
+                                                        az_nbins=azimuthal_nbins,
+                                                        azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                        azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                        theta0=theta0
+                                                        )
     results['mcfost_not_convolved_unresolved_corrected']['radial_profiles']=rad_prof
     results['mcfost_not_convolved_unresolved_corrected']['azimuthal_profiles']=az_prof
     
@@ -2058,11 +2068,12 @@ def polarimetric_analysis(
     if convolution_mode=='none':
         print('No convolution, skipping deconvolution')
     elif plot:
-        print('Deconvolution of unresolved corrected images')
-        # Create PSF for deconvolution
-        # Disabled: corrected PI deconvolution is neither scored nor plotted.
-        # pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
-        q_phi_corr_conv_decon=deconvolution(q_phi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
+        with obg.diagnostic_plot("Unresolved-corrected Qphi deconvolution"):
+            print('Deconvolution of unresolved corrected images')
+            # Create PSF for deconvolution
+            # Disabled: corrected PI deconvolution is neither scored nor plotted.
+            # pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
+            q_phi_corr_conv_decon=deconvolution(q_phi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
     
     results['mcfost_convolved_unresolved_corrected']={'img_q':q_corr_conv,
                                             'img_tot':I_conv,  # Q/U correction leaves total intensity unchanged.
@@ -2081,20 +2092,21 @@ def polarimetric_analysis(
     az_prof={}
     # Legacy profiles are plotted only; scoring measures its own profiles.
     if plot:
-        for ft in ['pi',"q_phi"]:
-            rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved_unresolved_corrected'][ft], inst_ps_mas,
-                                                profile_type="both",
-                                                mode="sum",
-                                                radial_limit_mas=radial_limit_mas,
-                                                plot=plot,
-                                                save_prefix=fig_dir + extra_title + "mcfost_convolved_unresolved_corrected_",
-                                                deprojection_inc_pa_deg=deprojection,
-                                                center=None,
-                                                az_nbins=azimuthal_nbins,
-                                                azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                theta0=theta0
-                                                )
+        with obg.diagnostic_plot("Unresolved-corrected profiles after convolution"):
+            for ft in ['pi',"q_phi"]:
+                rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved_unresolved_corrected'][ft], inst_ps_mas,
+                                                    profile_type="both",
+                                                    mode="sum",
+                                                    radial_limit_mas=radial_limit_mas,
+                                                    plot=plot,
+                                                    save_prefix=fig_dir + extra_title + "mcfost_convolved_unresolved_corrected_",
+                                                    deprojection_inc_pa_deg=deprojection,
+                                                    center=None,
+                                                    az_nbins=azimuthal_nbins,
+                                                    azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                    azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                    theta0=theta0
+                                                    )
     results['mcfost_convolved_unresolved_corrected']['radial_profiles']=rad_prof
     results['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']=az_prof
     
@@ -2104,31 +2116,32 @@ def polarimetric_analysis(
 
     # print(f'Unresolved pol after conv: {dolp_unres_conv*100} %, angle: {aolp_unres_conv} deg')
     if plot:
-        images_list = [q_phi_rescaled, pi_rescaled, q_phi_corr, pi_corr,
-                Q_phi_conv, PI_conv, q_phi_corr_conv, pi_corr_conv
-                ]
+        with obg.diagnostic_plot("Polarimetric correction comparison"):
+            images_list = [q_phi_rescaled, pi_rescaled, q_phi_corr, pi_corr,
+                    Q_phi_conv, PI_conv, q_phi_corr_conv, pi_corr_conv
+                    ]
         
-        titles = ['Q$_\\phi$', 'I$_{\\mathrm{pol}}$', 'Q$_\\phi$', 'I$_{\\mathrm{pol}}$',
-                'Q$_\\phi$', 'I$_{\\mathrm{pol}}$', 'Q$_\\phi$', 'I$_{\\mathrm{pol}}$']
+            titles = ['Q$_\\phi$', 'I$_{\\mathrm{pol}}$', 'Q$_\\phi$', 'I$_{\\mathrm{pol}}$',
+                    'Q$_\\phi$', 'I$_{\\mathrm{pol}}$', 'Q$_\\phi$', 'I$_{\\mathrm{pol}}$']
 
 
 
-        fig, axs = plot_image_grid(
-                        images=images_list,
-                        ps_mas=inst_ps_mas,
-                        nrows=2,
-                        ncols=4,
-                        titles=titles,
-                        group_headers=[(0.31, 'With unresolved'), (0.72, 'Without unresolved')],
-                        scale="asinh",
-                        roi_half_size=roi_size_half,          
-                        per_panel_autoscale=True,
-                        colorbar="individual",
-                        figsize=(12, 6),
-                        show=False
-                        )
-        fig.savefig(fig_dir+extra_title+"mcfost_model_comparison.png", dpi=150, bbox_inches='tight')
-        plt.close(fig)
+            fig, axs = plot_image_grid(
+                            images=images_list,
+                            ps_mas=inst_ps_mas,
+                            nrows=2,
+                            ncols=4,
+                            titles=titles,
+                            group_headers=[(0.31, 'With unresolved'), (0.72, 'Without unresolved')],
+                            scale="asinh",
+                            roi_half_size=roi_size_half,
+                            per_panel_autoscale=True,
+                            colorbar="individual",
+                            figsize=(12, 6),
+                            show=False
+                            )
+            fig.savefig(fig_dir+extra_title+"mcfost_model_comparison.png", dpi=150, bbox_inches='tight')
+            plt.close(fig)
     
     return results
 
@@ -2234,13 +2247,14 @@ def profile_chi2(
         index_max = np.where(prof_obs["i_rad_mas"] <= max_i_rad_mas)[0][-1]
         
         if plot:
-            plt.errorbar(prof_obs["i_rad_mas"][:index_max], prof_obs["signal"][:index_max], yerr=prof_obs["error"][:index_max], fmt='o', label='obs')
-            plt.errorbar(prof_mod["i_rad_mas"][:index_max], prof_mod["signal"][:index_max], yerr=prof_mod["error"][:index_max], fmt='o', label='model')
-            plt.xlabel('Distance from the star (mas)')
-            plt.ylabel('Normalised intensity')
-            plt.legend()
-            plt.savefig(save_prefix+'radial_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
-            plt.close()
+            with obg.diagnostic_plot("Radial data/model profile comparison"):
+                plt.errorbar(prof_obs["i_rad_mas"][:index_max], prof_obs["signal"][:index_max], yerr=prof_obs["error"][:index_max], fmt='o', label='obs')
+                plt.errorbar(prof_mod["i_rad_mas"][:index_max], prof_mod["signal"][:index_max], yerr=prof_mod["error"][:index_max], fmt='o', label='model')
+                plt.xlabel('Distance from the star (mas)')
+                plt.ylabel('Normalised intensity')
+                plt.legend()
+                plt.savefig(save_prefix+'radial_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
+                plt.close()
         
         if calculate_chi2:
             chi2_sum= ((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2 / (prof_obs["error"][:index_max] ** 2 + 1e-16)).sum()
@@ -2251,13 +2265,14 @@ def profile_chi2(
     if profile_type=="azimuthal":    
        
         if plot:
-            plt.plot(prof_obs["theta_deg_centers"], prof_obs["value"], 'o', label='obs')
-            plt.plot(prof_mod["theta_deg_centers"], prof_mod["value"], 'o', label='model')
-            plt.xlabel('Position angle (deg)')
-            plt.ylabel('Normalised intensity')
-            plt.legend()
-            plt.savefig(save_prefix+'azimuthal_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
-            plt.close()
+            with obg.diagnostic_plot("Azimuthal data/model profile comparison"):
+                plt.plot(prof_obs["theta_deg_centers"], prof_obs["value"], 'o', label='obs')
+                plt.plot(prof_mod["theta_deg_centers"], prof_mod["value"], 'o', label='model')
+                plt.xlabel('Position angle (deg)')
+                plt.ylabel('Normalised intensity')
+                plt.legend()
+                plt.savefig(save_prefix+'azimuthal_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
+                plt.close()
         
         if calculate_chi2:
             chi2_sum = ((prof_obs["value"] - prof_mod["value"]) ** 2 / (prof_obs["std"] ** 2 + 1e-16)).sum() #this is weighted least-squares χ²
@@ -2989,382 +3004,383 @@ def differential_quadrants(
 
     if plot:
 
-        if roi_mas is None:
-            roi_mas = 1.2 * r_out_mas
+        with obg.diagnostic_plot("Differential polarimetric quadrant maps"):
+            if roi_mas is None:
+                roi_mas = 1.2 * r_out_mas
 
-        fig, axes = plt.subplots(
-            2,
-            2,
-            figsize=(11, 10),
-            constrained_layout=True
-        )
+            fig, axes = plt.subplots(
+                2,
+                2,
+                figsize=(11, 10),
+                constrained_layout=True
+            )
 
-        axQ = axes[0, 0]
-        axU = axes[0, 1]
-        axQphi = axes[1, 0]
-        axP = axes[1, 1]
+            axQ = axes[0, 0]
+            axU = axes[0, 1]
+            axQphi = axes[1, 0]
+            axP = axes[1, 1]
 
-        # -----------------------------------------------------
-        # Plot helpers
-        # -----------------------------------------------------
+            # -----------------------------------------------------
+            # Plot helpers
+            # -----------------------------------------------------
 
-        def draw_radial_line(
-            ax,
-            angle_deg,
-            radius,
-            **kwargs
-        ):
-            """
-            Disk angle measured from +y toward +x.
-            """
-            a = np.deg2rad(angle_deg)
-
-            x_end = radius * np.sin(a)
-            y_end = radius * np.cos(a)
-
-            ax.plot(
-                [0, x_end],
-                [0, y_end],
+            def draw_radial_line(
+                ax,
+                angle_deg,
+                radius,
                 **kwargs
-            )
+            ):
+                """
+                Disk angle measured from +y toward +x.
+                """
+                a = np.deg2rad(angle_deg)
 
-        def annotate_quadrant(
-            ax,
-            angle_deg,
-            radius,
-            text
-        ):
-            a = np.deg2rad(angle_deg)
+                x_end = radius * np.sin(a)
+                y_end = radius * np.cos(a)
 
-            x_text = radius * np.sin(a)
-            y_text = radius * np.cos(a)
-
-            ax.text(
-                x_text,
-                y_text,
-                text,
-                ha="center",
-                va="center",
-                fontsize=9,
-                bbox=dict(
-                    facecolor="white",
-                    alpha=0.75,
-                    edgecolor="none"
+                ax.plot(
+                    [0, x_end],
+                    [0, y_end],
+                    **kwargs
                 )
-            )
 
-        def add_aperture(ax):
-            ax.add_patch(
-                Circle(
-                    (0, 0),
-                    r_in_mas,
-                    fill=False,
-                    ls=":",
-                    lw=1.2,
+            def annotate_quadrant(
+                ax,
+                angle_deg,
+                radius,
+                text
+            ):
+                a = np.deg2rad(angle_deg)
+
+                x_text = radius * np.sin(a)
+                y_text = radius * np.cos(a)
+
+                ax.text(
+                    x_text,
+                    y_text,
+                    text,
+                    ha="center",
+                    va="center",
+                    fontsize=9,
+                    bbox=dict(
+                        facecolor="white",
+                        alpha=0.75,
+                        edgecolor="none"
+                    )
+                )
+
+            def add_aperture(ax):
+                ax.add_patch(
+                    Circle(
+                        (0, 0),
+                        r_in_mas,
+                        fill=False,
+                        ls=":",
+                        lw=1.2,
+                        color="k"
+                    )
+                )
+
+                ax.add_patch(
+                    Circle(
+                        (0, 0),
+                        r_out_mas,
+                        fill=False,
+                        ls="-",
+                        lw=1.2,
+                        color="k"
+                    )
+                )
+
+            def format_disk_axes(ax):
+                ax.axhline(
+                    0,
+                    lw=0.5,
+                    alpha=0.35,
                     color="k"
                 )
+
+                ax.axvline(
+                    0,
+                    lw=0.5,
+                    alpha=0.35,
+                    color="k"
+                )
+
+                ax.set_xlim(-roi_mas, roi_mas)
+                ax.set_ylim(-roi_mas, roi_mas)
+
+                ax.set_aspect("equal")
+
+                ax.set_xlabel(
+                    r"$x_{\rm disk}$ [mas]  (major axis)"
+                )
+
+                ax.set_ylabel(
+                    r"$y_{\rm disk}$ [mas]  (minor axis)"
+                )
+
+            # -----------------------------------------------------
+            # Common Q/U scale
+            # -----------------------------------------------------
+
+            qu_values = np.concatenate([
+                np.abs(Qd[np.isfinite(Qd)]),
+                np.abs(Ud[np.isfinite(Ud)])
+            ])
+
+            vmax_qu = np.nanpercentile(
+                qu_values,
+                99
             )
 
-            ax.add_patch(
-                Circle(
-                    (0, 0),
+            if (
+                not np.isfinite(vmax_qu)
+                or vmax_qu == 0
+            ):
+                vmax_qu = 1.0
+
+            # =====================================================
+            # Q_disk
+            # =====================================================
+
+            imQ = axQ.pcolormesh(
+                Xd,
+                Yd,
+                Qd,
+                shading="auto",
+                cmap="RdBu_r",
+                vmin=-vmax_qu,
+                vmax=vmax_qu,
+            )
+
+            # Q centres:
+            # 0, 90, 180, 270
+            #
+            # boundaries:
+            # 45, 135, 225, 315
+            for angle in [45, 135, 225, 315]:
+                draw_radial_line(
+                    axQ,
+                    angle,
                     r_out_mas,
-                    fill=False,
-                    ls="-",
-                    lw=1.2,
-                    color="k"
+                    color="k",
+                    lw=1,
+                    ls="--"
                 )
+
+            add_aperture(axQ)
+
+            r_label = (
+                r_in_mas
+                + 0.68 * (r_out_mas - r_in_mas)
             )
 
-        def format_disk_axes(ax):
-            ax.axhline(
-                0,
-                lw=0.5,
-                alpha=0.35,
-                color="k"
+            annotate_quadrant(
+                axQ, 0, r_label, "Q000"
+            )
+            annotate_quadrant(
+                axQ, 90, r_label, "Q090"
+            )
+            annotate_quadrant(
+                axQ, 180, r_label, "Q180"
+            )
+            annotate_quadrant(
+                axQ, 270, r_label, "Q270"
             )
 
-            ax.axvline(
-                0,
-                lw=0.5,
-                alpha=0.35,
-                color="k"
+            if valid:
+                axQ.set_title(
+                    r"$Q_{\rm disk}$"
+                    "\n"
+                    rf"$\Delta Q_{{000}}/\Sigma Q_\phi"
+                    rf"={dQ000_norm:.3f}$, "
+                    rf"$090={dQ090_norm:.3f}$"
+                    "\n"
+                    rf"$180={dQ180_norm:.3f}$, "
+                    rf"$270={dQ270_norm:.3f}$"
+                )
+            else:
+                axQ.set_title(
+                    r"$Q_{\rm disk}$"
+                    "\n"
+                    r"$\Sigma Q_\phi \approx 0$"
+                )
+
+            format_disk_axes(axQ)
+
+            fig.colorbar(
+                imQ,
+                ax=axQ,
+                label=r"$Q_{\rm disk}$"
             )
 
-            ax.set_xlim(-roi_mas, roi_mas)
-            ax.set_ylim(-roi_mas, roi_mas)
+            # =====================================================
+            # U_disk
+            # =====================================================
 
-            ax.set_aspect("equal")
-
-            ax.set_xlabel(
-                r"$x_{\rm disk}$ [mas]  (major axis)"
+            imU = axU.pcolormesh(
+                Xd,
+                Yd,
+                Ud,
+                shading="auto",
+                cmap="RdBu_r",
+                vmin=-vmax_qu,
+                vmax=vmax_qu,
             )
 
-            ax.set_ylabel(
-                r"$y_{\rm disk}$ [mas]  (minor axis)"
+            # U centres:
+            # 45,135,225,315
+            #
+            # boundaries:
+            # 0,90,180,270
+            for angle in [0, 90, 180, 270]:
+                draw_radial_line(
+                    axU,
+                    angle,
+                    r_out_mas,
+                    color="k",
+                    lw=1,
+                    ls="--"
+                )
+
+            add_aperture(axU)
+
+            annotate_quadrant(
+                axU, 45, r_label, "U045"
+            )
+            annotate_quadrant(
+                axU, 135, r_label, "U135"
+            )
+            annotate_quadrant(
+                axU, 225, r_label, "U225"
+            )
+            annotate_quadrant(
+                axU, 315, r_label, "U315"
             )
 
-        # -----------------------------------------------------
-        # Common Q/U scale
-        # -----------------------------------------------------
+            if valid:
+                axU.set_title(
+                    r"$U_{\rm disk}$"
+                    "\n"
+                    rf"$\Delta U_+/\Sigma Q_\phi"
+                    rf"={dUplus_norm:.3f}$, "
+                    rf"$\Delta U_-/\Sigma Q_\phi"
+                    rf"={dUminus_norm:.3f}$"
+                )
+            else:
+                axU.set_title(
+                    r"$U_{\rm disk}$"
+                    "\n"
+                    r"$\Sigma Q_\phi \approx 0$"
+                )
 
-        qu_values = np.concatenate([
-            np.abs(Qd[np.isfinite(Qd)]),
-            np.abs(Ud[np.isfinite(Ud)])
-        ])
+            format_disk_axes(axU)
 
-        vmax_qu = np.nanpercentile(
-            qu_values,
-            99
-        )
-
-        if (
-            not np.isfinite(vmax_qu)
-            or vmax_qu == 0
-        ):
-            vmax_qu = 1.0
-
-        # =====================================================
-        # Q_disk
-        # =====================================================
-
-        imQ = axQ.pcolormesh(
-            Xd,
-            Yd,
-            Qd,
-            shading="auto",
-            cmap="RdBu_r",
-            vmin=-vmax_qu,
-            vmax=vmax_qu,
-        )
-
-        # Q centres:
-        # 0, 90, 180, 270
-        #
-        # boundaries:
-        # 45, 135, 225, 315
-        for angle in [45, 135, 225, 315]:
-            draw_radial_line(
-                axQ,
-                angle,
-                r_out_mas,
-                color="k",
-                lw=1,
-                ls="--"
+            fig.colorbar(
+                imU,
+                ax=axU,
+                label=r"$U_{\rm disk}$"
             )
 
-        add_aperture(axQ)
+            # =====================================================
+            # Q_phi
+            # =====================================================
 
-        r_label = (
-            r_in_mas
-            + 0.68 * (r_out_mas - r_in_mas)
-        )
 
-        annotate_quadrant(
-            axQ, 0, r_label, "Q000"
-        )
-        annotate_quadrant(
-            axQ, 90, r_label, "Q090"
-        )
-        annotate_quadrant(
-            axQ, 180, r_label, "Q180"
-        )
-        annotate_quadrant(
-            axQ, 270, r_label, "Q270"
-        )
 
-        if valid:
-            axQ.set_title(
-                r"$Q_{\rm disk}$"
+            imQphi = axQphi.pcolormesh(
+                Xd,
+                Yd,
+                Qphi_disk,
+                shading="auto",
+                cmap="inferno",
+            )
+
+            add_aperture(axQphi)
+            format_disk_axes(axQphi)
+
+            axQphi.set_title(
+                r"$Q_\phi$ in disk coordinates"
                 "\n"
-                rf"$\Delta Q_{{000}}/\Sigma Q_\phi"
-                rf"={dQ000_norm:.3f}$, "
-                rf"$090={dQ090_norm:.3f}$"
+                rf"$\Sigma Q_\phi={SigmaQphi:.3g}$"
+            )
+
+            fig.colorbar(
+                imQphi,
+                ax=axQphi,
+                label=r"$Q_\phi$"
+            )
+
+            # =====================================================
+            # Polarized flux P
+            # =====================================================
+
+            p_values = P_disk[np.isfinite(P_disk)]
+
+            vmax_p = np.nanpercentile(
+                p_values,
+                99
+            )
+
+            if (
+                not np.isfinite(vmax_p)
+                or vmax_p == 0
+            ):
+                vmax_p = 1.0
+
+            imP = axP.pcolormesh(
+                Xd,
+                Yd,
+                P_disk,
+                shading="auto",
+                cmap="inferno"
+            )
+
+            add_aperture(axP)
+            format_disk_axes(axP)
+
+            axP.set_title(
+                r"$P=\sqrt{Q^2+U^2}$ in disk coordinates"
                 "\n"
-                rf"$180={dQ180_norm:.3f}$, "
-                rf"$270={dQ270_norm:.3f}$"
-            )
-        else:
-            axQ.set_title(
-                r"$Q_{\rm disk}$"
-                "\n"
-                r"$\Sigma Q_\phi \approx 0$"
+                rf"$\Sigma P={SigmaP:.3g}$"
             )
 
-        format_disk_axes(axQ)
-
-        fig.colorbar(
-            imQ,
-            ax=axQ,
-            label=r"$Q_{\rm disk}$"
-        )
-
-        # =====================================================
-        # U_disk
-        # =====================================================
-
-        imU = axU.pcolormesh(
-            Xd,
-            Yd,
-            Ud,
-            shading="auto",
-            cmap="RdBu_r",
-            vmin=-vmax_qu,
-            vmax=vmax_qu,
-        )
-
-        # U centres:
-        # 45,135,225,315
-        #
-        # boundaries:
-        # 0,90,180,270
-        for angle in [0, 90, 180, 270]:
-            draw_radial_line(
-                axU,
-                angle,
-                r_out_mas,
-                color="k",
-                lw=1,
-                ls="--"
+            fig.colorbar(
+                imP,
+                ax=axP,
+                label=r"$P$"
             )
 
-        add_aperture(axU)
+            # =====================================================
+            # Overall title
+            # =====================================================
 
-        annotate_quadrant(
-            axU, 45, r_label, "U045"
-        )
-        annotate_quadrant(
-            axU, 135, r_label, "U135"
-        )
-        annotate_quadrant(
-            axU, 225, r_label, "U225"
-        )
-        annotate_quadrant(
-            axU, 315, r_label, "U315"
-        )
-
-        if valid:
-            axU.set_title(
-                r"$U_{\rm disk}$"
-                "\n"
-                rf"$\Delta U_+/\Sigma Q_\phi"
-                rf"={dUplus_norm:.3f}$, "
-                rf"$\Delta U_-/\Sigma Q_\phi"
-                rf"={dUminus_norm:.3f}$"
-            )
-        else:
-            axU.set_title(
-                r"$U_{\rm disk}$"
-                "\n"
-                r"$\Sigma Q_\phi \approx 0$"
+            base_title = (
+                rf"Major-axis PA = {disk_pa_deg:.1f}$^\circ$"
+                rf";  +$y_{{\rm disk}}$ PA = "
+                rf"{np.rad2deg(w) % 360:.1f}$^\circ$"
             )
 
-        format_disk_axes(axU)
+            if title is not None:
+                fig.suptitle(
+                    title + "\n" + base_title,
+                    fontsize=13
+                )
+            else:
+                fig.suptitle(
+                    base_title,
+                    fontsize=13
+                )
 
-        fig.colorbar(
-            imU,
-            ax=axU,
-            label=r"$U_{\rm disk}$"
-        )
+            if save is not None:
+                fig.savefig(
+                    save,
+                    dpi=200,
+                    bbox_inches="tight"
+                )
 
-        # =====================================================
-        # Q_phi
-        # =====================================================
-
-       
-
-        imQphi = axQphi.pcolormesh(
-            Xd,
-            Yd,
-            Qphi_disk,
-            shading="auto",
-            cmap="inferno",
-        )
-
-        add_aperture(axQphi)
-        format_disk_axes(axQphi)
-
-        axQphi.set_title(
-            r"$Q_\phi$ in disk coordinates"
-            "\n"
-            rf"$\Sigma Q_\phi={SigmaQphi:.3g}$"
-        )
-
-        fig.colorbar(
-            imQphi,
-            ax=axQphi,
-            label=r"$Q_\phi$"
-        )
-
-        # =====================================================
-        # Polarized flux P
-        # =====================================================
-
-        p_values = P_disk[np.isfinite(P_disk)]
-
-        vmax_p = np.nanpercentile(
-            p_values,
-            99
-        )
-
-        if (
-            not np.isfinite(vmax_p)
-            or vmax_p == 0
-        ):
-            vmax_p = 1.0
-
-        imP = axP.pcolormesh(
-            Xd,
-            Yd,
-            P_disk,
-            shading="auto",
-            cmap="inferno"
-        )
-
-        add_aperture(axP)
-        format_disk_axes(axP)
-
-        axP.set_title(
-            r"$P=\sqrt{Q^2+U^2}$ in disk coordinates"
-            "\n"
-            rf"$\Sigma P={SigmaP:.3g}$"
-        )
-
-        fig.colorbar(
-            imP,
-            ax=axP,
-            label=r"$P$"
-        )
-
-        # =====================================================
-        # Overall title
-        # =====================================================
-
-        base_title = (
-            rf"Major-axis PA = {disk_pa_deg:.1f}$^\circ$"
-            rf";  +$y_{{\rm disk}}$ PA = "
-            rf"{np.rad2deg(w) % 360:.1f}$^\circ$"
-        )
-
-        if title is not None:
-            fig.suptitle(
-                title + "\n" + base_title,
-                fontsize=13
-            )
-        else:
-            fig.suptitle(
-                base_title,
-                fontsize=13
-            )
-
-        if save is not None:
-            fig.savefig(
-                save,
-                dpi=200,
-                bbox_inches="tight"
-            )
-
-        plt.show()
+            plt.show()
 
     return result
 
@@ -3725,7 +3741,8 @@ def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=(0.0
                                         radius_mas=shared_radius_mas, radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
     terms = pdi_constraint_loss(observed, predicted, tolerances, absolute_floors)
     if output_path is not None:
-        plot_pdi_constraints(observed, predicted, output_path, band)
+        with obg.diagnostic_plot("PDI light fraction, profiles and quadrant comparison"):
+            plot_pdi_constraints(observed, predicted, output_path, band)
     # JSON-compatible diagnostics, including the exact measurement definition.
     return dict(observed=_to_py(observed), model=_to_py(predicted), **terms,
                 positive_qphi_only_in_fraction=True, radial_bin_mas=radial_bin_mas,

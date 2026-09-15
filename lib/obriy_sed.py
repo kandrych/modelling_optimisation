@@ -358,24 +358,25 @@ def chi2_SED_with_reddening(
     #### plot
     #plotting
     if plot:
-        fig, ax = plt.subplots(figsize=(7, 5))
-        ax.errorbar(data_wave, data_flux, data_err, label='data', fmt='bd', mfc='white', capsize=5, zorder=1000)
-        ax.plot(lam, full_sed, ls='-', c='k', label='MCFOST SED', zorder=1)
-        ax.plot(lam, star_sed, ls='-', c='grey', label='star', alpha=0.4, zorder=0)
-        if secondary_component:
-            ax.plot(lam, comp_sed, ls='-', c='orange', label='accretion secondary', alpha=0.4, zorder=0)
-            ax.plot(lam, full_sed_with_comp, ls='--', c='k', label='MCFOST SED + accretion secondary', zorder=1)
-        ax.set_xlabel(r"$\lambda \, \mathrm{[\mu m]}$")
-        ax.set_ylabel(r"$\lambda F_{\lambda} \, \mathrm{[erg \, cm^{-2} \, s^{-1}]}$")
-        ax.set_xlim(np.min(lam), np.max(lam))
-        ax.set_ylim(full_sed[np.isfinite(full_sed)].min(), full_sed[np.isfinite(full_sed)].max()*10)
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        ax.set_title('SED no ISM reddening, ' + folder_sim)
-        ax.legend()
-        plt.tight_layout()
-        plt.savefig(simulation_dir+'sed_no_reddening.png', bbox_inches='tight')
-        plt.close(fig)
+        with obg.diagnostic_plot("SED before reddening"):
+            fig, ax = plt.subplots(figsize=(7, 5))
+            ax.errorbar(data_wave, data_flux, data_err, label='data', fmt='bd', mfc='white', capsize=5, zorder=1000)
+            ax.plot(lam, full_sed, ls='-', c='k', label='MCFOST SED', zorder=1)
+            ax.plot(lam, star_sed, ls='-', c='grey', label='star', alpha=0.4, zorder=0)
+            if secondary_component:
+                ax.plot(lam, comp_sed, ls='-', c='orange', label='accretion secondary', alpha=0.4, zorder=0)
+                ax.plot(lam, full_sed_with_comp, ls='--', c='k', label='MCFOST SED + accretion secondary', zorder=1)
+            ax.set_xlabel(r"$\lambda \, \mathrm{[\mu m]}$")
+            ax.set_ylabel(r"$\lambda F_{\lambda} \, \mathrm{[erg \, cm^{-2} \, s^{-1}]}$")
+            ax.set_xlim(np.min(lam), np.max(lam))
+            ax.set_ylim(full_sed[np.isfinite(full_sed)].min(), full_sed[np.isfinite(full_sed)].max()*10)
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_title('SED no ISM reddening, ' + folder_sim)
+            ax.legend()
+            plt.tight_layout()
+            plt.savefig(simulation_dir+'sed_no_reddening.png', bbox_inches='tight')
+            plt.close(fig)
     #plt.show()
 
 
@@ -432,41 +433,42 @@ def chi2_SED_with_reddening(
         chi2_red,chi2, loglike=chi2reddened(data_wave, data_flux, lam, full_sed, data_err, reddening_law_path, E_best)
     #plotting
     if plot:
-        fig, ax = plt.subplots(figsize=(7, 7))
-        ax.errorbar(data_wave, data_flux, data_err, label='data', fmt='bd', mfc='white', capsize=5, zorder=1000)
-        ax.plot(lam, full_sed_red, ls='-', c='r', label='MCFOST SED reddened', zorder=1)
-        #ax.plot(lam, full_sed, ls='--', c='r', label='MCFOST SED no reddening', zorder=0, alpha=0.4) #commented for plottinh for the conference
-        #ax.plot(lam, star_sed_red, ls='-', c='k', label='STAR reddened', zorder=0)
-        #ax.plot(lam, star_sed, ls='--', c='k', label='STAR no reddening', alpha=0.4, zorder=0)
-        ax.set_xlabel(r"$\lambda \, \mathrm{[\mu m]}$")
-        ax.set_ylabel(r"$\lambda F_{\lambda} \, \mathrm{[erg \, cm^{-2} \, s^{-1}]}$")
-        ax.set_xlim(np.min(lam), np.max(lam))
-        ax.set_ylim(full_sed[np.isfinite(full_sed)].min(), full_sed[np.isfinite(full_sed)].max()*10)
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        fig.suptitle("SED, data and RT", fontsize=16, y=0.96)
+        with obg.diagnostic_plot("Reddened SED and secondary comparison"):
+            fig, ax = plt.subplots(figsize=(7, 7))
+            ax.errorbar(data_wave, data_flux, data_err, label='data', fmt='bd', mfc='white', capsize=5, zorder=1000)
+            ax.plot(lam, full_sed_red, ls='-', c='r', label='MCFOST SED reddened', zorder=1)
+            #ax.plot(lam, full_sed, ls='--', c='r', label='MCFOST SED no reddening', zorder=0, alpha=0.4) #commented for plottinh for the conference
+            #ax.plot(lam, star_sed_red, ls='-', c='k', label='STAR reddened', zorder=0)
+            #ax.plot(lam, star_sed, ls='--', c='k', label='STAR no reddening', alpha=0.4, zorder=0)
+            ax.set_xlabel(r"$\lambda \, \mathrm{[\mu m]}$")
+            ax.set_ylabel(r"$\lambda F_{\lambda} \, \mathrm{[erg \, cm^{-2} \, s^{-1}]}$")
+            ax.set_xlim(np.min(lam), np.max(lam))
+            ax.set_ylim(full_sed[np.isfinite(full_sed)].min(), full_sed[np.isfinite(full_sed)].max()*10)
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            fig.suptitle("SED, data and RT", fontsize=16, y=0.96)
 
-        desc = description if description is not None else ""
-        ax.text(0.5, 1.08, desc,
-            ha="center", va="bottom", transform=ax.transAxes,
-            fontsize=10, wrap=True)  
+            desc = description if description is not None else ""
+            ax.text(0.5, 1.08, desc,
+                ha="center", va="bottom", transform=ax.transAxes,
+                fontsize=10, wrap=True)
 
-        ax.text(0.5, 1.03,
-            r"$\chi^2 reduced = $" + f"{chi2_red:.2f}",
-            ha='center', va='bottom',
-            transform=ax.transAxes,
-            fontsize=12)
-        ax.legend()
-        plt.tight_layout()
+            ax.text(0.5, 1.03,
+                r"$\chi^2 reduced = $" + f"{chi2_red:.2f}",
+                ha='center', va='bottom',
+                transform=ax.transAxes,
+                fontsize=12)
+            ax.legend()
+            plt.tight_layout()
 
-        fig.savefig(simulation_dir+'SED_Akke_model1_MCFOST.png', dpi= 300, bbox_inches='tight')
-        plt.close(fig)
+            fig.savefig(simulation_dir+'SED_Akke_model1_MCFOST.png', dpi= 300, bbox_inches='tight')
+            plt.close(fig)
 
-        # Separate component comparison; the original figure above is unchanged.
-        if secondary_component:
-            plot_sed_secondary_comparison(
-                data_wave, data_flux, data_err, lam, full_sed, full_sed_with_comp,
-                reddening_law_path, E_best, simulation_dir+'SED_secondary_comparison.png')
+            # Separate component comparison; the original figure above is unchanged.
+            if secondary_component:
+                plot_sed_secondary_comparison(
+                    data_wave, data_flux, data_err, lam, full_sed, full_sed_with_comp,
+                    reddening_law_path, E_best, simulation_dir+'SED_secondary_comparison.png')
 
         
     
