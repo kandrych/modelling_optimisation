@@ -935,7 +935,9 @@ def main():
     p.add_argument("--tapered-edge-p1-eq-p2", action="store_true", help="Enable tapered edge with p1=p2")
     p.add_argument("--overresolved_flux_fit_for_interferometry", type=float, default=None, help="Optional: fit overresolved flux to interferometry at the supplied wavelength [micron]. Disabled by default.")
     p.add_argument("--unresolved-correction-radius-px", type=float, default=None, help="Unresolved-polarisation aperture radius in instrument pixels; required when correction is enabled")
-    p.add_argument("--pdi-constraint-tolerances", type=float, nargs=3, default=(0.05, 0.05, 0.05), metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Fixed PDI tolerances, not observational errors")
+    p.add_argument("--pdi-constraint-tolerances", type=float, nargs=3, default=(0.05, 0.05, 0.05), metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Relative PDI errors: 0.05 = 5 percent of each observed value (assumed, not measured)")
+    p.add_argument("--pdi-absolute-error-floors", type=float, nargs=3, default=(0., 0., 0.),
+                   metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Absolute floors for PDI error scales; needed for zero observed values")
     p.add_argument("--pdi-radial-bin-mas", type=float, default=25.0, help="Non-overlapping PDI radial bins [mas]")
     args = p.parse_args()
     

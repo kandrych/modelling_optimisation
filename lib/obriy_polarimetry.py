@@ -1829,7 +1829,8 @@ def polarimetric_analysis(
     # --- Load MCFOST images
     img_array_original, header_original, img_tot_original, img_q_original, img_u_original, img_v_original, img_star_original, img_star_sct_original, img_disk_th_original, img_disk_th_sct_original = load_mcfost_images_1wave(simulation_dir, wavelength, ploting=plot, save_plots=fig_dir, title_addition=extra_title)
     q_phi_original, u_phi_original, pi_original, phi_mcfost_original=compute_qphi_uphi_pi(img_q_original, img_u_original)
-    metrics_original=polarimetric_metrics(img_tot_original,img_q_original, img_u_original, q_phi_original, u_phi_original,pi_original)
+    # Disabled legacy integrated metrics: neither scored nor plotted.
+    # metrics_original=polarimetric_metrics(img_tot_original,img_q_original, img_u_original, q_phi_original, u_phi_original,pi_original)
 
     
     results['mcfost_original']={'img_array':img_array_original, 
@@ -1847,26 +1848,28 @@ def polarimetric_analysis(
                                 'pi':pi_original, 
                                 'phi':phi_mcfost_original,
                                 'pixel_scale_mas':native_ps_mas,
-                                'metrics':metrics_original
+                                # 'metrics':metrics_original
                                 }
 
 
     rad_prof={}
     az_prof={}
-    for ft in ['pi',"q_phi",'img_tot']:            
-        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_original'][ft], native_ps_mas, 
-                                            profile_type="both",
-                                            mode="sum",
-                                            radial_limit_mas=radial_limit_mas,
-                                            plot=plot,
-                                            save_prefix=fig_dir + extra_title + "mcfost_original_",
-                                            deprojection_inc_pa_deg=deprojection,
-                                            center=None,
-                                            az_nbins=azimuthal_nbins,
-                                            azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                            azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                            theta0=theta0
-                                            )
+    # Legacy profiles are plotted only; scoring measures its own profiles.
+    if plot:
+        for ft in ['pi',"q_phi",'img_tot']:
+            rad_prof[ft], az_prof[ft] = profiles(results['mcfost_original'][ft], native_ps_mas,
+                                                profile_type="both",
+                                                mode="sum",
+                                                radial_limit_mas=radial_limit_mas,
+                                                plot=plot,
+                                                save_prefix=fig_dir + extra_title + "mcfost_original_",
+                                                deprojection_inc_pa_deg=deprojection,
+                                                center=None,
+                                                az_nbins=azimuthal_nbins,
+                                                azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                theta0=theta0
+                                                )
     results['mcfost_original']['radial_profiles']=rad_prof
     results['mcfost_original']['azimuthal_profiles']=az_prof
           
@@ -1875,7 +1878,8 @@ def polarimetric_analysis(
     # Rescaling to instrument pixel scale
 
     img_q_rescaled, img_u_rescaled, img_total_rescaled, q_phi_rescaled, u_phi_rescaled, pi_rescaled, phi_rescaled=rescale_and_recalculate_all_polarim_img(img_q_original, img_u_original, img_tot_original, native_ps_mas, new_pix_scale=inst_ps_mas, conserve='sum')
-    metrics_rescaled=polarimetric_metrics(img_total_rescaled,img_q_rescaled, img_u_rescaled, q_phi_rescaled, u_phi_rescaled,pi_rescaled)
+    # Disabled legacy integrated metrics: neither scored nor plotted.
+    # metrics_rescaled=polarimetric_metrics(img_total_rescaled,img_q_rescaled, img_u_rescaled, q_phi_rescaled, u_phi_rescaled,pi_rescaled)
     
     print(f"Instrument pixel scale: {inst_ps_mas:.3f} mas/pix")
     n_pix_inst = int(img_q_rescaled.shape[0])
@@ -1893,25 +1897,27 @@ def polarimetric_analysis(
                                     'u_phi':u_phi_rescaled,
                                     'pi':pi_rescaled,
                                     'phi':phi_rescaled,
-                                    'metrics':metrics_rescaled,
+                                    # 'metrics':metrics_rescaled,
                                     'pixel_scale_mas':inst_ps_mas
                                     }
     rad_prof={}
     az_prof={}
-    for ft in ['pi',"q_phi",'img_tot']:      
-        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_rescaled'][ft], inst_ps_mas, 
-                                                profile_type="both",
-                                                mode="sum",
-                                                radial_limit_mas=radial_limit_mas,
-                                                plot=plot,
-                                                save_prefix=fig_dir + extra_title + "mcfost_rescaled_",
-                                                deprojection_inc_pa_deg=deprojection,
-                                                center=None,
-                                                az_nbins=azimuthal_nbins,
-                                                azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                theta0=theta0
-                                                )
+    # Legacy profiles are plotted only; scoring measures its own profiles.
+    if plot:
+        for ft in ['pi',"q_phi",'img_tot']:
+            rad_prof[ft], az_prof[ft] = profiles(results['mcfost_rescaled'][ft], inst_ps_mas,
+                                                    profile_type="both",
+                                                    mode="sum",
+                                                    radial_limit_mas=radial_limit_mas,
+                                                    plot=plot,
+                                                    save_prefix=fig_dir + extra_title + "mcfost_rescaled_",
+                                                    deprojection_inc_pa_deg=deprojection,
+                                                    center=None,
+                                                    az_nbins=azimuthal_nbins,
+                                                    azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                    azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                    theta0=theta0
+                                                    )
     results['mcfost_rescaled']['radial_profiles']=rad_prof
     results['mcfost_rescaled']['azimuthal_profiles']=az_prof
           
@@ -1921,11 +1927,13 @@ def polarimetric_analysis(
     # Convolving with synthetic PSF
     if convolution_mode=='synthetic':
             kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas,psf_source='synthetic', psf_fwhm_mas=psf_fwhm_mas)
-            metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
+            # Disabled legacy integrated metrics: neither scored nor plotted.
+            # metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
 
     if convolution_mode=='file':
             kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas, psf_source='file', psf_file=psf_file, folder_psf=folder_psf,psf_array=psf_array, psf_cut=psf_cut )
-            metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
+            # Disabled legacy integrated metrics: neither scored nor plotted.
+            # metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
     if convolution_mode=='none':
             Q_conv=img_q_rescaled
             U_conv=img_u_rescaled
@@ -1937,8 +1945,11 @@ def polarimetric_analysis(
     
         
     if convolution_mode!='none':
-            pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
-            q_phi_conv_decon=deconvolution(Q_phi_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
+            pi_conv_decon = q_phi_conv_decon = None
+            # Deconvolution is diagnostic only; scoring uses the convolved images.
+            if plot:
+                pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
+                q_phi_conv_decon=deconvolution(Q_phi_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
             
             results['mcfost_convolved']={'img_q':Q_conv,
                                             'img_u':U_conv,
@@ -1948,26 +1959,28 @@ def polarimetric_analysis(
                                             'pi':PI_conv,
                                             'pi_deconvolved':pi_conv_decon,
                                             'q_phi_deconvolved':q_phi_conv_decon,
-                                            'metrics':metrics_conv,
+                                            # 'metrics':metrics_conv,
                                             'pixel_scale_mas':inst_ps_mas
                                             }
             
             rad_prof={}
             az_prof={}
-            for ft in ['pi',"q_phi",'img_tot']:      
-                rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved'][ft], inst_ps_mas, 
-                                                profile_type="both",
-                                                mode="sum",
-                                                radial_limit_mas=radial_limit_mas,
-                                                plot=plot,
-                                                save_prefix=fig_dir + extra_title + "mcfost_convolved_",
-                                                deprojection_inc_pa_deg=deprojection,
-                                                center=None,
-                                                az_nbins=azimuthal_nbins,
-                                                azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                theta0=theta0
-                                                )
+            # Legacy profiles are plotted only; scoring measures its own profiles.
+            if plot:
+                for ft in ['pi',"q_phi",'img_tot']:
+                    rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved'][ft], inst_ps_mas,
+                                                    profile_type="both",
+                                                    mode="sum",
+                                                    radial_limit_mas=radial_limit_mas,
+                                                    plot=plot,
+                                                    save_prefix=fig_dir + extra_title + "mcfost_convolved_",
+                                                    deprojection_inc_pa_deg=deprojection,
+                                                    center=None,
+                                                    az_nbins=azimuthal_nbins,
+                                                    azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                    azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                    theta0=theta0
+                                                    )
             results['mcfost_convolved']['radial_profiles']=rad_prof
             results['mcfost_convolved']['azimuthal_profiles']=az_prof
             
@@ -2006,20 +2019,22 @@ def polarimetric_analysis(
 
     rad_prof={}
     az_prof={}
-    for ft in ['pi',"q_phi"]:      
-        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_not_convolved_unresolved_corrected'][ft], inst_ps_mas, 
-                                                profile_type="both",
-                                                mode="sum",
-                                                radial_limit_mas=radial_limit_mas,
-                                                plot=plot,
-                                                save_prefix=fig_dir + extra_title + "mcfost_not_convolved_unresolved_corrected_",
-                                                deprojection_inc_pa_deg=deprojection,
-                                                center=None,
-                                                az_nbins=azimuthal_nbins,
-                                                azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                theta0=theta0
-                                                )
+    # Legacy profiles are plotted only; scoring measures its own profiles.
+    if plot:
+        for ft in ['pi',"q_phi"]:
+            rad_prof[ft], az_prof[ft] = profiles(results['mcfost_not_convolved_unresolved_corrected'][ft], inst_ps_mas,
+                                                    profile_type="both",
+                                                    mode="sum",
+                                                    radial_limit_mas=radial_limit_mas,
+                                                    plot=plot,
+                                                    save_prefix=fig_dir + extra_title + "mcfost_not_convolved_unresolved_corrected_",
+                                                    deprojection_inc_pa_deg=deprojection,
+                                                    center=None,
+                                                    az_nbins=azimuthal_nbins,
+                                                    azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                    azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                    theta0=theta0
+                                                    )
     results['mcfost_not_convolved_unresolved_corrected']['radial_profiles']=rad_prof
     results['mcfost_not_convolved_unresolved_corrected']['azimuthal_profiles']=az_prof
     
@@ -2031,19 +2046,22 @@ def polarimetric_analysis(
 
     aolp_corr_conv=0.5*np.arctan2(u_corr_conv, q_corr_conv)
 
-    metrics_corr_conv=polarimetric_metrics(I_conv,q_corr_conv, u_corr_conv, q_phi_corr_conv, u_phi_corr_conv,pi_corr_conv)
-    metrics_corr_conv['dolp_unres']=dolp_unres_conv
-    metrics_corr_conv['aolp_unres']=aolp_unres_conv
+    # Disabled legacy integrated metrics: neither scored nor plotted.
+    # metrics_corr_conv=polarimetric_metrics(I_conv,q_corr_conv, u_corr_conv, q_phi_corr_conv, u_phi_corr_conv,pi_corr_conv)
+    # metrics_corr_conv['dolp_unres']=dolp_unres_conv
+    # metrics_corr_conv['aolp_unres']=aolp_unres_conv
 
 
 
-    # Deconvolution of corrected images
+    # Deconvolution of corrected images (Qphi is used only in optional plots).
+    q_phi_corr_conv_decon = None
     if convolution_mode=='none':
         print('No convolution, skipping deconvolution')
-    else:
+    elif plot:
         print('Deconvolution of unresolved corrected images')
         # Create PSF for deconvolution
-        pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
+        # Disabled: corrected PI deconvolution is neither scored nor plotted.
+        # pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
         q_phi_corr_conv_decon=deconvolution(q_phi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
     
     results['mcfost_convolved_unresolved_corrected']={'img_q':q_corr_conv,
@@ -2054,27 +2072,29 @@ def polarimetric_analysis(
                                             'pi':pi_corr_conv,
                                             'aolp_corr':aolp_corr_conv,
                                             'phi':phi,
-                                            'pi_deconvolved':pi_corr_conv_decon,
+                                            # 'pi_deconvolved':pi_corr_conv_decon,  # Unused diagnostic disabled above.
                                             'q_phi_deconvolved':q_phi_corr_conv_decon,
-                                            'metrics':metrics_corr_conv,
+                                            # 'metrics':metrics_corr_conv,
                                             'pixel_scale_mas':inst_ps_mas
                                             }
     rad_prof={}
     az_prof={}
-    for ft in ['pi',"q_phi"]:      
-        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved_unresolved_corrected'][ft], inst_ps_mas, 
-                                            profile_type="both",
-                                            mode="sum",
-                                            radial_limit_mas=radial_limit_mas,
-                                            plot=plot,
-                                            save_prefix=fig_dir + extra_title + "mcfost_convolved_unresolved_corrected_",
-                                            deprojection_inc_pa_deg=deprojection,
-                                            center=None,
-                                            az_nbins=azimuthal_nbins,
-                                            azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                            azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                            theta0=theta0
-                                            )
+    # Legacy profiles are plotted only; scoring measures its own profiles.
+    if plot:
+        for ft in ['pi',"q_phi"]:
+            rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved_unresolved_corrected'][ft], inst_ps_mas,
+                                                profile_type="both",
+                                                mode="sum",
+                                                radial_limit_mas=radial_limit_mas,
+                                                plot=plot,
+                                                save_prefix=fig_dir + extra_title + "mcfost_convolved_unresolved_corrected_",
+                                                deprojection_inc_pa_deg=deprojection,
+                                                center=None,
+                                                az_nbins=azimuthal_nbins,
+                                                azimuthal_r_in_mas=azimuthal_r_in_mas,
+                                                azimuthal_r_out_mas=azimuthal_r_out_mas,
+                                                theta0=theta0
+                                                )
     results['mcfost_convolved_unresolved_corrected']['radial_profiles']=rad_prof
     results['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']=az_prof
     
@@ -2173,8 +2193,9 @@ def profile_chi2(
     *,
     profile_type: Literal["radial", "azimuthal"] = "radial",
     plot: bool = True,
+    calculate_chi2: bool = True,
     save_prefix: Optional[str] = '',
-    ) -> Tuple[float, float, float, int]:
+    ) -> Optional[Tuple[float, float, float, int]]:
     """
     Calculate the reduced chi2 between data and model contained in arrays.
 
@@ -2190,12 +2211,15 @@ def profile_chi2(
         Type of profile to compute chi2 on.
     plot : bool
         Whether to plot profiles.
+    calculate_chi2 : bool
+        If False, only draw the requested comparison and return None.
+        This avoids unused legacy scores failing on short or mismatched profiles.
     save : str, optional
         Folder/prefix to save plots (if plot=True).
 
     Returns
     -------
-    Tuple containing (chi2, chi2_red, loglike, n_data_points)
+    Tuple containing (chi2, chi2_red, loglike, n_data_points), or None in plot-only mode.
      """
     
     # Initialize chi2 accumulators
@@ -2218,9 +2242,10 @@ def profile_chi2(
             plt.savefig(save_prefix+'radial_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
             plt.close()
         
-        chi2_sum= ((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2 / (prof_obs["error"][:index_max] ** 2 + 1e-16)).sum()
-        loglike_sum = np.nansum(((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2)/(prof_obs["error"][:index_max] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs["error"][:index_max] ** 2 + 1e-16)))
-        n_data_points=len(prof_obs["signal"][:index_max])
+        if calculate_chi2:
+            chi2_sum= ((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2 / (prof_obs["error"][:index_max] ** 2 + 1e-16)).sum()
+            loglike_sum = np.nansum(((prof_obs["signal"][:index_max] - prof_mod["signal"][:index_max]) ** 2)/(prof_obs["error"][:index_max] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs["error"][:index_max] ** 2 + 1e-16)))
+            n_data_points=len(prof_obs["signal"][:index_max])
     
 
     if profile_type=="azimuthal":    
@@ -2234,12 +2259,16 @@ def profile_chi2(
             plt.savefig(save_prefix+'azimuthal_profile_comparison.jpeg',bbox_inches='tight', pad_inches=0.1)
             plt.close()
         
-        chi2_sum = ((prof_obs["value"] - prof_mod["value"]) ** 2 / (prof_obs["std"] ** 2 + 1e-16)).sum() #this is weighted least-squares χ²
-        loglike_sum = np.nansum(((prof_obs["value"] - prof_mod["value"]) ** 2)/(prof_obs["std"] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs["std"] ** 2 + 1e-16)))
-        n_data_points=len(prof_obs["value"])
+        if calculate_chi2:
+            chi2_sum = ((prof_obs["value"] - prof_mod["value"]) ** 2 / (prof_obs["std"] ** 2 + 1e-16)).sum() #this is weighted least-squares χ²
+            loglike_sum = np.nansum(((prof_obs["value"] - prof_mod["value"]) ** 2)/(prof_obs["std"] ** 2 + 1e-16) + np.log(2.0 * np.pi * (prof_obs["std"] ** 2 + 1e-16)))
+            n_data_points=len(prof_obs["value"])
     
    
     
+    if not calculate_chi2:
+        return None
+
     if n_data_points == 0:
         raise ValueError("No valid data points found for chi2 calculation.")
     chi2_red = chi2_sum / (n_data_points-1)
@@ -2299,6 +2328,7 @@ def full_image_metrics_noshift(
     normalize: Literal["zscore","minmax","mean1","none"] = "zscore",
     ssim_win: Optional[int] = None,             # odd window size for SSIM local stats; None => auto
     ssim_gaussian_weights: bool = True,       # closer to perceptual similarity
+    calculate_ncc: bool = True,               # optional diagnostic; not needed for SSIM plots
     return_pixel_chi2: bool = True,           # χ² over pixels (optional)
     pixel_sigma: Optional[float] = None,      # if None, uses robust σ from obs_data
 ) -> Dict[str, Any]:
@@ -2343,12 +2373,12 @@ def full_image_metrics_noshift(
     )
 
     # 4) NCC (global)
-    ncc_score = ncc(A, B)
+    ncc_score = ncc(A, B) if calculate_ncc else None
 
     result = {
         "ssim": float(ssim_score),   # 1.0 is perfect; ~0 is dissimilar; can be negative
         "ssim_image": ssim_image,
-        "ncc": float(ncc_score),     # 1.0 is perfect linear correlation; 0 none; -1 inverted
+        "ncc": float(ncc_score) if ncc_score is not None else None,     # 1.0 is perfect linear correlation; 0 none; -1 inverted
     }
 
     # 5) Optional: pixel χ² as a sanity check (NOT morphology-robust)

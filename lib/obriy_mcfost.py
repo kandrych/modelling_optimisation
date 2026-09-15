@@ -902,38 +902,49 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             print(f'[obriy_mcfost] I band comparison uses {model_polarimetry_key}')
             data_cropped_i, model_cropped_i = obp.crop_to_same_size(
                 pdi_data_i['pol_images']['Q_phi'], results_i[model_polarimetry_key]['q_phi'])
-            model_rad_prof = results_i[model_polarimetry_key]['radial_profiles']['q_phi']
-            model_azimuthal_prof = results_i[model_polarimetry_key]['azimuthal_profiles']['q_phi']
+            if args.plot_intermediate:
+                model_rad_prof = results_i[model_polarimetry_key]['radial_profiles']['q_phi']
+                model_azimuthal_prof = results_i[model_polarimetry_key]['azimuthal_profiles']['q_phi']
                    
-            # Calculate metrics for arcsinh-scaled images to highlight morphology
-            obs_rad_prof_pi, obs_az_prof_pi = pdi_data_i['radial_profiles']['Q_phi'], pdi_data_i['azimuthal_profiles']['Q_phi']
+                # Calculate metrics for arcsinh-scaled images to highlight morphology
+                obs_rad_prof_pi, obs_az_prof_pi = pdi_data_i['radial_profiles']['Q_phi'], pdi_data_i['azimuthal_profiles']['Q_phi']
             
-            profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 3.6, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_i_")
-            profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_i_")
-            profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
-            profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
+            # Disabled legacy profile scores: neither scored nor plotted; small profiles can fail.
+            # profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 3.6, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_i_")
+            # profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_i_")
+            # profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
+            # profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
+            if args.plot_intermediate:
+                obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 3.6, profile_type="radial", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_i_")
+                obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_i_")
 
 
-            metrics_i = obp.full_image_metrics_noshift(
-                data_cropped_i, model_cropped_i,
-                normalize="zscore",          # good default for morphology
-                ssim_win=None,                 # 7–15 is typical
-                return_pixel_chi2=True
-            )
+            # SSIM is needed only for the optional diagnostic image.
+            metrics_i = {}
+            if args.plot_intermediate:
+                metrics_i = obp.full_image_metrics_noshift(
+                    data_cropped_i, model_cropped_i,
+                    normalize="zscore",          # good default for morphology
+                    ssim_win=None,                 # 7–15 is typical
+                    # return_pixel_chi2=True  # Unused by scoring and plots.
+                    calculate_ncc=False,  # NCC is neither scored nor plotted.
+                    return_pixel_chi2=False
+                )
             if args.plot_intermediate:
                 obp.plot_polarimetric_image(results_i['mcfost_convolved_unresolved_corrected']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_q_phi_corr_conv_deconv_I.png', image_scale='asinh', roi_half_size=100)
                 obp.plot_polarimetric_image(results_i['mcfost_convolved']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, decon', save=str(workdir)+'/figures'+'/model_q_phi_conv_deconv_I.png', image_scale='asinh', roi_half_size=100)
 
                 obp.plot_polarimetric_image(metrics_i["ssim_image"], 3.6, title=f'ssim, score {metrics_i["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_I.png', image_scale='linear', roi_half_size=50)
 
-            obp.save_band_metrics(
-                        workdir,
-                        band="I",
-                        analysis_metrics=results_i[model_polarimetry_key]['metrics'],
-                        ssim_score=metrics_i.get("ssim"),
-                        ncc_score=metrics_i.get("ncc"),
-                        extras={"ps_mas": 3.6, "notes": "zscore"}
-                        )
+            # Disabled legacy metric logging: these diagnostics are neither scored nor plotted.
+            # obp.save_band_metrics(
+            # workdir,
+            # band="I",
+            # analysis_metrics=results_i[model_polarimetry_key]['metrics'],
+            # ssim_score=metrics_i.get("ssim"),
+            # ncc_score=metrics_i.get("ncc"),
+            # extras={"ps_mas": 3.6, "notes": "zscore"}
+            # )
             
             if args.plot_intermediate:
                 images_list = [np.arcsinh(data_cropped_i), np.arcsinh(model_cropped_i)]
@@ -957,7 +968,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                 )
                 fig.savefig(str(workdir)+'/figures'+'/i_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()
-            print(f'[obriy_mcfost] I band metrics: SSIM={metrics_i["ssim"]}, NCC={metrics_i["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
+            # print(f'[obriy_mcfost] I band metrics: SSIM={metrics_i["ssim"]}, NCC={metrics_i["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
             
             
 
@@ -965,6 +976,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 pdi_data_i['pol_images'], results_i[model_polarimetry_key],
                 results_i[model_polarimetry_key]['pixel_scale_mas'],
                 tolerances=getattr(args, 'pdi_constraint_tolerances', (0.05, 0.05, 0.05)),
+                absolute_floors=getattr(args, 'pdi_absolute_error_floors', (1e-16, 1e-16, 1e-16)),
                 radial_bin_mas=getattr(args, 'pdi_radial_bin_mas', 25.0),
                 disk_pa_deg=disk_pa_deg,
                 output_path=workdir / 'figures' / 'pdi_constraints_i.png', band='I')
@@ -974,13 +986,13 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
             additional_info.setdefault("pdi", {})['I'] = {
                 "ssim": metrics_i.get("ssim"),
-                "ncc": metrics_i.get("ncc"),
-                "profile_pi_chi2_red": profile_pi_chi2_red,
-                "profile_pi_loglike": profile_loglike,
-                "profile_rad_pi_chi2": profile_rad_pi_chi2,
-                "profile_rad_pi_npoints": profile_rad_pi_npoints,
-                "profile_az_pi_chi2": profile_az_pi_chi2,
-                "profile_az_pi_npoints": profile_az_pi_npoints,
+                # "ncc": metrics_i.get("ncc"),  # Unused diagnostic disabled.
+                # "profile_pi_chi2_red": profile_pi_chi2_red,
+                # "profile_pi_loglike": profile_loglike,
+                # "profile_rad_pi_chi2": profile_rad_pi_chi2,
+                # "profile_rad_pi_npoints": profile_rad_pi_npoints,
+                # "profile_az_pi_chi2": profile_az_pi_chi2,
+                # "profile_az_pi_npoints": profile_az_pi_npoints,
                 "loss": loss_i,
                 "constraints": constraint_comparison_i,
                 "model_unresolved_corrected": correct_unresolved,
@@ -1016,33 +1028,44 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             print(f'[obriy_mcfost] V band comparison uses {model_polarimetry_key}')
             data_cropped_v, model_cropped_v = obp.crop_to_same_size(
                 pdi_data_v['pol_images']['Q_phi'], results_v[model_polarimetry_key]['q_phi'])
-            model_rad_prof = results_v[model_polarimetry_key]['radial_profiles']['q_phi']
-            model_azimuthal_prof = results_v[model_polarimetry_key]['azimuthal_profiles']['q_phi']
-            #CHANGE HERE for profiles that are already calculated in loading data initially to avoid recalculating them and speed up the process
-            obs_rad_prof, obs_az_prof= pdi_data_v['radial_profiles']['Q_phi'], pdi_data_v['azimuthal_profiles']['Q_phi']
+            if args.plot_intermediate:
+                model_rad_prof = results_v[model_polarimetry_key]['radial_profiles']['q_phi']
+                model_azimuthal_prof = results_v[model_polarimetry_key]['azimuthal_profiles']['q_phi']
+                #CHANGE HERE for profiles that are already calculated in loading data initially to avoid recalculating them and speed up the process
+                obs_rad_prof, obs_az_prof= pdi_data_v['radial_profiles']['Q_phi'], pdi_data_v['azimuthal_profiles']['Q_phi']
             
-            profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof, model_rad_prof, 3.6, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_v_")
-            profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_v_")
-            profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
-            profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
+            # Disabled legacy profile scores: neither scored nor plotted; small profiles can fail.
+            # profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof, model_rad_prof, 3.6, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_v_")
+            # profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_v_")
+            # profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
+            # profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
+            if args.plot_intermediate:
+                obp.profile_chi2(obs_rad_prof, model_rad_prof, 3.6, profile_type="radial", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_v_")
+                obp.profile_chi2(obs_az_prof, model_azimuthal_prof, 3.6, profile_type="azimuthal", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_v_")
 
-            metrics_v = obp.full_image_metrics_noshift(
-                data_cropped_v, model_cropped_v,
-                normalize="zscore",          # good default for morphology
-                ssim_win=None,                 # 7–15 is typical
-                return_pixel_chi2=True
-            )
+            # SSIM is needed only for the optional diagnostic image.
+            metrics_v = {}
+            if args.plot_intermediate:
+                metrics_v = obp.full_image_metrics_noshift(
+                    data_cropped_v, model_cropped_v,
+                    normalize="zscore",          # good default for morphology
+                    ssim_win=None,                 # 7–15 is typical
+                    # return_pixel_chi2=True  # Unused by scoring and plots.
+                    calculate_ncc=False,  # NCC is neither scored nor plotted.
+                    return_pixel_chi2=False
+                )
             if args.plot_intermediate:
                 obp.plot_polarimetric_image(metrics_v["ssim_image"], 3.6, title=f'ssim, score {metrics_v["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_V.png', image_scale='linear', roi_half_size=50)
 
-            obp.save_band_metrics(
-                        workdir,
-                        band="V",
-                        analysis_metrics=results_v[model_polarimetry_key]['metrics'],
-                        ssim_score=metrics_v.get("ssim"),
-                        ncc_score=metrics_v.get("ncc"),
-                        extras={"ps_mas": 3.6, "notes": "zscore"}
-                        )
+            # Disabled legacy metric logging: these diagnostics are neither scored nor plotted.
+            # obp.save_band_metrics(
+            # workdir,
+            # band="V",
+            # analysis_metrics=results_v[model_polarimetry_key]['metrics'],
+            # ssim_score=metrics_v.get("ssim"),
+            # ncc_score=metrics_v.get("ncc"),
+            # extras={"ps_mas": 3.6, "notes": "zscore"}
+            # )
             if args.plot_intermediate:
                 images_list = [np.arcsinh(data_cropped_v), np.arcsinh(model_cropped_v)]
                     
@@ -1065,11 +1088,12 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                 )
                 fig.savefig(str(workdir)+'/figures'+'/v_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()
-            print(f'[obriy_mcfost] V band metrics: SSIM={metrics_v["ssim"]}, NCC={metrics_v["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
+            # print(f'[obriy_mcfost] V band metrics: SSIM={metrics_v["ssim"]}, NCC={metrics_v["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
             constraint_comparison_v = obp.compare_pdi_constraints(
                 pdi_data_v['pol_images'], results_v[model_polarimetry_key],
                 results_v[model_polarimetry_key]['pixel_scale_mas'],
                 tolerances=getattr(args, 'pdi_constraint_tolerances', (0.05, 0.05, 0.05)),
+                absolute_floors=getattr(args, 'pdi_absolute_error_floors', (1e-16, 1e-16, 1e-16)),
                 radial_bin_mas=getattr(args, 'pdi_radial_bin_mas', 25.0),
                 disk_pa_deg=disk_pa_deg,
                 output_path=workdir / 'figures' / 'pdi_constraints_v.png', band='V')
@@ -1078,13 +1102,13 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             #loss_v= profile_pi_chi2_red
             additional_info.setdefault("pdi", {})['V'] = {
                             "ssim": metrics_v.get("ssim"),
-                            "ncc": metrics_v.get("ncc"),
-                            "profile_pi_chi2_red": profile_pi_chi2_red,
-                            "profile_pi_loglike": profile_loglike,
-                            "profile_rad_pi_chi2": profile_rad_pi_chi2,
-                            "profile_rad_pi_npoints": profile_rad_pi_npoints,
-                            "profile_az_pi_chi2": profile_az_pi_chi2,
-                            "profile_az_pi_npoints": profile_az_pi_npoints,
+                            # "ncc": metrics_v.get("ncc"),  # Unused diagnostic disabled.
+                            # "profile_pi_chi2_red": profile_pi_chi2_red,
+                            # "profile_pi_loglike": profile_loglike,
+                            # "profile_rad_pi_chi2": profile_rad_pi_chi2,
+                            # "profile_rad_pi_npoints": profile_rad_pi_npoints,
+                            # "profile_az_pi_chi2": profile_az_pi_chi2,
+                            # "profile_az_pi_npoints": profile_az_pi_npoints,
                             "loss": loss_v,
                 "constraints": constraint_comparison_v,
                 "model_unresolved_corrected": correct_unresolved,
@@ -1113,32 +1137,43 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             print(f'[obriy_mcfost] H band comparison uses {model_polarimetry_key}')
             data_cropped_h, model_cropped_h = obp.crop_to_same_size(
                 pdi_data_h['pol_images']['Q_phi'], results_h[model_polarimetry_key]['q_phi'])
-            model_rad_prof = results_h[model_polarimetry_key]['radial_profiles']['q_phi']
-            model_azimuthal_prof = results_h[model_polarimetry_key]['azimuthal_profiles']['q_phi']
+            if args.plot_intermediate:
+                model_rad_prof = results_h[model_polarimetry_key]['radial_profiles']['q_phi']
+                model_azimuthal_prof = results_h[model_polarimetry_key]['azimuthal_profiles']['q_phi']
             
-            obs_rad_prof_pi, obs_az_prof_pi = pdi_data_h['radial_profiles']['Q_phi'], pdi_data_h['azimuthal_profiles']['Q_phi']     
-            profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 12.27, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_h_")
-            profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 12.27, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_h_")
-            profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
-            profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
+                obs_rad_prof_pi, obs_az_prof_pi = pdi_data_h['radial_profiles']['Q_phi'], pdi_data_h['azimuthal_profiles']['Q_phi']
+            # Disabled legacy profile scores: neither scored nor plotted; small profiles can fail.
+            # profile_rad_pi_chi2, _,profile_rad_pi_loglike, profile_rad_pi_npoints = obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 12.27, profile_type="radial", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_h_")
+            # profile_az_pi_chi2, _,profile_az_pi_loglike, profile_az_pi_npoints = obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 12.27, profile_type="azimuthal", plot=args.plot_intermediate, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_h_")
+            # profile_pi_chi2_red= (profile_rad_pi_chi2 + profile_az_pi_chi2) / (profile_rad_pi_npoints + profile_az_pi_npoints -2)
+            # profile_loglike= profile_rad_pi_loglike + profile_az_pi_loglike
+            if args.plot_intermediate:
+                obp.profile_chi2(obs_rad_prof_pi, model_rad_prof, 12.27, profile_type="radial", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"radial_profile_pi_h_")
+                obp.profile_chi2(obs_az_prof_pi, model_azimuthal_prof, 12.27, profile_type="azimuthal", plot=True, calculate_chi2=False, save_prefix=str(workdir)+'/figures/'+"azimuthal_profile_pi_h_")
 
 
-            metrics_h = obp.full_image_metrics_noshift(
-                data_cropped_h, model_cropped_h,
-                normalize="zscore",          # good default for morphology
-                ssim_win=None,                 # 7–15 is typical
-                return_pixel_chi2=True
-            )
+            # SSIM is needed only for the optional diagnostic image.
+            metrics_h = {}
+            if args.plot_intermediate:
+                metrics_h = obp.full_image_metrics_noshift(
+                    data_cropped_h, model_cropped_h,
+                    normalize="zscore",          # good default for morphology
+                    ssim_win=None,                 # 7–15 is typical
+                    # return_pixel_chi2=True  # Unused by scoring and plots.
+                    calculate_ncc=False,  # NCC is neither scored nor plotted.
+                    return_pixel_chi2=False
+                )
             if args.plot_intermediate:
                 obp.plot_polarimetric_image(metrics_h["ssim_image"], 12.27, title=f'ssim, score {metrics_h["ssim"]}', save=str(workdir)+'/figures'+'/ssim_image_H.png', image_scale='linear', roi_half_size=30)
-            obp.save_band_metrics(
-                        workdir,
-                        band="H",
-                        analysis_metrics=results_h[model_polarimetry_key]['metrics'],
-                        ssim_score=metrics_h.get("ssim"),
-                        ncc_score=metrics_h.get("ncc"),
-                        extras={"ps_mas": 12.27, "notes": "zscore"}
-                        )
+            # Disabled legacy metric logging: these diagnostics are neither scored nor plotted.
+            # obp.save_band_metrics(
+            # workdir,
+            # band="H",
+            # analysis_metrics=results_h[model_polarimetry_key]['metrics'],
+            # ssim_score=metrics_h.get("ssim"),
+            # ncc_score=metrics_h.get("ncc"),
+            # extras={"ps_mas": 12.27, "notes": "zscore"}
+            # )
         # except Exception as e:
         #     print(f"Error in H-band polarimetric analysis: {e}")
         #     data_cropped_h= np.zeros((10,10))
@@ -1166,11 +1201,12 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                                 )
                 fig.savefig(str(workdir)+'/figures'+'/h_data_model_comparison.png', dpi=150, bbox_inches='tight')
                 plt.close()  
-            print(f'[obriy_mcfost] H band metrics: SSIM={metrics_h["ssim"]}, NCC={metrics_h["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
+            # print(f'[obriy_mcfost] H band metrics: SSIM={metrics_h["ssim"]}, NCC={metrics_h["ncc"]}, profile_pi_chi2_red={profile_pi_chi2_red}')
             constraint_comparison_h = obp.compare_pdi_constraints(
                 pdi_data_h['pol_images'], results_h[model_polarimetry_key],
                 results_h[model_polarimetry_key]['pixel_scale_mas'],
                 tolerances=getattr(args, 'pdi_constraint_tolerances', (0.05, 0.05, 0.05)),
+                absolute_floors=getattr(args, 'pdi_absolute_error_floors', (1e-16, 1e-16, 1e-16)),
                 radial_bin_mas=getattr(args, 'pdi_radial_bin_mas', 25.0),
                 disk_pa_deg=disk_pa_deg,
                 output_path=workdir / 'figures' / 'pdi_constraints_h.png', band='H')
@@ -1179,13 +1215,13 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             #loss_h=profile_pi_chi2_red # weights can be adjusted
             additional_info.setdefault("pdi", {})['H'] = {
                             "ssim": metrics_h.get("ssim"),
-                            "ncc": metrics_h.get("ncc"),
-                            "profile_pi_chi2_red": profile_pi_chi2_red,
-                            "profile_pi_loglike": profile_loglike,
-                            "profile_rad_pi_chi2": profile_rad_pi_chi2,
-                            "profile_rad_pi_npoints": profile_rad_pi_npoints,
-                            "profile_az_pi_chi2": profile_az_pi_chi2,
-                            "profile_az_pi_npoints": profile_az_pi_npoints,
+                            # "ncc": metrics_h.get("ncc"),  # Unused diagnostic disabled.
+                            # "profile_pi_chi2_red": profile_pi_chi2_red,
+                            # "profile_pi_loglike": profile_loglike,
+                            # "profile_rad_pi_chi2": profile_rad_pi_chi2,
+                            # "profile_rad_pi_npoints": profile_rad_pi_npoints,
+                            # "profile_az_pi_chi2": profile_az_pi_chi2,
+                            # "profile_az_pi_npoints": profile_az_pi_npoints,
                             "loss": loss_h,
                 "constraints": constraint_comparison_h,
                 "model_unresolved_corrected": correct_unresolved,
@@ -1204,10 +1240,13 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     if "alma" in fidelity["products"]:
         
         alma_cont = data_alma['alma_cont']
-        obs_rad_prof = data_alma['radial_profile']
-        obs_az_prof = data_alma['azimuthal_profile']
+        # Unused by the active ALMA comparison; avoid requiring legacy diagnostic data.
+        # obs_rad_prof = data_alma['radial_profile']
+        # Unused by the active ALMA comparison; avoid requiring legacy diagnostic data.
+        # obs_az_prof = data_alma['azimuthal_profile']
         ps_alma = data_alma['ps_alma']
-        data_size_alma = data_alma['image_size']
+        # Unused by the active ALMA comparison; avoid requiring legacy diagnostic data.
+        # data_size_alma = data_alma['image_size']
         wave=data_alma['alma_wavelength']
         # mask_alma = data_alma['mask_alma']  # Former per-pixel 3-sigma scoring mask.
         alma_spec = data_alma['image_spec']
@@ -1319,27 +1358,28 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         
         print(f"[obriy_mcfost] ALMA aperture residual-energy loss = {alma_comparison['residual_energy_loss']}, pixels = {alma_comparison['aperture_pixel_count']}")
 
-        metrics_alma = obp.full_image_metrics_noshift(
-                alma_cont, simulated_itot_as_data,
-                normalize="zscore",          # good default for morphology
-                ssim_win=None,                 # 7–15 is typical
-                return_pixel_chi2=True
-            )
+        # Disabled: ALMA SSIM/NCC and pixel chi2 are neither scored nor plotted.
+        # metrics_alma = obp.full_image_metrics_noshift(
+        # alma_cont, simulated_itot_as_data,
+        # normalize="zscore",          # good default for morphology
+        # ssim_win=None,                 # 7–15 is typical
+        # return_pixel_chi2=True
+        # )
         
         #loss_alma= 1-(metrics_alma['ssim']+metrics_alma['ncc'])/2 #
         loss_alma=alma_comparison["residual_energy_loss"] 
         #loss_alma=chi2_red_alma_profiles
 
         additional_info["alma"] = {
-            "ssim": metrics_alma.get("ssim"),
-            "ncc": metrics_alma.get("ncc"),
+            # "ssim": metrics_alma.get("ssim"),
+            # "ncc": metrics_alma.get("ncc"),
             "loss": loss_alma
         }
 
         additional_info["alma"]["comparison"] = {key: value.tolist() if isinstance(value, np.ndarray) else value
                                                 for key, value in alma_comparison.items()}
 
-        print(f'[obriy_mcfost] ALMA metrics: SSIM={metrics_alma["ssim"]}, NCC={metrics_alma["ncc"]}, aperture residual-energy loss = {alma_comparison["residual_energy_loss"]}')
+        # print(f'[obriy_mcfost] ALMA metrics: SSIM={metrics_alma["ssim"]}, NCC={metrics_alma["ncc"]}, aperture residual-energy loss = {alma_comparison["residual_energy_loss"]}')
             
         #print(f"ALMA chi2: {chi2_red_alma}")
     
