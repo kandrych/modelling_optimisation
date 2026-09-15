@@ -3575,8 +3575,9 @@ def measure_pdi_constraints(images, pixel_scale_mas, radius_mas=500.0,
                             radial_bin_mas=25.0, disk_pa_deg=0.0):
     """Measure linear images on a fixed grid. Only the light fraction clips Qphi.
 
-    Use a 500 mas circle if contained; otherwise use the full image for BOTH
-    numerator and denominator. Radial bins partition that same aperture.
+    Use a circle limited by the requested radius and the image pixel edges.
+    The centre is the original array's geometric centre. Radial bins partition
+    that same aperture for both Qphi and total intensity.
     Q/U and Qphi must represent the same reduction/correction state.
     """
     qphi, intensity, q, u = [np.asarray(images[k], dtype=float)
@@ -3590,9 +3591,9 @@ def measure_pdi_constraints(images, pixel_scale_mas, radius_mas=500.0,
     ny, nx = qphi.shape
     yy, xx = np.indices(qphi.shape)
     radius = np.hypot(xx-(nx-1)/2, yy-(ny-1)/2)*pixel_scale_mas
-    full_image = min(nx, ny)*pixel_scale_mas/2 < radius_mas
-    aperture = np.ones_like(qphi, dtype=bool) if full_image else radius <= radius_mas
-    outer = float(radius.max()+pixel_scale_mas*1e-6) if full_image else radius_mas
+    # Pixel edges are half a pixel beyond the outermost pixel centres.
+    outer = min(float(radius_mas), min(nx, ny)*pixel_scale_mas/2)
+    aperture = radius <= outer
     total_i = float(intensity[aperture].sum())
     total_qphi = float(qphi[aperture].sum())
     if total_i <= 0 or total_qphi <= 0:
@@ -3610,8 +3611,8 @@ def measure_pdi_constraints(images, pixel_scale_mas, radius_mas=500.0,
         raise ValueError('Invalid normalised differential quadrants.')
     return dict(positive_qphi_over_i=fraction, qphi_profile=q_profile,
                 intensity_profile=i_profile, radial_edges_mas=edges,
-                quadrants=values, full_image_aperture=full_image,
-                aperture_radius_mas=None if full_image else radius_mas,
+                quadrants=values, full_image_aperture=False,
+                aperture_radius_mas=outer,
                 sum_I=total_i, sum_signed_Qphi=total_qphi)
 
 
@@ -3634,7 +3635,7 @@ def pdi_constraint_loss(observed, model, tolerances, absolute_floors=(1e-16, 1e-
 
     for index, (name, key) in enumerate((
         ('fraction', 'positive_qphi_over_i'),
-        ('radial', 'pi_profile'), ('quadrant', 'quadrants'),
+        ('radial', 'qphi_profile'), ('quadrant', 'quadrants'),
     )):
         data = np.asarray(observed[key], dtype=float)
         prediction = np.asarray(model[key], dtype=float)
@@ -3677,7 +3678,7 @@ def plot_pdi_constraints(observed, model, output_path, band=''):
                   ylabel='Normalised differential value', title='Differential quadrants')
     for ax in axes.flat:
         ax.legend(); ax.grid(alpha=.2)
-    aperture = 'full common image' if observed['full_image_aperture'] else '500 mas circle'
+    aperture = f"{observed['aperture_radius_mas']:g} mas circle"
     fig.suptitle(f'{band}: {aperture}')
     fig.tight_layout()
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -3688,32 +3689,45 @@ def plot_pdi_constraints(observed, model, output_path, band=''):
 def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=(0.05, 0.05, 0.05),
                             radial_bin_mas=25.0, disk_pa_deg=0.0, output_path=None, band='',
                             absolute_floors=(0., 0., 0.)):
-    """Measure both images on their common central square, then score and plot.
+    """Measure separate grids within a shared circle, then score and plot.
+
+    The model must already have the observation's pixel scale. Each image keeps
+    its original geometric centre; no crop or interpolation is performed.
+    The shared radius is 500 mas or the largest circle inside both images.
 
     Recompute both observed and model quadrants at the supplied simulation PA
     on every call; observed quadrant values must not be cached across trial PAs.
 
     Reconstruct observed Q/U from the scored Qphi/Uphi pair so H-band raw Q/U
     cannot silently mix correction states. This assumes the same azimuthal
-    Stokes convention as compute_qphi_uphi_pi and a common centred pixel grid.
+    Stokes convention as compute_qphi_uphi_pi and the original geometric centre.
     """
-    arrays = [observation[k] for k in ('Q_phi', 'U_phi', 'I')]
-    arrays += [model[k] for k in ('q_phi', 'img_q', 'img_u', 'img_tot')]
-    size = min(min(np.shape(a)) for a in arrays)
-    cropped = [center_crop(np.asarray(a, dtype=float), size, size) for a in arrays]
-    qp, up, intensity, model_qp, model_q, model_u, model_i = cropped
+    qp, up, intensity = [np.asarray(observation[k], dtype=float)
+                         for k in ('Q_phi', 'U_phi', 'I')]
+    model_qp, model_q, model_u, model_i = [np.asarray(model[k], dtype=float)
+                                         for k in ('q_phi', 'img_q', 'img_u', 'img_tot')]
+    for group in ((qp, up, intensity), (model_qp, model_q, model_u, model_i)):
+        if group[0].ndim != 2 or any(a.shape != group[0].shape for a in group):
+            raise ValueError('Stokes images within each dataset must share a 2D grid.')
+    if not np.isfinite(pixel_scale_mas) or pixel_scale_mas <= 0:
+        raise ValueError('Pixel scale must be finite and positive.')
+    # Both circles are centred on their own original grid, including half-pixel
+    # centres for even arrays. Coverage is measured to the outer pixel edges.
+    shared_radius_mas = min(500.0, min(qp.shape)*pixel_scale_mas/2,
+                           min(model_qp.shape)*pixel_scale_mas/2)
     _, _, _, phi = compute_qphi_uphi_pi(qp, up)
     c, s = np.cos(2*phi), np.sin(2*phi)
     observed_images = dict(Q_phi=qp, I=intensity, Q=-qp*c+up*s, U=-qp*s-up*c)
     model_images = dict(Q_phi=model_qp, I=model_i, Q=model_q, U=model_u)
     observed = measure_pdi_constraints(observed_images, pixel_scale_mas,
-                                       radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
+                                       radius_mas=shared_radius_mas, radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
     predicted = measure_pdi_constraints(model_images, pixel_scale_mas,
-                                        radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
+                                        radius_mas=shared_radius_mas, radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
     terms = pdi_constraint_loss(observed, predicted, tolerances, absolute_floors)
     if output_path is not None:
         plot_pdi_constraints(observed, predicted, output_path, band)
     # JSON-compatible diagnostics, including the exact measurement definition.
     return dict(observed=_to_py(observed), model=_to_py(predicted), **terms,
                 positive_qphi_only_in_fraction=True, radial_bin_mas=radial_bin_mas,
-                disk_pa_deg=disk_pa_deg, common_image_size=size)
+                disk_pa_deg=disk_pa_deg, aperture_radius_mas=shared_radius_mas,
+                observed_image_shape=list(qp.shape), model_image_shape=list(model_qp.shape))
