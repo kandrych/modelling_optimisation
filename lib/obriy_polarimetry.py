@@ -2599,6 +2599,8 @@ def differential_quadrants(
 
     Notes
     -----
+    - The exact centre (R=0) is excluded from all quadrant aperture sums
+      because its azimuthal direction is undefined.
     - No scipy image rotation/interpolation is performed.
     - Q/U are rotated analytically into the disk Stokes basis.
     - Quadrants are defined in disk coordinates.
@@ -2740,8 +2742,11 @@ def differential_quadrants(
     # Calculate using your existing routine as a cross-check
     Qphi_sky, Uphi_sky, P_sky, _ = compute_qphi_uphi_pi(Q, U)
 
+    # The azimuthal direction is undefined at the exact stellar centre.
+    # Exclude it from the Qphi invariance check as well as quadrant integration.
     finite = (
-        np.isfinite(Qphi_disk)
+        (R > 0)
+        & np.isfinite(Qphi_disk)
         & np.isfinite(Qphi_sky)
     )
 
@@ -2768,8 +2773,11 @@ def differential_quadrants(
     # 6. Integration aperture
     # =========================================================
 
+    # Use the same centre exclusion for every quadrant and integrated denominator.
+    # This removes one pixel for odd grids and none for even centred grids.
     aperture = (
-        (R >= r_in_mas)
+        (R > 0)
+        & (R >= r_in_mas)
         & (R <= r_out_mas)
         & np.isfinite(Qd)
         & np.isfinite(Ud)
@@ -2779,55 +2787,39 @@ def differential_quadrants(
     # 7. Non-overlapping quadrant masks
     # =========================================================
 
-    def angular_difference(phi_array, center_deg):
-        """
-        Wrapped angular difference in [-pi, pi).
-        """
-        center = np.deg2rad(center_deg)
-
-        return np.angle(
-            np.exp(1j * (phi_array - center))
-        )
-
-    def wedge(center_deg):
-        """
-        90-degree wedge centred on center_deg.
-
-        The lower boundary is included and the upper boundary
-        excluded so neighbouring wedges cannot double-count pixels.
-        """
-        dphi = angular_difference(phi, center_deg)
-
-        return (
-            aperture
-            & (dphi >= -np.pi / 4.0)
-            & (dphi <  np.pi / 4.0)
-        )
+    # Classify each pixel once per Stokes family. Independent angular
+    # comparisons can omit or double-count pixels at rounded boundaries.
+    # Q sectors are centred on 0, 90, 180, 270 degrees; U on 45, 135, 225, 315.
+    q_sector = np.floor(
+        ((phi + np.pi / 4.0) % (2.0 * np.pi)) / (np.pi / 2.0)
+    ).astype(int) % 4
+    u_sector = np.floor(
+        (phi % (2.0 * np.pi)) / (np.pi / 2.0)
+    ).astype(int) % 4
 
     # =========================================================
     # 8. Q quadrants
     # =========================================================
 
-    Q000 = np.nansum(Qd[wedge(0)])
-    Q090 = np.nansum(Qd[wedge(90)])
-    Q180 = np.nansum(Qd[wedge(180)])
-    Q270 = np.nansum(Qd[wedge(270)])
+    Q000 = np.nansum(Qd[aperture & (q_sector == 0)])
+    Q090 = np.nansum(Qd[aperture & (q_sector == 1)])
+    Q180 = np.nansum(Qd[aperture & (q_sector == 2)])
+    Q270 = np.nansum(Qd[aperture & (q_sector == 3)])
 
     # =========================================================
     # 9. U quadrants
     # =========================================================
 
-    U045 = np.nansum(Ud[wedge(45)])
-    U135 = np.nansum(Ud[wedge(135)])
-    U225 = np.nansum(Ud[wedge(225)])
-    U315 = np.nansum(Ud[wedge(315)])
+    U045 = np.nansum(Ud[aperture & (u_sector == 0)])
+    U135 = np.nansum(Ud[aperture & (u_sector == 1)])
+    U225 = np.nansum(Ud[aperture & (u_sector == 2)])
+    U315 = np.nansum(Ud[aperture & (u_sector == 3)])
 
     # =========================================================
     # 10. Integrated quantities
     # =========================================================
 
-    # Better than summing the four quadrant values because this
-    # guarantees every aperture pixel is counted exactly once.
+    # Direct aperture totals also provide a check on the quadrant sums.
     SigmaQ = np.nansum(Qd[aperture])
     SigmaU = np.nansum(Ud[aperture])
 
@@ -3593,21 +3585,48 @@ def measure_pdi_constraints(images, pixel_scale_mas, radius_mas=500.0,
                 sum_I=total_i, sum_signed_Qphi=total_qphi)
 
 
-def pdi_constraint_loss(observed, model, tolerances):
-    """Equal-weight group mean; fixed tolerances, not a statistical chi-square.
+def pdi_constraint_loss(observed, model, tolerances, absolute_floors=(1e-16, 1e-16, 1e-16)):
+    """Relative-error composite loss: fraction, radial mean, quadrant sum.
 
-    tolerances: positive [fraction, normalised radial bin, normalised quadrant].
-    I(r) is diagnostic only. Shared normalisations correlate these measurements.
+    tolerances are fractional errors (0.05 means 5% of abs(observed)).
+    Optional absolute floors are in each measurement's dimensionless units.
+    No noise floor is assumed: zero scales raise rather than silently dropping data.
+    These are assumed error scales, not measured observational uncertainties.
     """
-    scales = np.asarray(tolerances, dtype=float)
-    if scales.shape != (3,) or not np.all(np.isfinite(scales)) or np.any(scales <= 0):
-        raise ValueError('Supply three finite positive PDI tolerances: fraction, radial, quadrant.')
+    relative = np.asarray(tolerances, dtype=float)
+    floors = np.asarray(absolute_floors, dtype=float)
+    if relative.shape != (3,) or not np.all(np.isfinite(relative)) or np.any(relative <= 0):
+        raise ValueError('Supply three finite positive relative PDI errors.')
+    if floors.shape != (3,) or not np.all(np.isfinite(floors)) or np.any(floors < 0):
+        raise ValueError('Supply three finite non-negative absolute PDI error floors.')
     np.testing.assert_allclose(observed['radial_edges_mas'], model['radial_edges_mas'])
-    fraction = ((model['positive_qphi_over_i']-observed['positive_qphi_over_i'])/scales[0])**2
-    radial = np.mean(((model['qphi_profile']-observed['qphi_profile'])/scales[1])**2)
-    quadrant = np.mean(((model['quadrants']-observed['quadrants'])/scales[2])**2)
-    return dict(fraction=float(fraction), radial=float(radial), quadrant=float(quadrant),
-                loss=float((fraction+radial+quadrant)/3), tolerances=scales.tolist())
+    terms, error_scales = {}, {}
+
+    for index, (name, key) in enumerate((
+        ('fraction', 'positive_qphi_over_i'),
+        ('radial', 'pi_profile'), ('quadrant', 'quadrants'),
+    )):
+        data = np.asarray(observed[key], dtype=float)
+        prediction = np.asarray(model[key], dtype=float)
+        if data.shape != prediction.shape or data.size == 0:
+            raise ValueError(f'{name}: inconsistent or empty measurement arrays.')
+        if not np.all(np.isfinite(data)) or not np.all(np.isfinite(prediction)):
+            raise ValueError(f'{name}: non-finite measurements.')
+        sigma = np.maximum(relative[index] * np.abs(data), floors[index])
+        if np.any(sigma <= 0):
+            raise ValueError(f'{name}: zero observed values require a positive '
+                             '--pdi-absolute-error-floors entry; relative errors alone are undefined.')
+        squared = ((prediction-data)/sigma)**2
+        terms[name] = float(np.mean(squared) if name == 'radial' else np.sum(squared))
+        error_scales[name] = sigma.tolist()
+    loss = sum(terms.values()) / 3.0
+    if not np.isfinite(loss):
+        raise ValueError('Non-finite PDI loss; check relative errors and absolute floors.')
+
+    return dict(**terms, loss=float(loss), tolerances=relative.tolist(),
+                error_model='relative_to_observed', absolute_floors=floors.tolist(),
+                error_scales=error_scales)
+
 
 
 def plot_pdi_constraints(observed, model, output_path, band=''):
@@ -3637,7 +3656,8 @@ def plot_pdi_constraints(observed, model, output_path, band=''):
 
 
 def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=(0.05, 0.05, 0.05),
-                            radial_bin_mas=25.0, disk_pa_deg=0.0, output_path=None, band=''):
+                            radial_bin_mas=25.0, disk_pa_deg=0.0, output_path=None, band='',
+                            absolute_floors=(0., 0., 0.)):
     """Measure both images on their common central square, then score and plot.
 
     Recompute both observed and model quadrants at the supplied simulation PA
@@ -3660,7 +3680,7 @@ def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=(0.0
                                        radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
     predicted = measure_pdi_constraints(model_images, pixel_scale_mas,
                                         radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
-    terms = pdi_constraint_loss(observed, predicted, tolerances)
+    terms = pdi_constraint_loss(observed, predicted, tolerances, absolute_floors)
     if output_path is not None:
         plot_pdi_constraints(observed, predicted, output_path, band)
     # JSON-compatible diagnostics, including the exact measurement definition.
