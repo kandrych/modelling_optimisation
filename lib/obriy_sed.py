@@ -224,7 +224,7 @@ def fit_sed_reddening(data_wave, data_flux, data_err, lam, flux_for_fit, reddeni
     reddening_fit = minimize(
         reddening_objective,
         x0=[1.4],
-        bounds=[(0.0, None)],  # A foreground screen cannot brighten the source.
+        bounds=[(0.0, 5.0)],  # A foreground screen cannot brighten the source.
     )
 
     if (
