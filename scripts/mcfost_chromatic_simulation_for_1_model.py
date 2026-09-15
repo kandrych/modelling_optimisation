@@ -46,7 +46,9 @@ p.add_argument("--correct-unresolved-polarimetry", action="store_true", help="Ap
 p.add_argument("--unresolved-correction-radius-px", type=float, default=None,
                help="Unresolved-polarisation aperture radius in instrument pixels; required when correction is enabled")
 p.add_argument("--pdi-constraint-tolerances", type=float, nargs=3, default=(0.05, 0.05, 0.05),
-               metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Fixed PDI tolerances, not observational errors")
+               metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Relative PDI errors: 0.05 = 5 percent of each observed value (assumed, not measured)")
+p.add_argument("--pdi-absolute-error-floors", type=float, nargs=3, default=(0., 0., 0.),
+               metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Absolute floors for PDI error scales; needed for zero observed values")
 p.add_argument("--pdi-radial-bin-mas", type=float, default=25.0, help="Non-overlapping PDI radial bins [mas]")
 args = p.parse_args()
 work_root=f'/fred/oz061/kandrych/smac/polarimetry_sed/full_chromatic_for_best/' #distance_sublimationF #distance660  #original
