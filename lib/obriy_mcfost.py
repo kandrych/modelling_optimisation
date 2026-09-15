@@ -732,6 +732,8 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         return 1e99, additional_info
     plot_mcfost_disk_structure(str(workdir.parent)+'/', simulation_name,  az_disk=0)
 
+    plot_mcfost_density_temperature_cuts(workdir, reference_radius_au=cfg.get("zone_1_Rc"))
+
     ebminv_sed=0.0
     if "sed" in fidelity["products"]:
         chi2_sed, chi2_reduced_sed, loglike_sed, ebminv_sed= obs.chi2_SED_with_reddening(str(workdir.name), str(workdir.parent)+'/', data_wave=data_sed[0], data_flux=data_sed[1],data_err=data_sed[2],
@@ -1388,3 +1390,134 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
     print(f"Total reduced chi2: {chi2_red_total}, loglike: {loglike_total}")
     
     return chi2_red_total, additional_info
+
+
+
+
+def plot_mcfost_density_temperature_cuts(
+    model_dir,
+    *,
+    az_disk=0,
+    height_ratios=(0.0, 0.15),
+    reference_radius_au=None,
+):
+    """Plot radial dust-density and temperature cuts.
+
+    Assumes the existing reader's cylindrical grid layout:
+        grid: (2, n_az, n_z, n_rad), coordinates in au
+        quantities: (n_az, n_z, n_rad)
+
+    Midplane uses the cell nearest z=0.
+    Other cuts interpolate vertically without extrapolation.
+    """
+    from pathlib import Path
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from astropy.io import fits
+
+    model_dir = Path(model_dir)
+
+    def read_array(relative_path):
+        path = model_dir / relative_path
+        if not path.is_file():
+            path = Path(str(path) + ".gz")
+        with fits.open(path) as hdul:
+            return np.asarray(hdul[0].data, dtype=float).copy()
+
+    grid = read_array("data_disk/grid.fits")
+    if grid.ndim != 4 or grid.shape[0] != 2:
+        raise ValueError(f"Unexpected grid shape: {grid.shape}")
+
+    radius = grid[0, az_disk]
+    height = grid[1, az_disk]
+    spatial_shape = grid.shape[1:]
+
+    quantities = {}
+    for name, path in (
+        ("density", "data_disk/dust_mass_density.fits"),
+        ("temperature", "data_th/Temperature.fits"),
+    ):
+        values = read_array(path)
+        if values.shape != spatial_shape:
+            raise ValueError(
+                f"{name}: expected {spatial_shape}, got {values.shape}. "
+                "Select additional component axes explicitly."
+            )
+        quantities[name] = values[az_disk]
+
+    radial_positions = np.median(radius, axis=0)
+    if not np.allclose(
+        radius, radial_positions[None, :], rtol=1e-6, atol=1e-10
+    ):
+        raise ValueError(
+            "Expected cylindrical grid columns at constant radius."
+        )
+
+    def extract_cut(values, height_ratio):
+        result = np.full(radial_positions.shape, np.nan)
+
+        for j, r_au in enumerate(radial_positions):
+            z, column = height[:, j], values[:, j]
+            valid = np.isfinite(z) & np.isfinite(column)
+            if not valid.any():
+                continue
+
+            z, column = z[valid], column[valid]
+            order = np.argsort(z)
+            z, column = z[order], column[order]
+
+            if height_ratio == 0:
+                result[j] = column[np.argmin(np.abs(z))]
+            else:
+                target_z = height_ratio * r_au
+                if z[0] <= target_z <= z[-1]:
+                    result[j] = np.interp(target_z, z, column)
+
+        return result
+
+    fig, axes = plt.subplots(
+        2, 1, figsize=(7, 7), sharex=True,
+        gridspec_kw={"hspace": 0.05},
+    )
+    order = np.argsort(radial_positions)
+    profiles = {}
+
+    for height_ratio in height_ratios:
+        label = (
+            "Midplane (nearest cell)"
+            if height_ratio == 0 else f"z/r = {height_ratio:g}"
+        )
+        profiles[height_ratio] = {
+            "radius_au": radial_positions[order]
+        }
+
+        for ax, name in zip(axes, ("density", "temperature")):
+            values = extract_cut(quantities[name], height_ratio)
+            profiles[height_ratio][name] = values[order]
+            plotted = np.where(values > 0, values, np.nan)
+            ax.plot(
+                radial_positions[order], plotted[order], label=label
+            )
+
+    axes[0].set_ylabel(r"$\rho_{\rm dust}$ [g cm$^{-3}$]")
+    axes[1].set_ylabel("T [K]")
+    axes[1].set_xlabel("Cylindrical radius [au]")
+    axes[0].set_title(model_dir.name)
+    axes[0].legend()
+
+    for ax in axes:
+        ax.set_yscale("log")
+        ax.grid(alpha=0.2)
+        if reference_radius_au is not None:
+            ax.axvline(
+                reference_radius_au,
+                color="grey", linestyle="--", linewidth=1,
+            )
+
+    output = model_dir / "figures" / "density_temperature_cuts.png"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+    return profiles
