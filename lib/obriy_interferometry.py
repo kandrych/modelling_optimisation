@@ -88,6 +88,25 @@ plt.rc("figure", titlesize=14)  # fontsize of the figure title
 #######################################
 
 
+def validate_interferometric_data(container, vistype):
+    """Validate observations once; preserve the existing positive-error selection."""
+    field = {"vis2": "v2", "vis": "v"}.get(vistype)
+    if field is None:
+        raise ValueError("vistype must be 'vis2' or 'vis'.")
+    data = np.asarray(getattr(container, field))
+    errors = np.asarray(getattr(container, field + "_err"))
+    if data.ndim != 1 or errors.shape != data.shape:
+        raise ValueError("Interferometric values and errors must be matching 1D arrays.")
+    if not np.all(np.isfinite(errors)):
+        raise ValueError("Non-finite interferometric observational errors.")
+    valid = errors > 0
+    if np.count_nonzero(valid) < 2:
+        raise ValueError("At least two positive-error interferometric samples are required for chi2/(N-1).")
+    if not np.all(np.isfinite(data[valid])):
+        raise ValueError("Non-finite retained interferometric observations.")
+    return valid
+
+
 def oi_container_chi2(
     container_data,
     container_model,
@@ -152,9 +171,15 @@ def oi_container_chi2(
             f"Shape mismatch: data{visdata.shape}, model.v2{vismod.shape}, data.v2_err{viserrdata.shape}"
         )
    
-    # Loop over all data points
+    valid = validate_interferometric_data(container_data, vistype)
+    if not np.all(np.isfinite(vismod[valid])):
+        raise ValueError("Non-finite model predictions at retained interferometric samples.")
+    if sigma_sys_frac is not None and (not np.isfinite(sigma_sys_frac) or sigma_sys_frac < 0):
+        raise ValueError("Systematic fractional error must be finite and non-negative.")
+
+    # Loop over the observation-selected samples; never mask a bad model prediction.
     for i in range(len(visdata)):
-        if viserrdata[i] > 0:
+        if valid[i]:
             if sigma_sys_frac is not None:
                 varience = viserrdata[i] ** 2 + (sigma_sys_frac * vismod[i])**2
             else:
@@ -163,8 +188,8 @@ def oi_container_chi2(
             loglike_sum+=((visdata[i] - vismod[i]) ** 2)/varience +np.log(2.0 * np.pi * varience)
             n_data_points += 1  # Count only points with valid error bars
 
-    if n_data_points == 0:
-        raise ValueError("No valid data points with positive error bars found for chi2 calculation.")
+    if not np.isfinite(chi2_sum) or not np.isfinite(loglike_sum):
+        raise ValueError("Non-finite interferometric score; check fluxes and uncertainties.")
     chi2_red = chi2_sum / (n_data_points-1)
     #chi2_red_scipy=chisquare(visdata, f_exp=vismod, ddof=1, sum_check=False)[0]
     #print(f"Chi2_red calculation check: custom={chi2_red}, scipy={chi2_red_scipy}")
