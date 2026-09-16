@@ -357,7 +357,7 @@ def calculate_unresolved(correction_radius, q, u,i,ps,R,normlim):
     mask=(R<=correction_radius)
 
     normalisation=np.sum(i[R<=1500/ps]) #normalisation within 1500 mas from central star
-    q_over_i=np.divide(q,i,where=i!=0)   
+    q_over_i=np.divide(q,i, out=np.full_like(q, np.nan, dtype=float), where=i!=0)   
     cq=np.median(q_over_i[mask]) #for median normal as in IRDIS
     u_over_i=np.divide(u,i,where=i!=0)    
     cu=np.median(u_over_i[mask]) #for median normal as in IRDIS
@@ -2899,7 +2899,7 @@ def differential_quadrants(
         and not np.isclose(
             SigmaQphi,
             0.0,
-            atol=1e-12,
+            atol=1e-32,
             rtol=0.0
         )
     )
