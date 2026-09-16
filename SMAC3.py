@@ -322,6 +322,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
     figdir=str(figdir)
     alma_spec = None
     alma_header = None
+    alma_aperture_radius_mas = None
 
     #filename of SED catalogue data file
     if data_root =='demo_mac':
@@ -730,7 +731,19 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         yc = (ny - 1) / 2.0
         R,_,_,X, Y = obp.compute_grid(alma_cont, xc=xc, yc=yc)
         noise_level_alma=np.nanstd(alma_cont[R>(150/ps_alma)])#here we take the noise level from the outer part of the image, where there is no emission
-        # The 3-sigma criterion now selects the outer radius in compare_alma_images.
+        # Fix the aperture from observations once, before any trial is launched.
+        centre = (float(alma_header["CRPIX1"])-1, float(alma_header["CRPIX2"])-1)
+        alma_aperture_radius_mas = ps_alma * oba.alma_snr_aperture_radius(
+            alma_cont, noise_level_alma, center_xy=centre,
+            snr_threshold=3.0, padding_pixels=3.0)
+        available_radius_mas = min(centre[0]+0.5, nx-0.5-centre[0],
+                                   centre[1]+0.5, ny-0.5-centre[1]) * ps_alma
+        if alma_aperture_radius_mas > available_radius_mas:
+            raise ValueError(
+                f"Observed ALMA SNR aperture ({alma_aperture_radius_mas:g} mas) exceeds "
+                f"image coverage ({available_radius_mas:g} mas). Inspect edge detections "
+                "and choose a valid observational aperture before optimisation.")
+        # The 3-sigma criterion selects only the radius, not individual scoring pixels.
         # Retained for reference: former individual-pixel scoring mask and plot.
         # mask_alma = (alma_cont >= 3*noise_level_alma)
         # #local plotting
@@ -751,7 +764,12 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
     pdi_data_h={'psf': psf_h, 'pol_images': pdi_h, 'radial_profiles': radial_profile_h, 'azimuthal_profiles': azimuthal_profile_h}
 
     data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma,'image_size': data_size_alma, 'alma_wavelength': alma_wavelength, 'image_spec': alma_spec, 'header': alma_header,
-               'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma, 'mask_alma': mask_alma, 'noise_level_alma': noise_level_alma}
+               'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma, 'mask_alma': mask_alma, 'noise_level_alma': noise_level_alma, 'aperture_radius_mas': alma_aperture_radius_mas}
+    if "vis2_1perband" in fidelity_products or "vis2_chromatic" in fidelity_products:
+        for container in (container_data_pionier, container_data_gravity,
+                          container_data_matisse_l, container_data_matisse_n):
+            obi.validate_interferometric_data(
+                container, 'vis' if container.vis_in_fcorr else 'vis2')
     data_sed = [data_wave, data_flux, data_err]
     data_arrays = [data_sed, container_data_pionier, container_data_gravity, container_data_matisse_l, container_data_matisse_n,pdi_data_v, pdi_data_i, pdi_data_h, data_alma]
     print('data loaded')
