@@ -208,8 +208,8 @@ def chi2reddened(lam, flux, lam_model, flux_model, flux_error, path, E, sigma_sy
 
 def fit_sed_reddening(data_wave, data_flux, data_err, lam, flux_for_fit, reddening_law_path):
     """Fit the production non-negative foreground E(B-V), without plotting or I/O."""
-    def reddening_objective(ebv_start: np.ndarray) -> float:
-        ebv = float(ebv_start[0])
+    def reddening_objective(ebv: float) -> float:
+        ebv = float(ebv)
         _, chi2_full, _ = chi2reddened(
             data_wave,
             data_flux,
@@ -221,10 +221,10 @@ def fit_sed_reddening(data_wave, data_flux, data_err, lam, flux_for_fit, reddeni
         )
         return float(chi2_full)
 
-    reddening_fit = minimize(
+    reddening_fit = minimize_scalar(
         reddening_objective,
-        x0=[1.4],
-        bounds=[(0.0, 5.0)],  # A foreground screen cannot brighten the source.
+        bounds=(0.0, 5.0),  # Preserve the physical foreground-screen bounds.
+        method="bounded",
     )
 
     if (
@@ -236,7 +236,12 @@ def fit_sed_reddening(data_wave, data_flux, data_err, lam, flux_for_fit, reddeni
             f"SED reddening fit failed: {reddening_fit.message}"
         )
 
-    return float(reddening_fit.x[0])
+    # A bounded interior search need not evaluate the exact physical boundaries.
+    candidates = np.array([0.0, float(reddening_fit.x), 5.0])
+    costs = np.array([reddening_objective(ebv) for ebv in candidates])
+    if not np.all(np.isfinite(costs)):
+        raise ValueError("Non-finite SED reddening objective.")
+    return float(candidates[np.argmin(costs)])
 
 
 def plot_sed_secondary_comparison(data_wave, data_flux, data_err, lam, full_sed,
