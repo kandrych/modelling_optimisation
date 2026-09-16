@@ -298,6 +298,60 @@ def rescale_alma(
     return img_tot_res
 
 
+def align_alma_to_observation(model_jybeam, model_header, observed_header,
+                              observed_shape):
+    """Sample beam-convolved Jy/beam on the observation grid without recentering by shape.
+
+    Register the two FITS reference pixels as the same source position. Use
+    local sky-plane offsets (degrees), appropriate for these subarcsecond images,
+    rather than matching absolute CRVAL: MCFOST uses an arbitrary sky origin.
+    PC/CD matrices retain axis orientation and rotation. No flux renormalisation
+    is applied: the input is already surface brightness in Jy/beam.
+    """
+    from scipy.ndimage import map_coordinates
+
+    model = np.asarray(model_jybeam, dtype=float)
+    if model.ndim != 2 or not np.all(np.isfinite(model)):
+        raise ValueError("Expected a finite 2D beam-convolved ALMA model.")
+    if len(observed_shape) != 2 or min(observed_shape) <= 0:
+        raise ValueError("Expected a nonempty 2D observation shape.")
+    matrices, centres = [], []
+    for header in (model_header, observed_header):
+        wcs = WCS(header).celestial
+        if wcs.pixel_n_dim != 2 or not (
+            wcs.wcs.ctype[0].startswith("RA") and wcs.wcs.ctype[1].startswith("DEC")
+        ):
+            raise ValueError("Expected RA, Dec celestial axes for ALMA alignment.")
+        if wcs.has_distortion:
+            raise ValueError("Distorted ALMA grids require full WCS reprojection.")
+        matrix = np.asarray(wcs.pixel_scale_matrix, dtype=float)
+        centre = np.asarray(wcs.wcs.crpix, dtype=float) - 1.0
+        if (not np.all(np.isfinite(matrix)) or np.linalg.det(matrix) == 0
+                or not np.all(np.isfinite(centre))):
+            raise ValueError("Invalid ALMA spatial WCS or reference pixel.")
+        matrices.append(matrix)
+        centres.append(centre)
+
+    yy, xx = np.indices(observed_shape, dtype=float)
+    observed_offsets = np.stack((xx-centres[1][0], yy-centres[1][1]), axis=0)
+    transform = np.linalg.solve(matrices[0], matrices[1])
+    coordinates = np.einsum('ij,jhw->ihw', transform, observed_offsets)
+    coordinates += centres[0][:, None, None]
+    # Require coverage before interpolation; never silently pad missing emission.
+    limits = np.array([model.shape[1]-1, model.shape[0]-1])[:, None, None]
+    if np.any(coordinates < -1e-7) or np.any(coordinates > limits+1e-7):
+        raise ValueError("ALMA model does not cover the registered observational grid.")
+    coordinates = np.clip(coordinates, 0.0, limits)
+    aligned = map_coordinates(model, coordinates[::-1], order=1,
+                              mode="constant", cval=np.nan, prefilter=False)
+    metadata = dict(model_center_xy=centres[0].tolist(),
+                    observed_center_xy=centres[1].tolist(),
+                    observed_to_model_pixel_matrix=transform.tolist(),
+                    alignment="FITS reference pixels; local sky-plane offsets",
+                    interpolation="bilinear; Jy/beam preserved")
+    return aligned, metadata
+
+
 def cut_down_alma(
     img_1: np.ndarray,
     img_2: np.ndarray

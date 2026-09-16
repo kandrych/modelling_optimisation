@@ -1296,20 +1296,9 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             data_alma["header"],
         )
 
-        simulated_itot_resc = oba.rescale_alma(
-            model_jybeam_native,
-            model_pixel_mas,
-            ps_alma,
-            conserve="surface_brightness",
+        simulated_itot_as_data, alma_alignment = oba.align_alma_to_observation(
+            model_jybeam_native, model_header, data_alma["header"], alma_cont.shape,
         )
-
-        if simulated_itot_resc.shape[0] > alma_cont.shape[0]:
-            simulated_itot_as_data=oba.cut_down_alma(simulated_itot_resc, alma_cont)
-        elif simulated_itot_resc.shape[0] < alma_cont.shape[0]:
-            raise ValueError("ALMA model does not cover the observational image.")
-        else:
-            simulated_itot_as_data=simulated_itot_resc
-
 
         if args.plot_intermediate:
             with obg.diagnostic_plot("ALMA matched model image"):
@@ -1327,10 +1316,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
         # Explicit initial assumption: source centre is the FITS reference pixel.
         # FITS coordinates are one-based; NumPy coordinates are zero-based.
-        center_xy = (
-            float(observed_header["CRPIX1"]) - 1.0,
-            float(observed_header["CRPIX2"]) - 1.0,
-        )
+        center_xy = tuple(alma_alignment["observed_center_xy"])
 
         alma_comparison = oba.compare_alma_images(
             alma_cont,
@@ -1408,6 +1394,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         #loss_alma=chi2_red_alma_profiles
 
         additional_info["alma"] = {
+            "alignment": alma_alignment,
             # "ssim": metrics_alma.get("ssim"),
             # "ncc": metrics_alma.get("ncc"),
             "loss": loss_alma
