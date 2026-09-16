@@ -905,17 +905,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             #CHANGES HERE
             disk_pa_deg=cfg.get('disk_pa', 0)
             #to avoid machine precision issues due to the small values of Q and U, we can multiply them by representative factor of qphi, because we are interested in normalised values anyway and it is not affecting final differential quadrant results. 
-            max_val_for_order = np.nanmax(np.abs(results_i['mcfost_convolved']['q_phi']))
-            order = np.floor(np.log10(max_val_for_order)) if max_val_for_order > 0 else 0
-            size_convolved_i = results_i['mcfost_convolved']['img_q'].shape[0]
-            r_out_quadrants=(size_convolved_i-1)*results_i['mcfost_convolved']['pixel_scale_mas']/2 #in mas, to avoid issues with the quadrant calculation, we can use the full size of the convolved image
-            quadrant_results_sim_i = obp.differential_quadrants(results_i['mcfost_convolved']['img_q']*10**(-order), results_i['mcfost_convolved']['img_u']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_simulation.png', roi_mas=None)
-            quadrant_results_sim_i_conv_unres_corr = obp.differential_quadrants(results_i['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_i['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_simulation_unresolved_corr.png', roi_mas=None)
-            #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
-            quadrant_results_data_i = obp.differential_quadrants(pdi_data_i['pol_images']['Q']*10**(-order), pdi_data_i['pol_images']['U']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_data.png', roi_mas=None)
-            with obg.diagnostic_plot("I-band quadrant comparison"):
-                fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_i, quadrant_results_sim_i, quadrant_results_sim_i_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_i_comparison.png')
-                plt.close(fig)
+            if args.plot_intermediate:
+                with obg.diagnostic_plot("I-band diagnostic quadrant preparation and comparison"):
+                    max_val_for_order = np.nanmax(np.abs(results_i['mcfost_convolved']['q_phi']))
+                    order = np.floor(np.log10(max_val_for_order)) if max_val_for_order > 0 else 0
+                    size_convolved_i = results_i['mcfost_convolved']['img_q'].shape[0]
+                    r_out_quadrants=(size_convolved_i-1)*results_i['mcfost_convolved']['pixel_scale_mas']/2 #in mas, to avoid issues with the quadrant calculation, we can use the full size of the convolved image
+                    quadrant_results_sim_i = obp.differential_quadrants(results_i['mcfost_convolved']['img_q']*10**(-order), results_i['mcfost_convolved']['img_u']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_simulation.png', roi_mas=None)
+                    quadrant_results_sim_i_conv_unres_corr = obp.differential_quadrants(results_i['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_i['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_simulation_unresolved_corr.png', roi_mas=None)
+                    #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
+                    quadrant_results_data_i = obp.differential_quadrants(pdi_data_i['pol_images']['Q']*10**(-order), pdi_data_i['pol_images']['U']*10**(-order), pixel_scale_mas=results_i['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_i_data.png', roi_mas=None)
+                    fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_i, quadrant_results_sim_i, quadrant_results_sim_i_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_i_comparison.png')
+                    plt.close(fig)
             
             print(f'[obriy_mcfost] I band comparison uses {model_polarimetry_key}')
             data_cropped_i, model_cropped_i = obp.crop_to_same_size(
@@ -1034,17 +1035,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             #CHANGES HERE
             disk_pa_deg=cfg.get('disk_pa', 0)
             #to avoid machine precision issues due to the small values of Q and U, we can multiply them by representative factor of qphi, because we are interested in normalised values anyway and it is not affecting final differential quadrant results. 
-            max_val_for_order = np.nanmax(np.abs(results_v['mcfost_convolved']['q_phi']))
-            order = np.floor(np.log10(max_val_for_order)) if max_val_for_order > 0 else 0
-            size_convolved_v = results_v['mcfost_convolved']['img_q'].shape[0]
-            r_out_quadrants=(size_convolved_v-1)*results_v['mcfost_convolved']['pixel_scale_mas']/2 #in mas, to avoid issues with the quadrant calculation, we can use the full size of the convolved image
-            quadrant_results_sim_v = obp.differential_quadrants(results_v['mcfost_convolved']['img_q']*10**(-order), results_v['mcfost_convolved']['img_u']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_simulation.png', roi_mas=None)
-            quadrant_results_sim_v_conv_unres_corr = obp.differential_quadrants(results_v['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_v['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_simulation_unresolved_corr.png', roi_mas=None)
-            #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
-            quadrant_results_data_v = obp.differential_quadrants(pdi_data_v['pol_images']['Q']*10**(-order), pdi_data_v['pol_images']['U']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_data.png', roi_mas=None)
-            with obg.diagnostic_plot("V-band quadrant comparison"):
-                fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_v, quadrant_results_sim_v, quadrant_results_sim_v_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_v_comparison.png')
-                plt.close(fig)
+            if args.plot_intermediate:
+                with obg.diagnostic_plot("V-band diagnostic quadrant preparation and comparison"):
+                    max_val_for_order = np.nanmax(np.abs(results_v['mcfost_convolved']['q_phi']))
+                    order = np.floor(np.log10(max_val_for_order)) if max_val_for_order > 0 else 0
+                    size_convolved_v = results_v['mcfost_convolved']['img_q'].shape[0]
+                    r_out_quadrants=(size_convolved_v-1)*results_v['mcfost_convolved']['pixel_scale_mas']/2 #in mas, to avoid issues with the quadrant calculation, we can use the full size of the convolved image
+                    quadrant_results_sim_v = obp.differential_quadrants(results_v['mcfost_convolved']['img_q']*10**(-order), results_v['mcfost_convolved']['img_u']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_simulation.png', roi_mas=None)
+                    quadrant_results_sim_v_conv_unres_corr = obp.differential_quadrants(results_v['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_v['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_simulation_unresolved_corr.png', roi_mas=None)
+                    #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
+                    quadrant_results_data_v = obp.differential_quadrants(pdi_data_v['pol_images']['Q']*10**(-order), pdi_data_v['pol_images']['U']*10**(-order), pixel_scale_mas=results_v['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_v_data.png', roi_mas=None)
+                    fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_v, quadrant_results_sim_v, quadrant_results_sim_v_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'], save=str(workdir)+'/figures/'+'quadrants_v_comparison.png')
+                    plt.close(fig)
             if args.plot_intermediate:
                 with obg.diagnostic_plot("V-band deconvolved Qphi images"):
                     obp.plot_polarimetric_image(results_v['mcfost_convolved_unresolved_corrected']['q_phi_deconvolved'], 3.6, title=f'Model Qphi, conv, unres corr, decon', save=str(workdir)+'/figures'+'/model_q_phi_corr_conv_deconv_V.png', image_scale='asinh', roi_half_size=100)
@@ -1153,17 +1155,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             #CHANGES HERE
             disk_pa_deg=cfg.get('disk_pa', 0)
             #to avoid machine precision issues due to the small values of Q and U, we can multiply them by representative factor of qphi, because we are interested in normalised values anyway and it is not affecting final differential quadrant results. 
-            max_val_for_order = np.nanmax(np.abs(results_h['mcfost_convolved']['q_phi']))
-            order = np.floor(np.log10(max_val_for_order)) if max_val_for_order > 0 else 0
-            size_convolved_h = results_h['mcfost_convolved']['img_q'].shape[0]
-            r_out_quadrants=(size_convolved_h-1)*12.27/2 #in mas, to avoid issues with the quadrant calculation, we can use the full size of the convolved image
-            quadrant_results_sim_h = obp.differential_quadrants(results_h['mcfost_convolved']['img_q']*10**(-order), results_h['mcfost_convolved']['img_u']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_simulation.png', roi_mas=None)
-            quadrant_results_sim_h_conv_unres_corr = obp.differential_quadrants(results_h['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_h['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_simulation_unresolved_corr.png', roi_mas=None)
-            #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
-            quadrant_results_data_h = obp.differential_quadrants(pdi_data_h['pol_images']['Q']*10**(-order), pdi_data_h['pol_images']['U']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_data.png', roi_mas=None)
-            with obg.diagnostic_plot("H-band quadrant comparison"):
-                fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_h, quadrant_results_sim_h, quadrant_results_sim_h_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'],  save=str(workdir)+'/figures/'+'quadrants_h_comparison.png')
-                plt.close(fig)
+            if args.plot_intermediate:
+                with obg.diagnostic_plot("H-band diagnostic quadrant preparation and comparison"):
+                    max_val_for_order = np.nanmax(np.abs(results_h['mcfost_convolved']['q_phi']))
+                    order = np.floor(np.log10(max_val_for_order)) if max_val_for_order > 0 else 0
+                    size_convolved_h = results_h['mcfost_convolved']['img_q'].shape[0]
+                    r_out_quadrants=(size_convolved_h-1)*12.27/2 #in mas, to avoid issues with the quadrant calculation, we can use the full size of the convolved image
+                    quadrant_results_sim_h = obp.differential_quadrants(results_h['mcfost_convolved']['img_q']*10**(-order), results_h['mcfost_convolved']['img_u']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_simulation.png', roi_mas=None)
+                    quadrant_results_sim_h_conv_unres_corr = obp.differential_quadrants(results_h['mcfost_convolved_unresolved_corrected']['img_q']*10**(-order), results_h['mcfost_convolved_unresolved_corrected']['img_u']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved_unresolved_corrected']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_simulation_unresolved_corr.png', roi_mas=None)
+                    #we can use the same order as for the model to avoid any issues with the differential quadrant calculation
+                    quadrant_results_data_h = obp.differential_quadrants(pdi_data_h['pol_images']['Q']*10**(-order), pdi_data_h['pol_images']['U']*10**(-order), pixel_scale_mas=results_h['mcfost_convolved']['pixel_scale_mas'], disk_pa_deg=disk_pa_deg, r_in_mas=0, r_out_mas=r_out_quadrants, flip_disk_y=False, plot=args.plot_intermediate, save=str(workdir)+'/figures/'+'quadrants_h_data.png', roi_mas=None)
+                    fig, axes=obp.plot_quadrant_comparison([quadrant_results_data_h, quadrant_results_sim_h, quadrant_results_sim_h_conv_unres_corr], ['Data', 'Model', 'Model Conv Unres Corr'],  save=str(workdir)+'/figures/'+'quadrants_h_comparison.png')
+                    plt.close(fig)
                         
             print(f'[obriy_mcfost] H band comparison uses {model_polarimetry_key}')
             data_cropped_h, model_cropped_h = obp.crop_to_same_size(
@@ -1324,7 +1327,7 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             observed_header,
             ps_alma,
             center_xy=center_xy,
-            aperture_radius_mas=None,
+            aperture_radius_mas=data_alma["aperture_radius_mas"],
             snr_threshold=3.0,
             aperture_padding_pixels=3.0,
             noise_rms_jybeam=data_alma["noise_level_alma"],
