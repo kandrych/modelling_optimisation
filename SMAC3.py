@@ -781,33 +781,48 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
 
 
 
-def make_unique_trial_dir(scratch_root: Path, seed: int, budget: float) -> Path:
+# def make_unique_trial_dir(scratch_root: Path, seed: int, budget: float) -> Path:
+#     """Previous seed/timestamp naming, retained for reference."""
+#     ts = time.strftime("%Y%m%d-%H%M%S")
+#     base = Path(scratch_root) / f"trial_seed{seed}_budget{budget:.2f}_{ts}"
+#     trial_dir = base
+#     idx = 0
+#     while True:
+#         try:
+#             trial_dir.mkdir(parents=True, exist_ok=False)
+#             return trial_dir
+#         except FileExistsError:
+#             idx += 1
+#             trial_dir = base.with_name(f"{base.name}_{idx:03d}")
+
+
+def make_unique_config_trial_dir(scratch_root: Path, config_id: int, budget: float) -> Path:
+    """Create ``config_<id>_budget_<budget>`` folders with an atomic suffix.
+
+    A SMAC configuration may be evaluated repeatedly, including at several
+    budgets.  The suffix preserves every evaluation while the shared config ID
+    remains visible in the folder and its diagnostic plot names.
     """
-    Create a unique trial directory like:
-      trial_seed42_budget1.50_20251029-204211
-      trial_seed42_budget1.50_20251029-204211_001
-      ...
-    Uses atomic mkdir to avoid races.
-    """
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    base = Path(scratch_root) / f"trial_seed{seed}_budget{budget:.2f}_{ts}"
+    base = Path(scratch_root) / f"config_{config_id}_budget_{budget:.2f}"
     trial_dir = base
-    idx = 0
+    suffix = 0
     while True:
         try:
-            trial_dir.mkdir(parents=True, exist_ok=False)  # atomic: raises if exists
+            trial_dir.mkdir(parents=True, exist_ok=False)
             return trial_dir
         except FileExistsError:
-            idx += 1
-            trial_dir = base.with_name(f"{base.name}_{idx:03d}")
+            suffix += 1
+            trial_dir = base.with_name(f"{base.name}_{suffix:03d}")
 
-def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str, Any], scratch_root: str, args) -> float:
+
+def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str, Any],
+              scratch_root: str, args, config_id: int) -> float:
     fidelity = map_budget_to_fidelity(budget)
 
     # Each trial gets a private scratch dir
     # trial_dir = Path(scratch_root) / f"trial_seed{seed}_budget{budget:.2f}" /time.strftime("%Y%m%d-%H%M%S")
     # trial_dir.mkdir(parents=True, exist_ok=True)
-    trial_dir = make_unique_trial_dir(Path(scratch_root), seed, budget)
+    trial_dir = make_unique_config_trial_dir(Path(scratch_root), config_id, budget)
 
     # Convert cfg (ConfigSpace.Configuration) to dict
     if hasattr(cfg, "get_dictionary"):
@@ -999,7 +1014,11 @@ def main():
 
     # SMAC Objective wrapper with extra kwargs via lambda/closure
     def smac_objective(cfg, seed: int, budget: float) -> float:
-        return objective(cfg, seed, budget, data_arg=data_arg, scratch_root=trial_folder, args=args)
+        config_id = smac.runhistory.get_config_id(cfg)
+        if config_id is None:
+            raise RuntimeError("SMAC did not register a config_id before objective evaluation.")
+        return objective(cfg, seed, budget, data_arg=data_arg,
+                         scratch_root=trial_folder, args=args, config_id=config_id)
     
 
     
