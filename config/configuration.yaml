@@ -99,12 +99,12 @@ hyperparameters:
 
 
 conditions:
-  - type: EqualsCondition
+  - type: EQ
     child: zone_1_species_1_component_2_volume_fraction_forsterite
     parent: zone_1_species_1_component_2_optical_indices_file
     value: forst_cryst_servoin.lnk
 
-  - type: EqualsCondition
+  - type: EQ
     child: zone_1_species_1_component_2_volume_fraction_iron
     parent: zone_1_species_1_component_2_optical_indices_file
     value: Fe_palik.lnk
