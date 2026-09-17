@@ -3700,8 +3700,8 @@ def measure_pdi_constraints(images, pixel_scale_mas, radius_mas=500.0,
     aperture = radius <= outer
     total_i = float(intensity[aperture].sum())
     total_qphi = float(qphi[aperture].sum())
-    if total_i <= 0 or total_qphi <= 0:
-        raise ValueError('Positive integrated I and signed Qphi required for normalisation.')
+    if total_i <= 0:
+        raise ValueError('Positive integrated I required for normalisation.')
     # Positive-only Qphi, as explicitly requested; noise can bias this upward.
     fraction = float(np.maximum(qphi[aperture], 0).sum()/total_i)
     edges = np.arange(0., outer, radial_bin_mas)
