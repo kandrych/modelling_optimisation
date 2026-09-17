@@ -68,11 +68,28 @@ hyperparameters:
     default_value: 0.25
     meta: null
   
-  - name: zone_1_species_1_component_1_volume_fraction
+  - name: zone_1_species_1_Vmax
     type: categorical
     choices: [0.7, 0.8]
     default_value: 0.7
     meta: null
+
+  - name: zone_1_species_1_component_2_optical_indices_file
+    type: categorical
+    choices: [forst_cryst_servoin.lnk, Fe_palik.lnk]
+    default_value: forst_cryst_servoin.lnk
+
+  - name: zone_1_species_1_component_2_volume_fraction_forsterite
+    type: uniform_float
+    lower: 0.0
+    upper: 0.4
+    default_value: 0.2
+
+  - name: zone_1_species_1_component_2_volume_fraction_iron
+    type: uniform_float
+    lower: 0.0
+    upper: 0.2
+    default_value: 0.1
 
 
 #Fixed parameters
@@ -80,7 +97,19 @@ hyperparameters:
     type: constant
     value: 1220.0
 
-conditions: []
+
+conditions:
+  - type: EqualsCondition
+    child: zone_1_species_1_component_2_volume_fraction_forsterite
+    parent: zone_1_species_1_component_2_optical_indices_file
+    value: forst_cryst_servoin.lnk
+
+  - type: EqualsCondition
+    child: zone_1_species_1_component_2_volume_fraction_iron
+    parent: zone_1_species_1_component_2_optical_indices_file
+    value: Fe_palik.lnk
+
+
 forbiddens: []
 
 #  # extra categorical just to demo a forbidden combo
