@@ -354,13 +354,25 @@ def calculate_unresolved(correction_radius, q, u,i,ps,R,normlim):
     #resulting values are in fraction (not %) for dolp, and in degrees for aolp
     
 
-    mask=(R<=correction_radius)
+    q, u, i, R = (np.asarray(array, dtype=float) for array in (q, u, i, R))
+    if not (q.shape == u.shape == i.shape == R.shape):
+        raise ValueError("Unresolved correction requires Q, U, I and R on the same grid.")
+
+    # Estimate both coefficients from exactly the same valid central pixels.
+    # Zero/negative intensity and invalid Stokes values cannot define Q/I or U/I.
+    mask = ((R <= correction_radius) & np.isfinite(R)
+            & np.isfinite(q) & np.isfinite(u) & np.isfinite(i) & (i > 0))
+    if not np.any(mask):
+        raise ValueError("Unresolved correction aperture has no finite Q/U pixels with positive I.")
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        q_over_i = q[mask] / i[mask]
+        u_over_i = u[mask] / i[mask]
+    if not (np.all(np.isfinite(q_over_i)) and np.all(np.isfinite(u_over_i))):
+        raise ValueError("Non-finite Q/I or U/I ratios in unresolved correction aperture.")
+    cq = np.median(q_over_i)
+    cu = np.median(u_over_i)
 
     normalisation=np.sum(i[R<=1500/ps]) #normalisation within 1500 mas from central star
-    q_over_i=np.divide(q,i, out=np.full_like(q, np.nan, dtype=float), where=i!=0)   
-    cq=np.median(q_over_i[mask]) #for median normal as in IRDIS
-    u_over_i=np.divide(u,i,where=i!=0)    
-    cu=np.median(u_over_i[mask]) #for median normal as in IRDIS
     aolp_unres=np.rad2deg(0.5*np.arctan2(cu, cq))
     #print(aolp_unres)
     if aolp_unres<0 : 
