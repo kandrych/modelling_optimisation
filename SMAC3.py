@@ -816,12 +816,17 @@ def make_unique_config_trial_dir(scratch_root: Path, config_id: int, budget: flo
 
 
 def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str, Any],
-              scratch_root: str, args, config_id: int) -> float:
+              scratch_root: str, args) -> float:
     fidelity = map_budget_to_fidelity(budget)
 
     # Each trial gets a private scratch dir
     # trial_dir = Path(scratch_root) / f"trial_seed{seed}_budget{budget:.2f}" /time.strftime("%Y%m%d-%H%M%S")
     # trial_dir.mkdir(parents=True, exist_ok=True)
+    # SMAC registers the running trial before dispatching it to Dask and stores
+    # the resulting runhistory ID on this serializable Configuration object.
+    config_id = getattr(cfg, "config_id", None)
+    if config_id is None:
+        raise RuntimeError("SMAC Configuration has no config_id before objective evaluation.")
     trial_dir = make_unique_config_trial_dir(Path(scratch_root), config_id, budget)
 
     # Convert cfg (ConfigSpace.Configuration) to dict
@@ -1014,11 +1019,8 @@ def main():
 
     # SMAC Objective wrapper with extra kwargs via lambda/closure
     def smac_objective(cfg, seed: int, budget: float) -> float:
-        config_id = smac.runhistory.get_config_id(cfg)
-        if config_id is None:
-            raise RuntimeError("SMAC did not register a config_id before objective evaluation.")
         return objective(cfg, seed, budget, data_arg=data_arg,
-                         scratch_root=trial_folder, args=args, config_id=config_id)
+                         scratch_root=trial_folder, args=args)
     
 
     
