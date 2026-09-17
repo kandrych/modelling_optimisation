@@ -68,7 +68,7 @@ hyperparameters:
     default_value: 0.25
     meta: null
   
-  - name: zone_1_species_1_volume_fraction
+  - name: zone_1_species_1_component_1_volume_fraction
     type: categorical
     choices: [0.7, 0.8]
     default_value: 0.7

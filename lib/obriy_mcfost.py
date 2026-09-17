@@ -97,6 +97,10 @@ class ParaFile:
         self.filepath = filepath
         self.lines = []
         self.params = {}
+        # These values define the number of following records.  Editing a
+        # token cannot safely create or remove those records, so keep the
+        # grain-section structure fixed by the input template.
+        self._structural_params = set()
         self.read()
         self._param_map = {
             "nbr_photons_eq_th": (3,0),
@@ -142,6 +146,7 @@ class ParaFile:
             "alpha_viscosity": (37, 1),
             "number_of_zones": (40, 0)
         }
+        self._structural_params.add("number_of_zones")
         num_zones = int(self.lines[self.find_line_starting_with("#Number of zones") + 1].split()[0])
         
         # Add density structure parameters for each zone
@@ -164,31 +169,48 @@ class ParaFile:
                 self._param_map[f"zone_{i+1}_surface_density_exp"] = (base +5,0)
                 self._param_map[f"zone_{i+1}_-gamma_exp"] = (base +5,1)
 
-        # Add grain properties for each zone
-        start_line = self.find_line_starting_with("#Grain properties") 
+        # Add grain properties for each zone.  A species occupies a variable
+        # number of rows: one header, N_components material rows, one heating
+        # row and one grain-size row.  Do not use fixed line offsets here.
+        start_line = self.find_line_starting_with("#Grain properties")
         if start_line != -1:
-            
-            base = start_line + 1
-            lines_per_species = 4
+            cursor = self._next_parameter_line(start_line + 1)
             for i in range(num_zones):
-                self._param_map[f"zone_{i+1}_number_of_species"] = (base + 0, 0)
-                num_species = int(self.lines[base + 0].split()[0])
+                zone_key = f"zone_{i + 1}_number_of_species"
+                self._param_map[zone_key] = (cursor, 0)
+                self._structural_params.add(zone_key)
+                num_species = int(self.lines[cursor].split()[0])
+                cursor = self._next_parameter_line(cursor + 1)
+
                 for j in range(num_species):
-                    basej = base 
-                    self._param_map[f"zone_{i+1}_species_{j+1}_grain_type"] = (basej + 1, 0)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_N_components"] = (basej + 1, 1)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_mixing_rule"] = (basej + 1, 2)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_porosity"] = (basej + 1, 3)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_mass_fraction"] = (basej + 1, 4)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_Vmax"] = (basej + 1, 5)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_optical_indices_file"] = (basej + 2, 0)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_volume_fraction"] = (basej + 2, 1)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_heating_method"] = (basej + 3, 0)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_amin"] = (basej +4,0)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_amax"] = (basej +4,1)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_aexp"] = (basej +4,2)
-                    self._param_map[f"zone_{i+1}_species_{j+1}_n_grains"] = (basej +4,3)
-                base = basej+4 +2
+                    species_prefix = f"zone_{i + 1}_species_{j + 1}"
+                    header_line = cursor
+                    self._param_map[f"{species_prefix}_grain_type"] = (header_line, 0)
+                    component_key = f"{species_prefix}_N_components"
+                    self._param_map[component_key] = (header_line, 1)
+                    self._structural_params.add(component_key)
+                    self._param_map[f"{species_prefix}_mixing_rule"] = (header_line, 2)
+                    self._param_map[f"{species_prefix}_porosity"] = (header_line, 3)
+                    self._param_map[f"{species_prefix}_mass_fraction"] = (header_line, 4)
+                    self._param_map[f"{species_prefix}_Vmax"] = (header_line, 5)
+
+                    n_components = int(self.lines[header_line].split()[1])
+                    if n_components < 1:
+                        raise ValueError(f"{component_key} must be at least one.")
+                    cursor = self._next_parameter_line(header_line + 1)
+                    for k in range(n_components):
+                        component_prefix = f"{species_prefix}_component_{k + 1}"
+                        self._param_map[f"{component_prefix}_optical_indices_file"] = (cursor, 0)
+                        self._param_map[f"{component_prefix}_volume_fraction"] = (cursor, 1)
+                        cursor = self._next_parameter_line(cursor + 1)
+
+                    self._param_map[f"{species_prefix}_heating_method"] = (cursor, 0)
+                    cursor = self._next_parameter_line(cursor + 1)
+                    self._param_map[f"{species_prefix}_amin"] = (cursor, 0)
+                    self._param_map[f"{species_prefix}_amax"] = (cursor, 1)
+                    self._param_map[f"{species_prefix}_aexp"] = (cursor, 2)
+                    self._param_map[f"{species_prefix}_n_grains"] = (cursor, 3)
+                    cursor = self._next_parameter_line(cursor + 1)
                 
         
         #Add star properties
@@ -237,19 +259,38 @@ class ParaFile:
             if line.strip().startswith(prefix):
                 return i
         return -1  # not found
+
+    def _next_parameter_line(self, start):
+        """Return the next non-empty, non-heading line in a parameter block."""
+        for line_no in range(start, len(self.lines)):
+            stripped = self.lines[line_no].strip()
+            if stripped and not stripped.startswith("#"):
+                return line_no
+        raise ValueError("Unexpected end of MCFOST parameter file.")
         
 
 
     def set_param(self, param_name, new_value):
         if param_name not in self._param_map:
             raise ValueError(f"Unknown parameter name: {param_name}")
+        if param_name in self._structural_params:
+            current_value = self.params[param_name]
+            if str(new_value) != str(current_value):
+                raise ValueError(
+                    f"{param_name} defines the MCFOST grain-section layout and must "
+                    "remain fixed. Use a template with the required species and "
+                    "material-component records."
+                )
+            return
         line_no = self._param_map[param_name][0]
         col_no = self._param_map[param_name][1]
         old_line = self.lines[line_no]
         parts = old_line.split()
         parts[col_no] = str(new_value)
         self.lines[line_no] = "  "+"  ".join(parts) + "\n"
-        self.params[param_name] = new_value
+        for name, location in self._param_map.items():
+            if location == (line_no, col_no):
+                self.params[name] = new_value
 
     def save(self, out_path):
         with open(out_path, "w") as f:
