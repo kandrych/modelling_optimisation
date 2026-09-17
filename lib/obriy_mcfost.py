@@ -999,8 +999,6 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             constraint_comparison_i = obp.compare_pdi_constraints(
                 pdi_data_i['pol_images'], results_i[model_polarimetry_key],
                 results_i[model_polarimetry_key]['pixel_scale_mas'],
-                tolerances=getattr(args, 'pdi_constraint_tolerances', (0.05, 0.05, 0.05)),
-                absolute_floors=getattr(args, 'pdi_absolute_error_floors', (1e-16, 1e-16, 1e-16)),
                 radial_bin_mas=getattr(args, 'pdi_radial_bin_mas', 25.0),
                 disk_pa_deg=disk_pa_deg,
                 output_path=workdir / 'figures' / 'pdi_constraints_i.png', band='I')
@@ -1124,8 +1122,6 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             constraint_comparison_v = obp.compare_pdi_constraints(
                 pdi_data_v['pol_images'], results_v[model_polarimetry_key],
                 results_v[model_polarimetry_key]['pixel_scale_mas'],
-                tolerances=getattr(args, 'pdi_constraint_tolerances', (0.05, 0.05, 0.05)),
-                absolute_floors=getattr(args, 'pdi_absolute_error_floors', (1e-16, 1e-16, 1e-16)),
                 radial_bin_mas=getattr(args, 'pdi_radial_bin_mas', 25.0),
                 disk_pa_deg=disk_pa_deg,
                 output_path=workdir / 'figures' / 'pdi_constraints_v.png', band='V')
@@ -1244,8 +1240,6 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             constraint_comparison_h = obp.compare_pdi_constraints(
                 pdi_data_h['pol_images'], results_h[model_polarimetry_key],
                 results_h[model_polarimetry_key]['pixel_scale_mas'],
-                tolerances=getattr(args, 'pdi_constraint_tolerances', (0.05, 0.05, 0.05)),
-                absolute_floors=getattr(args, 'pdi_absolute_error_floors', (1e-16, 1e-16, 1e-16)),
                 radial_bin_mas=getattr(args, 'pdi_radial_bin_mas', 25.0),
                 disk_pa_deg=disk_pa_deg,
                 output_path=workdir / 'figures' / 'pdi_constraints_h.png', band='H')

@@ -2622,6 +2622,7 @@ def differential_quadrants(
     save=None,
     title=None,
     roi_mas=None,
+    show=True,
 ):
     """
     Calculate Schmid differential quadrant parameters.
@@ -3020,6 +3021,9 @@ def differential_quadrants(
             if roi_mas is None:
                 roi_mas = 1.2 * r_out_mas
 
+            # Use the displayed disk-coordinate square, not off-screen pixels,
+            # to determine colour limits. This does not mask the scoring arrays.
+            visible = (np.abs(Xd) <= roi_mas) & (np.abs(Yd) <= roi_mas)
             fig, axes = plt.subplots(
                 2,
                 2,
@@ -3137,8 +3141,8 @@ def differential_quadrants(
             # -----------------------------------------------------
 
             qu_values = np.concatenate([
-                np.abs(Qd[np.isfinite(Qd)]),
-                np.abs(Ud[np.isfinite(Ud)])
+                np.abs(Qd[visible & np.isfinite(Qd)]),
+                np.abs(Ud[visible & np.isfinite(Ud)])
             ])
 
             vmax_qu = np.nanpercentile(
@@ -3307,6 +3311,8 @@ def differential_quadrants(
                 Qphi_disk,
                 shading="auto",
                 cmap="inferno",
+                vmin=np.min(Qphi_disk[visible & np.isfinite(Qphi_disk)]),
+                vmax=np.max(Qphi_disk[visible & np.isfinite(Qphi_disk)]),
             )
 
             add_aperture(axQphi)
@@ -3328,7 +3334,7 @@ def differential_quadrants(
             # Polarized flux P
             # =====================================================
 
-            p_values = P_disk[np.isfinite(P_disk)]
+            p_values = P_disk[visible & np.isfinite(P_disk)]
 
             vmax_p = np.nanpercentile(
                 p_values,
@@ -3346,7 +3352,9 @@ def differential_quadrants(
                 Yd,
                 P_disk,
                 shading="auto",
-                cmap="inferno"
+                cmap="inferno",
+                vmin=0.0,
+                vmax=vmax_p,
             )
 
             add_aperture(axP)
@@ -3392,10 +3400,78 @@ def differential_quadrants(
                     bbox_inches="tight"
                 )
 
-            plt.show()
+            if show:
+                plt.show()
+            plt.close(fig)
 
     return result
 
+
+
+def plot_differential_quadrants_slides(q, u, pixel_scale_mas, disk_pa_deg,
+                                      r_in_mas, r_out_mas, output_path,
+                                      title=None, roi_mas=None):
+    """Save the notebook's four-panel slide layout using current quadrant geometry.
+
+    Colour limits use only the visible region, with a shared symmetric Q/U
+    scale. Separate model figures are not on a common absolute brightness scale.
+    No image interpolation or change to the fitting metrics is performed.
+    """
+    from matplotlib.patches import Circle
+
+    result = differential_quadrants(q, u, pixel_scale_mas, disk_pa_deg,
+                                    r_in_mas, r_out_mas, plot=False)
+    if roi_mas is None:
+        roi_mas = 1.2 * r_out_mas
+    visible = ((np.abs(result['X_disk']) <= roi_mas)
+               & (np.abs(result['Y_disk']) <= roi_mas))
+    qu_values = np.concatenate([np.abs(result[k][visible & np.isfinite(result[k])])
+                                for k in ('Q_disk', 'U_disk')])
+    qu_limit = float(np.percentile(qu_values, 99)) or 1.0
+    fig, axes = plt.subplots(2, 2, figsize=(11, 10), constrained_layout=True)
+    panels = (
+        ('Q_disk', r'$Q_{\rm disk}$', 'RdBu_r', (0, 90, 180, 270), (45, 135, 225, 315)),
+        ('U_disk', r'$U_{\rm disk}$', 'RdBu_r', (45, 135, 225, 315), (0, 90, 180, 270)),
+        ('Qphi_disk', r'$Q_\phi$ in disk coordinates', 'inferno', (), ()),
+        ('P_disk', r'$P=\sqrt{Q^2+U^2}$ in disk coordinates', 'inferno', (), ()),
+    )
+    try:
+        for ax, (key, label, cmap, centres, boundaries) in zip(axes.flat, panels):
+            values = result[key][visible & np.isfinite(result[key])]
+            limits = ((-qu_limit, qu_limit) if key in ('Q_disk', 'U_disk')
+                      else (float(np.min(values)), float(np.max(values))))
+            ax.pcolormesh(result['X_disk'], result['Y_disk'], result[key],
+                          shading='auto', cmap=cmap, vmin=limits[0], vmax=limits[1])
+            for angle in boundaries:
+                theta = np.deg2rad(angle)
+                ax.plot([0, r_out_mas*np.sin(theta)], [0, r_out_mas*np.cos(theta)],
+                        color='k', lw=1, ls='--')
+            label_radius = r_in_mas + .68*(r_out_mas-r_in_mas)
+            for angle in centres:
+                theta = np.deg2rad(angle)
+                ax.text(label_radius*np.sin(theta), label_radius*np.cos(theta),
+                        f'{key[0]}{angle:03d}', ha='center', va='center', fontsize=9,
+                        bbox=dict(facecolor='white', alpha=.75, edgecolor='none'))
+            # Preserve the slide notebook layout: no aperture overlay on Qphi.
+            if key != 'Qphi_disk':
+                for radius, style in ((r_in_mas, ':'), (r_out_mas, '-')):
+                    if radius > 0:
+                        ax.add_patch(Circle((0, 0), radius, fill=False, ls=style, lw=1.2, color='k'))
+            if key == 'P_disk':
+                label += '\n' + rf'$\Sigma P={result["SigmaP"]:.3g}$'
+            ax.set(title=label, xlim=(-roi_mas, roi_mas), ylim=(-roi_mas, roi_mas),
+                   xlabel=r'$x_{\rm disk}$ [mas] (major axis)',
+                   ylabel=r'$y_{\rm disk}$ [mas] (minor axis)', aspect='equal')
+            ax.axhline(0, lw=.5, alpha=.35, color='k')
+            ax.axvline(0, lw=.5, alpha=.35, color='k')
+        geometry = (f'Major-axis PA = {disk_pa_deg:g} deg; '
+                    f'+y disk PA = {result["disk_y_pa_deg"]:g} deg')
+        fig.suptitle((title+'\n' if title else '') + geometry, fontsize=13)
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_path, dpi=200, bbox_inches='tight')
+    finally:
+        plt.close(fig)
 
 
 def plot_quadrant_comparison(
@@ -3644,47 +3720,39 @@ def measure_pdi_constraints(images, pixel_scale_mas, radius_mas=500.0,
                 sum_I=total_i, sum_signed_Qphi=total_qphi)
 
 
-def pdi_constraint_loss(observed, model, tolerances, absolute_floors=(1e-16, 1e-16, 1e-16)):
-    """Relative-error composite loss: fraction, radial mean, quadrant sum.
+def pdi_constraint_loss(observed, model, tolerances=None, absolute_floors=None, weights=None):
+    """Squared-difference score: fraction, radial mean, quadrant sum.
 
-    tolerances are fractional errors (0.05 means 5% of abs(observed)).
-    Optional absolute floors are in each measurement's dimensionless units.
-    No noise floor is assumed: zero scales raise rather than silently dropping data.
-    These are assumed error scales, not measured observational uncertainties.
+    No uncertainty divisors or flux renormalisation are applied here. The three
+    component terms retain their existing mean combination; this is not chi2.
+    Legacy error arguments are accepted for notebook compatibility only.
+    weights are dictionaries with keys 'fraction', 'radial', 'quadrant' specifying the relative importance of each term.
+    total loss is the sum of the weighted squared differences for each term.
     """
-    relative = np.asarray(tolerances, dtype=float)
-    floors = np.asarray(absolute_floors, dtype=float)
-    if relative.shape != (3,) or not np.all(np.isfinite(relative)) or np.any(relative <= 0):
-        raise ValueError('Supply three finite positive relative PDI errors.')
-    if floors.shape != (3,) or not np.all(np.isfinite(floors)) or np.any(floors < 0):
-        raise ValueError('Supply three finite non-negative absolute PDI error floors.')
+    if tolerances is not None or absolute_floors is not None:
+        import warnings
+        warnings.warn("PDI tolerances and error floors are ignored: loss now uses raw squared differences.",
+                      FutureWarning, stacklevel=2)
     np.testing.assert_allclose(observed['radial_edges_mas'], model['radial_edges_mas'])
-    terms, error_scales = {}, {}
-
-    for index, (name, key) in enumerate((
-        ('fraction', 'positive_qphi_over_i'),
-        ('radial', 'qphi_profile'), ('quadrant', 'quadrants'),
-    )):
+    terms = {}
+    for name, key in (('fraction', 'positive_qphi_over_i'),
+                      ('radial', 'qphi_profile'), ('quadrant', 'quadrants')):
         data = np.asarray(observed[key], dtype=float)
         prediction = np.asarray(model[key], dtype=float)
         if data.shape != prediction.shape or data.size == 0:
             raise ValueError(f'{name}: inconsistent or empty measurement arrays.')
         if not np.all(np.isfinite(data)) or not np.all(np.isfinite(prediction)):
             raise ValueError(f'{name}: non-finite measurements.')
-        sigma = np.maximum(relative[index] * np.abs(data), floors[index])
-        if np.any(sigma <= 0):
-            raise ValueError(f'{name}: zero observed values require a positive '
-                             '--pdi-absolute-error-floors entry; relative errors alone are undefined.')
-        squared = ((prediction-data)/sigma)**2
-        terms[name] = float(np.mean(squared) if name == 'radial' else np.sum(squared))
-        error_scales[name] = sigma.tolist()
-    loss = sum(terms.values()) / 3.0
+        squared = (prediction-data)**2
+        if weights is not None and name in weights:
+            terms[name] = float(weights[name] * (np.mean(squared) if name == 'radial' else np.sum(squared)))
+        else:
+            terms[name] = float(np.mean(squared) if name == 'radial' else np.sum(squared))
+    loss = sum(terms.values())
     if not np.isfinite(loss):
-        raise ValueError('Non-finite PDI loss; check relative errors and absolute floors.')
-
-    return dict(**terms, loss=float(loss), tolerances=relative.tolist(),
-                error_model='relative_to_observed', absolute_floors=floors.tolist(),
-                error_scales=error_scales)
+        raise ValueError('Non-finite PDI squared-difference loss.')
+    return dict(**terms, loss=float(loss), error_model='none',
+                loss_definition='mean(fraction_squared_difference, radial_mean_squared_difference, quadrant_sum_squared_difference)')
 
 
 
@@ -3692,7 +3760,9 @@ def plot_pdi_constraints(observed, model, output_path, band=''):
     """Plot both radial profiles, positive-Qphi fraction and all six quadrants."""
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
     for label, result, color in [('Data', observed, 'royalblue'), ('Model', model, 'red')]:
-        centres = (result['radial_edges_mas'][:-1]+result['radial_edges_mas'][1:])/2
+        # Comparison results may contain JSON-compatible lists rather than arrays.
+        edges = np.asarray(result['radial_edges_mas'], dtype=float)
+        centres = (edges[:-1] + edges[1:]) / 2
         for ax, key, title in [(axes[0,0], 'qphi_profile', 'Signed Qphi radial shape (scored)'),
                                (axes[0,1], 'intensity_profile', 'I radial shape (diagnostic)')]:
             ax.plot(centres, result[key], 'o-', color=color, mfc='white', label=label)
@@ -3714,9 +3784,9 @@ def plot_pdi_constraints(observed, model, output_path, band=''):
     plt.close(fig)
 
 
-def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=(0.05, 0.05, 0.05),
+def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=None,
                             radial_bin_mas=25.0, disk_pa_deg=0.0, output_path=None, band='',
-                            absolute_floors=(0., 0., 0.)):
+                            absolute_floors=None):
     """Measure separate grids within a shared circle, then score and plot.
 
     The model must already have the observation's pixel scale. Each image keeps
@@ -3751,10 +3821,15 @@ def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=(0.0
                                        radius_mas=shared_radius_mas, radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
     predicted = measure_pdi_constraints(model_images, pixel_scale_mas,
                                         radius_mas=shared_radius_mas, radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
-    terms = pdi_constraint_loss(observed, predicted, tolerances, absolute_floors)
+    terms = pdi_constraint_loss(observed, predicted, tolerances, absolute_floors, weights={'fraction': 1e6, 'radial': 1e4, 'quadrant': 1e3}) #here weights based on empirical values for model to level up the field
     if output_path is not None:
         with obg.diagnostic_plot("PDI light fraction, profiles and quadrant comparison"):
             plot_pdi_constraints(observed, predicted, output_path, band)
+        with obg.diagnostic_plot(f'{band}: model quadrant slides'):
+            slide_path = Path(output_path).with_name(Path(output_path).stem + '_model_quadrants_slides.png')
+            plot_differential_quadrants_slides(
+                model_q, model_u, pixel_scale_mas, disk_pa_deg, 0., shared_radius_mas,
+                slide_path, title=f'{band}: model used for PDI scoring')
     # JSON-compatible diagnostics, including the exact measurement definition.
     return dict(observed=_to_py(observed), model=_to_py(predicted), **terms,
                 positive_qphi_only_in_fraction=True, radial_bin_mas=radial_bin_mas,
