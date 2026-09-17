@@ -260,7 +260,7 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
         products = ["sed", "vis2_1perband", "pdi_V", "pdi_I", "pdi_H"]
     elif stage == "F3":
         img_res = 2
-        products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H"]
+        products = ["sed", "vis2_1perband", "pdi_V", "pdi_I", "pdi_H","alma"]
     elif stage == "F4":
         img_res = 2
         products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
@@ -289,7 +289,7 @@ def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
 
     elif stage == "F14":
         img_res = 2
-        products = ["sed", "vis2_1perband", "pdi_V", "pdi_I", "pdi_H", "alma"]
+        products = ["sed"]
     elif stage == "F15":
         img_res = 2
         products = ["sed","pdi_V", "pdi_I", "pdi_H"]
