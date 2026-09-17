@@ -1871,22 +1871,22 @@ def polarimetric_analysis(
     rad_prof={}
     az_prof={}
     # Legacy profiles are plotted only; scoring measures its own profiles.
-    if plot:
-        with obg.diagnostic_plot("Original MCFOST profiles"):
-            for ft in ['pi',"q_phi",'img_tot']:
-                rad_prof[ft], az_prof[ft] = profiles(results['mcfost_original'][ft], native_ps_mas,
-                                                    profile_type="both",
-                                                    mode="sum",
-                                                    radial_limit_mas=radial_limit_mas,
-                                                    plot=plot,
-                                                    save_prefix=fig_dir + extra_title + "mcfost_original_",
-                                                    deprojection_inc_pa_deg=deprojection,
-                                                    center=None,
-                                                    az_nbins=azimuthal_nbins,
-                                                    azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                    azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                    theta0=theta0
-                                                    )
+    # if plot:
+    #     with obg.diagnostic_plot("Original MCFOST profiles"):
+    #         for ft in ['pi',"q_phi",'img_tot']:
+    #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_original'][ft], native_ps_mas,
+    #                                                 profile_type="both",
+    #                                                 mode="sum",
+    #                                                 radial_limit_mas=radial_limit_mas,
+    #                                                 plot=plot,
+    #                                                 save_prefix=fig_dir + extra_title + "mcfost_original_",
+    #                                                 deprojection_inc_pa_deg=deprojection,
+    #                                                 center=None,
+    #                                                 az_nbins=azimuthal_nbins,
+    #                                                 azimuthal_r_in_mas=azimuthal_r_in_mas,
+    #                                                 azimuthal_r_out_mas=azimuthal_r_out_mas,
+    #                                                 theta0=theta0
+    #                                                 )
     results['mcfost_original']['radial_profiles']=rad_prof
     results['mcfost_original']['azimuthal_profiles']=az_prof
           
@@ -1920,22 +1920,22 @@ def polarimetric_analysis(
     rad_prof={}
     az_prof={}
     # Legacy profiles are plotted only; scoring measures its own profiles.
-    if plot:
-        with obg.diagnostic_plot("Rescaled MCFOST profiles"):
-            for ft in ['pi',"q_phi",'img_tot']:
-                rad_prof[ft], az_prof[ft] = profiles(results['mcfost_rescaled'][ft], inst_ps_mas,
-                                                        profile_type="both",
-                                                        mode="sum",
-                                                        radial_limit_mas=radial_limit_mas,
-                                                        plot=plot,
-                                                        save_prefix=fig_dir + extra_title + "mcfost_rescaled_",
-                                                        deprojection_inc_pa_deg=deprojection,
-                                                        center=None,
-                                                        az_nbins=azimuthal_nbins,
-                                                        azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                        azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                        theta0=theta0
-                                                        )
+    # if plot:
+    #     with obg.diagnostic_plot("Rescaled MCFOST profiles"):
+    #         for ft in ['pi',"q_phi",'img_tot']:
+    #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_rescaled'][ft], inst_ps_mas,
+    #                                                     profile_type="both",
+    #                                                     mode="sum",
+    #                                                     radial_limit_mas=radial_limit_mas,
+    #                                                     plot=plot,
+    #                                                     save_prefix=fig_dir + extra_title + "mcfost_rescaled_",
+    #                                                     deprojection_inc_pa_deg=deprojection,
+    #                                                     center=None,
+    #                                                     az_nbins=azimuthal_nbins,
+    #                                                     azimuthal_r_in_mas=azimuthal_r_in_mas,
+    #                                                     azimuthal_r_out_mas=azimuthal_r_out_mas,
+    #                                                     theta0=theta0
+    #                                                     )
     results['mcfost_rescaled']['radial_profiles']=rad_prof
     results['mcfost_rescaled']['azimuthal_profiles']=az_prof
           
@@ -1985,22 +1985,22 @@ def polarimetric_analysis(
             rad_prof={}
             az_prof={}
             # Legacy profiles are plotted only; scoring measures its own profiles.
-            if plot:
-                with obg.diagnostic_plot("Convolved MCFOST profiles"):
-                    for ft in ['pi',"q_phi",'img_tot']:
-                        rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved'][ft], inst_ps_mas,
-                                                        profile_type="both",
-                                                        mode="sum",
-                                                        radial_limit_mas=radial_limit_mas,
-                                                        plot=plot,
-                                                        save_prefix=fig_dir + extra_title + "mcfost_convolved_",
-                                                        deprojection_inc_pa_deg=deprojection,
-                                                        center=None,
-                                                        az_nbins=azimuthal_nbins,
-                                                        azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                        azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                        theta0=theta0
-                                                        )
+            # if plot:
+            #     with obg.diagnostic_plot("Convolved MCFOST profiles"):
+            #         for ft in ['pi',"q_phi",'img_tot']:
+            #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved'][ft], inst_ps_mas,
+            #                                             profile_type="both",
+            #                                             mode="sum",
+            #                                             radial_limit_mas=radial_limit_mas,
+            #                                             plot=plot,
+            #                                             save_prefix=fig_dir + extra_title + "mcfost_convolved_",
+            #                                             deprojection_inc_pa_deg=deprojection,
+            #                                             center=None,
+            #                                             az_nbins=azimuthal_nbins,
+            #                                             azimuthal_r_in_mas=azimuthal_r_in_mas,
+            #                                             azimuthal_r_out_mas=azimuthal_r_out_mas,
+            #                                             theta0=theta0
+            #                                             )
             results['mcfost_convolved']['radial_profiles']=rad_prof
             results['mcfost_convolved']['azimuthal_profiles']=az_prof
             
@@ -2041,22 +2041,22 @@ def polarimetric_analysis(
     rad_prof={}
     az_prof={}
     # Legacy profiles are plotted only; scoring measures its own profiles.
-    if plot:
-        with obg.diagnostic_plot("Unresolved-corrected profiles before convolution"):
-            for ft in ['pi',"q_phi"]:
-                rad_prof[ft], az_prof[ft] = profiles(results['mcfost_not_convolved_unresolved_corrected'][ft], inst_ps_mas,
-                                                        profile_type="both",
-                                                        mode="sum",
-                                                        radial_limit_mas=radial_limit_mas,
-                                                        plot=plot,
-                                                        save_prefix=fig_dir + extra_title + "mcfost_not_convolved_unresolved_corrected_",
-                                                        deprojection_inc_pa_deg=deprojection,
-                                                        center=None,
-                                                        az_nbins=azimuthal_nbins,
-                                                        azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                        azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                        theta0=theta0
-                                                        )
+    # if plot:
+    #     with obg.diagnostic_plot("Unresolved-corrected profiles before convolution"):
+    #         for ft in ['pi',"q_phi"]:
+    #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_not_convolved_unresolved_corrected'][ft], inst_ps_mas,
+    #                                                     profile_type="both",
+    #                                                     mode="sum",
+    #                                                     radial_limit_mas=radial_limit_mas,
+    #                                                     plot=plot,
+    #                                                     save_prefix=fig_dir + extra_title + "mcfost_not_convolved_unresolved_corrected_",
+    #                                                     deprojection_inc_pa_deg=deprojection,
+    #                                                     center=None,
+    #                                                     az_nbins=azimuthal_nbins,
+    #                                                     azimuthal_r_in_mas=azimuthal_r_in_mas,
+    #                                                     azimuthal_r_out_mas=azimuthal_r_out_mas,
+    #                                                     theta0=theta0
+    #                                                     )
     results['mcfost_not_convolved_unresolved_corrected']['radial_profiles']=rad_prof
     results['mcfost_not_convolved_unresolved_corrected']['azimuthal_profiles']=az_prof
     
@@ -2103,22 +2103,22 @@ def polarimetric_analysis(
     rad_prof={}
     az_prof={}
     # Legacy profiles are plotted only; scoring measures its own profiles.
-    if plot:
-        with obg.diagnostic_plot("Unresolved-corrected profiles after convolution"):
-            for ft in ['pi',"q_phi"]:
-                rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved_unresolved_corrected'][ft], inst_ps_mas,
-                                                    profile_type="both",
-                                                    mode="sum",
-                                                    radial_limit_mas=radial_limit_mas,
-                                                    plot=plot,
-                                                    save_prefix=fig_dir + extra_title + "mcfost_convolved_unresolved_corrected_",
-                                                    deprojection_inc_pa_deg=deprojection,
-                                                    center=None,
-                                                    az_nbins=azimuthal_nbins,
-                                                    azimuthal_r_in_mas=azimuthal_r_in_mas,
-                                                    azimuthal_r_out_mas=azimuthal_r_out_mas,
-                                                    theta0=theta0
-                                                    )
+    # if plot:
+    #     with obg.diagnostic_plot("Unresolved-corrected profiles after convolution"):
+    #         for ft in ['pi',"q_phi"]:
+    #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved_unresolved_corrected'][ft], inst_ps_mas,
+    #                                                 profile_type="both",
+    #                                                 mode="sum",
+    #                                                 radial_limit_mas=radial_limit_mas,
+    #                                                 plot=plot,
+    #                                                 save_prefix=fig_dir + extra_title + "mcfost_convolved_unresolved_corrected_",
+    #                                                 deprojection_inc_pa_deg=deprojection,
+    #                                                 center=None,
+    #                                                 az_nbins=azimuthal_nbins,
+    #                                                 azimuthal_r_in_mas=azimuthal_r_in_mas,
+    #                                                 azimuthal_r_out_mas=azimuthal_r_out_mas,
+    #                                                 theta0=theta0
+    #                                                 )
     results['mcfost_convolved_unresolved_corrected']['radial_profiles']=rad_prof
     results['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']=az_prof
     
