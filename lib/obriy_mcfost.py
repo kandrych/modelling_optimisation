@@ -581,6 +581,48 @@ def plot_mcfost_disk_structure(main_dir: str, sub_dir: str,  az_disk=0) -> None:
 
 
 
+def _apply_selected_second_component_fractions(pf: ParaFile, cfg: Dict[str, Any]) -> None:
+    """Set a two-material mixture from the active conditional configuration.
+
+    For every sampled ``*_component_2_optical_indices_file`` key, exactly one
+    active key named ``*_component_2_volume_fraction_<label>`` is required.
+    Its range and its association with a material are defined solely in the
+    ConfigSpace conditions.  Component 1 receives the complementary fraction.
+    """
+    material_keys = [
+        key for key in cfg if key.endswith("_component_2_optical_indices_file")
+    ]
+    for material_key in material_keys:
+        component_2_prefix = material_key.removesuffix("_optical_indices_file")
+        conditional_fraction_prefix = f"{component_2_prefix}_volume_fraction_"
+        active_fraction_keys = [
+            key for key in cfg if key.startswith(conditional_fraction_prefix)
+        ]
+        if len(active_fraction_keys) != 1:
+            raise ValueError(
+                f"{material_key} requires exactly one active conditional fraction "
+                f"named {conditional_fraction_prefix}<label>; got {active_fraction_keys}."
+            )
+
+        component_1_prefix = component_2_prefix.replace(
+            "_component_2", "_component_1"
+        )
+        component_1_fraction_key = f"{component_1_prefix}_volume_fraction"
+        component_2_fraction_key = f"{component_2_prefix}_volume_fraction"
+        required_keys = (material_key, component_1_fraction_key, component_2_fraction_key)
+        missing_keys = [key for key in required_keys if key not in pf.params]
+        if missing_keys:
+            raise ValueError(
+                "The simulation template must contain both material-component "
+                f"records before optimizing this mixture; missing: {missing_keys}."
+            )
+
+        second_fraction = float(cfg[active_fraction_keys[0]])
+        pf.set_param(material_key, cfg[material_key])
+        pf.set_param(component_1_fraction_key, 1.0 - second_fraction)
+        pf.set_param(component_2_fraction_key, second_fraction)
+
+
 def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir: Path) -> Path:
     """
     test
@@ -606,11 +648,19 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
         except:
             raise ValueError("Base MCFOST parameter file not found in the working directory. Please ensure 'simulation.para' exists.")
     
+    rref_key = "zone_1_Rref"
+    rin_key = "zone_1_Rin"
+    rref_tracks_rin = cfg.get(rref_key) == rin_key
     for key in cfg.keys():
+        if key == rref_key and rref_tracks_rin:
+            # Resolve this symbolic configuration value after the full trial
+            # configuration has been applied, rather than writing text to .para.
+            continue
         if key in pf.params:
             pf.set_param(key, cfg[key])
-            if key=='zone_1_Rin':
-                pf.set_param('zone_1_Rref', cfg[key]) #scale-height is setted up at the inner rim.
+        elif "_component_2_volume_fraction_" in key:
+            # This is translated into MCFOST's component-2 fraction below.
+            continue
         elif key=='inclination':
             pf.set_param('imin', cfg[key])
             pf.set_param('imax', cfg[key])
@@ -620,6 +670,14 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
         
         else:
             print(f"Warning: parameter {key} not found in MCFOST parameter file.")
+
+    # The scale-height reference radius may be an independent sampled value,
+    # or deliberately tied to the inner rim through the symbolic YAML value
+    # ``zone_1_Rin``.  Retain the historical Rin fallback when Rref is absent.
+    if rref_tracks_rin or (rref_key not in cfg and rin_key in cfg):
+        pf.set_param(rref_key, cfg.get(rin_key, pf.params[rin_key]))
+        print(f"Warning: Set {rref_key} to be at inner rim with value {cfg.get(rin_key, pf.params[rin_key])}")
+    _apply_selected_second_component_fractions(pf, cfg)
     # Set fidelity-related params
     # pf.set_param("nbr_photons_eq_th", fidelity["nbr_photons_eq_th"])
     # pf.set_param("nbr_photons_lambda", fidelity["nbr_photons_lambda"])
