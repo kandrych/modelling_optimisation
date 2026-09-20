@@ -314,12 +314,31 @@ def run_mcfost_safe(param_path: Path, workdir: Path, options: list[str] = None,
     if options:
         cmd += options
 
-    # stream to file if requested
-    if logfile:
-        with open(workdir / logfile, "w") as f:
-            subprocess.run(cmd, cwd=workdir, check=True, stdout=f, stderr=subprocess.STDOUT, text=True)
-    else:
-        subprocess.run(cmd, cwd=workdir, check=True)
+    # Close/flush the log before collecting diagnostics from a failed command.
+    try:
+        if logfile:
+            with open(workdir / logfile, "w") as f:
+                subprocess.run(cmd, cwd=workdir, check=True, stdout=f, stderr=subprocess.STDOUT, text=True)
+        else:
+            subprocess.run(cmd, cwd=workdir, check=True)
+    except (subprocess.CalledProcessError, OSError) as error:
+        details = {"command": cmd}
+        if isinstance(error, subprocess.CalledProcessError):
+            details["exit_code"] = error.returncode
+        if logfile:
+            log_path = workdir / logfile
+            details["log_path"] = str(log_path)
+            try:
+                # Bound run-history size even when MCFOST produces a large log.
+                with log_path.open("rb") as log:
+                    log.seek(0, os.SEEK_END)
+                    log.seek(max(0, log.tell() - 8192))
+                    details["log_tail"] = "\n".join(
+                        log.read().decode("utf-8", errors="replace").splitlines()[-30:])
+            except OSError as log_error:
+                details["log_read_error"] = str(log_error)
+        error.mcfost_details = details
+        raise
 
 
 
@@ -827,8 +846,15 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
     sed_path = workdir / "data_th" / "sed_rt.fits.gz"
     if not sed_path.exists():
-        print(f"Temperature file {sed_path} not found.")
-        # trial ran but produced no SED -> invalid config or earlier failure
+        reason = f"Required MCFOST SED output not found: {sed_path}"
+        print(f"[obriy_mcfost] {reason}")
+        additional_info["failure"] = {
+            "code": "missing_sed_output",
+            "stage": "load_and_score_outputs",
+            "reason": reason,
+            "path": str(sed_path),
+            "trial_dir": str(workdir),
+        }
         return 1e99, additional_info
     # These plots are diagnostics, not objective inputs. A missing or incompatible
     # structure output must not discard an otherwise scoreable trial.

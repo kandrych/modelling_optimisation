@@ -24,6 +24,7 @@ import sys
 import textwrap
 import tempfile
 import time
+import traceback
 from pathlib import Path
 from typing import Any, Dict, Tuple
 import numpy as np
@@ -816,7 +817,7 @@ def make_unique_config_trial_dir(scratch_root: Path, config_id: int, budget: flo
 
 
 def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str, Any],
-              scratch_root: str, args) -> float:
+              scratch_root: str, args) -> Tuple[float, Dict[str, Any]]:
     fidelity = map_budget_to_fidelity(budget)
 
     # Each trial gets a private scratch dir
@@ -842,10 +843,20 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
     par_path = obm.write_mcfost_paramfile(cfg, fidelity, trial_dir)
     try:
         obm.run_mcfost(fidelity,par_path, trial_dir, args.puffed_up_rim, cfg, alma_spec=(data_arg[8]["image_spec"] if "alma" in fidelity["products"] else None))
-    except Exception:
+    except Exception as error:
         # Trial failed; return a high loss
-        print(f"[objective] Trial failed for cfg={cfg}, dir={trial_dir}")
-        return 1e99
+        failure = {
+            "code": "mcfost_execution_failed",
+            "stage": "run_mcfost",
+            "reason": str(error),
+            "exception_type": type(error).__name__,
+            "traceback": traceback.format_exc(),
+            "trial_dir": str(trial_dir),
+        }
+        failure.update(getattr(error, "mcfost_details", {}))
+        print(f"[objective] Trial failed for cfg={cfg}, dir={trial_dir}: "
+              f"{type(error).__name__}: {error}")
+        return 1e99, {"failure": failure}
 
     # Score outputs
 
