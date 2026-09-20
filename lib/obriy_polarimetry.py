@@ -3821,7 +3821,7 @@ def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=None
                                        radius_mas=shared_radius_mas, radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
     predicted = measure_pdi_constraints(model_images, pixel_scale_mas,
                                         radius_mas=shared_radius_mas, radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
-    terms = pdi_constraint_loss(observed, predicted, tolerances, absolute_floors, weights={'fraction': 1e6, 'radial': 1e4, 'quadrant': 1e3}) #here weights based on empirical values for model to level up the field
+    terms = pdi_constraint_loss(observed, predicted, tolerances, absolute_floors, weights={'fraction': 1e5, 'radial': 1e4, 'quadrant': 5e3}) #here weights based on empirical values for model to level up the field
     if output_path is not None:
         with obg.diagnostic_plot("PDI light fraction, profiles and quadrant comparison"):
             plot_pdi_constraints(observed, predicted, output_path, band)
