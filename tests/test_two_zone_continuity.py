@@ -165,6 +165,23 @@ class TwoZoneTests(unittest.TestCase):
                                     with self.assertRaises(ValueError):
                                         real_ns['write_mcfost_paramfile'](
                                             dict(cfg, zone_2_scale_height=invalid_height), {}, root/'invalid_height')
+                                cfg.pop('zone_1_scale_height')
+                                cfg['zone_2_scale_height'] = 'zone_1_scale_height'
+                                for source_height in (None, 2.5):
+                                    if source_height is not None:
+                                        cfg['zone_1_scale_height'] = source_height
+                                    ns['objective'](cfg, 1, 0.1, [], str(root/'trials'), args)
+                                    path = obm.run_mcfost.call_args.args[1]
+                                    actual = real_ns['ParaFile'](path).params
+                                    expected = 1.0 if source_height is None else source_height
+                                    self.assertEqual(float(actual['zone_2_scale_height']), expected)
+                                    self.assertEqual(float(actual['zone_1_scale_height']), expected)
+                                    metadata = json.loads((path.parent/'config_used.json').read_text())['cfg']
+                                    self.assertEqual(metadata['zone_2_scale_height'], expected)
+                                    ns['incumbent'] = dict(cfg)
+                                    exec(compile(ast.Module(body=[final_write], type_ignores=[]), '<reverse tie>', 'exec'), ns)
+                                    self.assertEqual(actual, real_ns['ParaFile'](ns['par_path']).params)
+                                    self.assertEqual(cfg['zone_2_scale_height'], 'zone_1_scale_height')
                                 with self.assertRaisesRegex(ValueError, 'remove from config'):
                                     real_ns['write_mcfost_paramfile'](
                                         dict(cfg, zone_2_species_1_amin=0.5), {}, root/'invalid_shared',

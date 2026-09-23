@@ -2,22 +2,22 @@
 
 ## Optional scale-height tie
 
-To derive zone 1's scale height from zone 2, use:
+To derive zone 2's scale height from zone 1, use:
 
 ```yaml
-- name: zone_1_scale_height
+- name: zone_2_scale_height
   type: constant
-  value: "zone_2_scale_height"
+  value: "zone_1_scale_height"
 ```
 
-Zone 2's scale height may be sampled, fixed in the configuration, or taken
+Zone 1's scale height may be sampled, fixed in the configuration, or taken
 from the template. It must be numeric, finite and positive. The writer
 resolves the tie before writing each trial or final model, records the numeric
 result in config_used.json, and leaves the sampled configuration unchanged.
 No additional CLI flag is required. This ties only the heights at their
 reference radii; identical vertical profiles also require matching reference
-radii and flaring exponents. Other symbolic scale-height references are not
-supported.
+radii and flaring exponents. The reverse tie remains supported, but tying
+both heights to each other is rejected as circular.
 
 ## Optional shared dust population
 
