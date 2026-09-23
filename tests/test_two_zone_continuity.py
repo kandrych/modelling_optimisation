@@ -64,6 +64,7 @@ class TwoZoneTests(unittest.TestCase):
                         flags = (['--2ZONE_CONT_LHC'] if continuous else []) + (['--tapered-edge-p1-eq-p2'] if tied else [])
                         args = arg_parser.parse_args(flags)
                         args.puffed_up_rim = False
+                        args.fidelity_settings = {}
                         # The parser maps the header by fixed line indices.
                         lines = ['1 1 1 1 1 1 1\n'] * 41
                         lines[39] = '#Number of zones\n'
@@ -91,11 +92,11 @@ class TwoZoneTests(unittest.TestCase):
                                 cfg.update(disk_Rmid=20, disk_total_dust_mass=0.009)
                             obm = SimpleNamespace(write_mcfost_paramfile=real_ns['write_mcfost_paramfile'],
                                                   run_mcfost=Mock(),
-                                                  load_and_score_outputs=Mock(return_value=(12.0, {'sed': {}})))
-                            ns = dict(Path=Path, obm=obm, map_budget_to_fidelity=lambda b: {'products': ['sed']})
+                                                  load_and_score_outputs=Mock(return_value=(12.0, {'sed': {}, 'fidelity': {'stage': 'sed', 'products': ['sed']}})))
+                            ns = dict(Path=Path, obm=obm, map_budget_to_fidelity=lambda b, settings: {'stage': 'sed', 'products': ['sed']})
                             exec(compile(ast.Module(body=functions, type_ignores=[]), '<objective>', 'exec',
                                          flags=__future__.annotations.compiler_flag), ns)
-                            self.assertEqual(ns['objective'](cfg, 1, 0.1, [], str(root/'trials'), args), (12.0, {'sed': {}}))
+                            self.assertEqual(ns['objective'](cfg, 1, 0.1, [], str(root/'trials'), args), (12.0, {'sed': {}, 'fidelity': {'stage': 'sed', 'products': ['sed']}}))
                             obm.run_mcfost.assert_called_once()
                             trial_path = obm.run_mcfost.call_args.args[1]
                             ns.update(incumbent=dict(cfg), fidelity_result={'products': ['sed']},

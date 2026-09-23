@@ -57,6 +57,8 @@ import distroi
 sys.path.append(os.path.abspath(".."))  # parent of current working dir
 #import lib.Katya_func as kf
 
+from lib.obriy_fidelity import load_fidelity_config, map_budget_to_fidelity, fidelity_products
+
 import lib.obriy_general as obg
 import lib.obriy_sed as obs
 import lib.obriy_interferometry as obi
@@ -199,116 +201,117 @@ def build_configspace(config_file: str) -> ConfigurationSpace:
 # Multi-fidelity mapping
 # -----------------------------------------------------------------------------
 
-def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
-    """
-    Map the continuous budget in [min_budget, max_budget] to discrete fidelity settings.
-
-    Example strategy:
-    - Stage ladder F0→F3 via budget thresholds
-    - Photon packets and image resolution scale with budget - TO DO
-
-    """
-    # Example budget range: min=0.25, max=3.0 (set in Scenario)
-    stage = "F0"
-    if budget >= 1.0:
-        stage = "F1"
-    if budget >= 2.0:
-        stage = "F2"
-    if budget >= 3.0:
-        stage = "F3"
-    if budget >= 4.0:
-        stage = "F4"
-    if budget >= 5.0:
-        stage = "F5"
-    if budget >= 6.0:
-        stage = "F6"
-    if budget >= 7.0:
-        stage = "F7"
-    if budget >= 8.0:
-        stage = "F8"
-  
-
-    if budget >= 9.0:
-        stage = "F9"
-    if budget >= 10.0:
-        stage = "F10"
-    if budget >= 11.0:
-        stage = "F11"
-    
-   
-    if budget >= 14.0:
-        stage = "F14"
-    if budget >= 15.0:
-        stage = "F15"
-    if budget >= 16.0:
-        stage = "F16"
-
-    # scale photons with budget
-    # nbr_photons_eq_th = int(1.28e5 * (10**budget))
-    # nbr_photons_lambda= int(1.28e3 * (10**budget))
-    # nbr_photons_image= int(1.28e4 * (10**budget))
-
-
-    # image resolution mapping (example)
-    if stage == "F0":
-        img_res = 10 #mas/pixel
-        products = ["sed"]
-    elif stage == "F1":
-        img_res = 2 #mas/pixel
-        products = ["sed", "vis2_1perband"]
-    elif stage == "F2":
-        img_res = 2
-        products = ["sed", "vis2_1perband", "pdi_V", "pdi_I", "pdi_H"]
-    elif stage == "F3":
-        img_res = 2
-        products = ["sed", "vis2_1perband", "pdi_V", "pdi_I", "pdi_H","alma"]
-    elif stage == "F4":
-        img_res = 2
-        products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
-
-    elif stage == "F5":
-        img_res = 10 #mas/pixel
-        products = ["sed"]
-    elif stage == "F6":
-        img_res = 2 #mas/pixel
-        products = ["sed", "vis2_1perband"]
-    elif stage == "F7":
-        img_res = 2
-        products = ["sed", "vis2_chromatic"]
-
-
-    elif stage == "F9":
-        img_res = 2
-        products = ["sed"]
-    elif stage == "F10":
-        img_res = 2
-        products = ["sed", "alma"]
-    elif stage == "F11":
-        img_res = 2
-        products = ["sed", "pdi_V", "pdi_I", "pdi_H", "alma"]
-
-
-    elif stage == "F14":
-        img_res = 2
-        products = ["sed"]
-    elif stage == "F15":
-        img_res = 2
-        products = ["sed","pdi_V", "pdi_I", "pdi_H"]
-    
-    elif stage == "F16": #created for AR Pup test
-        img_res = 2
-        products = ["pdi_V", "pdi_I", "pdi_H"]
-    else:
-        raise ValueError(f"Unknown stage for budget {budget}: {stage}")
-
-    return {
-        "stage": stage,
-        # "nbr_photons_eq_th": nbr_photons_eq_th,
-        # "nbr_photons_lambda": nbr_photons_lambda,
-        # "nbr_photons_image": nbr_photons_image,
-        "image_res": img_res,
-        "products": products,
-    }
+# Legacy budget mapping retained for reference.
+# def map_budget_to_fidelity(budget: float) -> Dict[str, Any]:
+#     """
+#     Map the continuous budget in [min_budget, max_budget] to discrete fidelity settings.
+#
+#     Example strategy:
+#     - Stage ladder F0→F3 via budget thresholds
+#     - Photon packets and image resolution scale with budget - TO DO
+#
+#     """
+#     # Example budget range: min=0.25, max=3.0 (set in Scenario)
+#     stage = "F0"
+#     if budget >= 1.0:
+#         stage = "F1"
+#     if budget >= 2.0:
+#         stage = "F2"
+#     if budget >= 3.0:
+#         stage = "F3"
+#     if budget >= 4.0:
+#         stage = "F4"
+#     if budget >= 5.0:
+#         stage = "F5"
+#     if budget >= 6.0:
+#         stage = "F6"
+#     if budget >= 7.0:
+#         stage = "F7"
+#     if budget >= 8.0:
+#         stage = "F8"
+#
+#
+#     if budget >= 9.0:
+#         stage = "F9"
+#     if budget >= 10.0:
+#         stage = "F10"
+#     if budget >= 11.0:
+#         stage = "F11"
+#
+#
+#     if budget >= 14.0:
+#         stage = "F14"
+#     if budget >= 15.0:
+#         stage = "F15"
+#     if budget >= 16.0:
+#         stage = "F16"
+#
+#     # scale photons with budget
+#     # nbr_photons_eq_th = int(1.28e5 * (10**budget))
+#     # nbr_photons_lambda= int(1.28e3 * (10**budget))
+#     # nbr_photons_image= int(1.28e4 * (10**budget))
+#
+#
+#     # image resolution mapping (example)
+#     if stage == "F0":
+#         img_res = 10 #mas/pixel
+#         products = ["sed"]
+#     elif stage == "F1":
+#         img_res = 2 #mas/pixel
+#         products = ["sed", "vis2_1perband"]
+#     elif stage == "F2":
+#         img_res = 2
+#         products = ["sed", "vis2_1perband", "pdi_V", "pdi_I", "pdi_H"]
+#     elif stage == "F3":
+#         img_res = 2
+#         products = ["sed", "vis2_1perband", "pdi_V", "pdi_I", "pdi_H","alma"]
+#     elif stage == "F4":
+#         img_res = 2
+#         products = ["sed", "vis2_chromatic", "pdi_V", "pdi_I", "pdi_H", "alma"]
+#
+#     elif stage == "F5":
+#         img_res = 10 #mas/pixel
+#         products = ["sed"]
+#     elif stage == "F6":
+#         img_res = 2 #mas/pixel
+#         products = ["sed", "vis2_1perband"]
+#     elif stage == "F7":
+#         img_res = 2
+#         products = ["sed", "vis2_chromatic"]
+#
+#
+#     elif stage == "F9":
+#         img_res = 2
+#         products = ["sed"]
+#     elif stage == "F10":
+#         img_res = 2
+#         products = ["sed", "alma"]
+#     elif stage == "F11":
+#         img_res = 2
+#         products = ["sed", "pdi_V", "pdi_I", "pdi_H", "alma"]
+#
+#
+#     elif stage == "F14":
+#         img_res = 2
+#         products = ["sed"]
+#     elif stage == "F15":
+#         img_res = 2
+#         products = ["sed","pdi_V", "pdi_I", "pdi_H"]
+#
+#     elif stage == "F16": #created for AR Pup test
+#         img_res = 2
+#         products = ["pdi_V", "pdi_I", "pdi_H"]
+#     else:
+#         raise ValueError(f"Unknown stage for budget {budget}: {stage}")
+#
+#     return {
+#         "stage": stage,
+#         # "nbr_photons_eq_th": nbr_photons_eq_th,
+#         # "nbr_photons_lambda": nbr_photons_lambda,
+#         # "nbr_photons_image": nbr_photons_image,
+#         "image_res": img_res,
+#         "products": products,
+#     }
 
 
 # -----------------------------------------------------------------------------
@@ -818,7 +821,8 @@ def make_unique_config_trial_dir(scratch_root: Path, config_id: int, budget: flo
 
 def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str, Any],
               scratch_root: str, args) -> Tuple[float, Dict[str, Any]]:
-    fidelity = map_budget_to_fidelity(budget)
+    fidelity = map_budget_to_fidelity(budget, args.fidelity_settings)
+    print(f"[objective] Stage {fidelity['stage']}, budget {budget}: {fidelity['products']}")
 
     # Each trial gets a private scratch dir
     # trial_dir = Path(scratch_root) / f"trial_seed{seed}_budget{budget:.2f}" /time.strftime("%Y%m%d-%H%M%S")
@@ -857,11 +861,12 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
         failure.update(getattr(error, "mcfost_details", {}))
         print(f"[objective] Trial failed for cfg={cfg}, dir={trial_dir}: "
               f"{type(error).__name__}: {error}")
-        return 1e99, {"failure": failure}
+        return 1e99, {"failure": failure, "fidelity": fidelity}
 
     # Score outputs
 
     loss, additional_info = obm.load_and_score_outputs(fidelity, trial_dir, data_arg, args,cfg)
+    additional_info["fidelity"] = fidelity
     return float(loss), additional_info  # Return loss and additional info for SMAC
 
 
@@ -872,6 +877,7 @@ def warmstart_from_runhistory_json(
     *,
     only_finished: bool = True,
     max_trials: int | None = None,
+    fidelity_settings=None,
 ) -> int:
     """
     Warmstart SMAC by reading a SMAC runhistory.json and calling smac.tell(...).
@@ -907,6 +913,18 @@ def warmstart_from_runhistory_json(
         status = row.get("status", None)
         if only_finished and status != 1:
             continue
+
+        if fidelity_settings is not None:
+            recorded = (row.get("additional_info") or {}).get("fidelity")
+            try:
+                expected = map_budget_to_fidelity(row.get("budget"), fidelity_settings)
+            except (ValueError, TypeError):
+                continue
+            if (not isinstance(recorded, dict)
+                    or recorded.get("products") != expected["products"]
+                    or recorded.get("image_res") != expected["image_res"]):
+                print(f"[warmstart] Skipping config {row.get('config_id')}: missing/incompatible fidelity metadata")
+                continue
 
         cost = row.get("cost", None)
         if cost is None:
@@ -954,7 +972,7 @@ def warmstart_from_runhistory_json(
         info = TrialInfo(**info_kwargs)
 
         # TrialValue: cost is required. You can also pass time/cpu_time, but not necessary.
-        value = TrialValue(cost=float(row["cost"]))
+        value = TrialValue(cost=float(row["cost"]), additional_info=row.get("additional_info", {}))
 
         smac.tell(info, value)
         told += 1
@@ -974,8 +992,10 @@ def main():
     p.add_argument("--use-slurm", action="store_true", help="Use SLURMCluster instead of LocalCluster")
     p.add_argument("--n-workers", type=int, default=4)
     p.add_argument("--procs-per-worker", type=int, default=1)
-    p.add_argument("--min-budget", type=float, default=0.25)
-    p.add_argument("--max-budget", type=float, default=3.0)
+    p.add_argument("--min-budget", type=float, default=None, help="Deprecated; budgets come from fidelity.txt")
+    p.add_argument("--max-budget", type=float, default=None, help="Deprecated; budgets come from fidelity.txt")
+    p.add_argument("--fidelity-config", type=str, default=None, help="Stage file; defaults to WORK_ROOT/fidelity.txt")
+    p.add_argument("--config-space", type=str, default=None, help="Explicit ConfigSpace YAML path")
     p.add_argument("--n-trials", type=int, default=80)
     p.add_argument("--seed", type=int, default=-1)# Random seed for SMAC
     p.add_argument("--correct-unresolved-polarimetry", action="store_true", help="Use unresolved-corrected model images and profiles for polarimetry comparisons; requires --unresolved-correction-radius-px")
@@ -1003,10 +1023,29 @@ def main():
     print(f"[main] Working root: {WORK_ROOT}")
 
 
-    config_candidates = list(WORK_ROOT.rglob("*.yaml")) + list(WORK_ROOT.rglob("*.yml"))
-    if not config_candidates:
-        raise FileNotFoundError(f"No *.yaml found under {WORK_ROOT}")
-    config_file = sorted(config_candidates)[0]
+    fidelity_path = Path(args.fidelity_config) if args.fidelity_config else WORK_ROOT / "fidelity.txt"
+    args.fidelity_settings = load_fidelity_config(fidelity_path)
+    if args.min_budget is not None or args.max_budget is not None:
+        p.error("Remove --min-budget/--max-budget; budgets are assigned from fidelity.txt.")
+    args.min_budget = args.fidelity_settings['stages'][0]['budget']
+    args.max_budget = args.fidelity_settings['stages'][-1]['budget']
+    manifest = WORK_ROOT / "fidelity_resolved.json"
+    if manifest.exists() and json.loads(manifest.read_text()) != args.fidelity_settings:
+        raise ValueError("Fidelity stages differ from this run's saved stages. Use a new working root.")
+    manifest.write_text(json.dumps(args.fidelity_settings, indent=2))
+    for stage in args.fidelity_settings['stages']:
+        print(f"[main] Stage {stage['stage']}: budget={stage['budget']}, products={stage['products']}")
+
+    if args.config_space:
+        config_file = Path(args.config_space)
+    else:
+        config_candidates = sorted(path for path in list(WORK_ROOT.rglob("*.yaml")) + list(WORK_ROOT.rglob("*.yml"))
+                                   if path.resolve() != fidelity_path.resolve())
+        if len(config_candidates) != 1:
+            raise ValueError("Specify --config-space: expected exactly one ConfigSpace YAML in working root.")
+        config_file = config_candidates[0]
+    if config_file.resolve() == fidelity_path.resolve():
+        raise ValueError("ConfigSpace and fidelity configuration must be separate files.")
 
     print(f"[main] Using config space file: {config_file}")
 
@@ -1027,8 +1066,7 @@ def main():
         # You can also set output directories, logging, etc.
     )
     work_root = Path(args.working_root)
-    max_fidelity = map_budget_to_fidelity(args.max_budget)
-    data_arg = load_data(args.data_root, str(work_root),max_fidelity["products"])
+    data_arg = load_data(args.data_root, str(work_root), fidelity_products(args.fidelity_settings))
 
     trial_folder= work_root/"trials/"
     trial_folder.mkdir(exist_ok=True)
@@ -1049,6 +1087,8 @@ def main():
         #dask_client=client,   
     )
 
+    smac_kwargs["intensifier"] = MultiFidelityFacade.get_intensifier(
+        scenario, eta=args.fidelity_settings["eta"])
     smac = MultiFidelityFacade(**smac_kwargs)
 
     if args.warmstart is not None:
@@ -1058,6 +1098,7 @@ def main():
             warmstart_path=args.warmstart,
             only_finished=True,
             max_trials=None,  # or set e.g. 50
+            fidelity_settings=args.fidelity_settings,
         )
 
     # Optional: callbacks (e.g., log incumbent every K trials)
@@ -1080,7 +1121,7 @@ def main():
         incumbent = dict(incumbent)
     fidelity_result={}
     
-    fidelity_result=map_budget_to_fidelity(args.max_budget)
+    fidelity_result=map_budget_to_fidelity(args.max_budget, args.fidelity_settings)
     # Verify template parameter file for mcfost exists
     template_para= Path(results_dir.parent/"simulation.para")
     assert template_para.exists(), f"Missing template .para at {template_para}"
