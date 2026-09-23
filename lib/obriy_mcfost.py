@@ -13,6 +13,7 @@ import astropy.units as u
 from IPython.display import display
 
 import subprocess
+from scipy.integrate import quad
 from skimage.transform import rescale, resize, downscale_local_mean
 from astropy.convolution import Gaussian2DKernel, convolve, convolve_fft, AiryDisk2DKernel
 import fnmatch
@@ -642,7 +643,77 @@ def _apply_selected_second_component_fractions(pf: ParaFile, cfg: Dict[str, Any]
         pf.set_param(component_2_fraction_key, second_fraction)
 
 
-def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir: Path) -> Path:
+def _2zone_cont_calc_dmass(cfg_dict) -> None:
+    """Derive contiguous zone boundaries and dust masses in place.
+
+    Radii are in au and dust masses in solar masses. Profiles are normalised
+    to the same surface density at disk_Rmid; their slopes may differ.
+    Zone 1 is a power law; zone 2 may be a power law or exponentially tapered.
+    """
+    total_mass = float(cfg_dict["disk_total_dust_mass"])
+    r_mid = float(cfg_dict["disk_Rmid"])
+    r_in = float(cfg_dict["zone_1_Rin"])
+    r_out = float(cfg_dict["zone_2_Rout"])
+    exponent_in = float(cfg_dict["zone_1_surface_density_exp"])
+    exponent_out = float(cfg_dict["zone_2_surface_density_exp"])
+    if not np.all(np.isfinite([
+        total_mass, r_in, r_mid, r_out, exponent_in, exponent_out
+    ])):
+        raise ValueError("2ZONE_CONT_LHC requires finite masses, radii and exponents.")
+    if total_mass <= 0 or not 0 < r_in < r_mid < r_out:
+        raise ValueError("2ZONE_CONT_LHC requires positive total mass and 0 < Rin < Rmid < Rout.")
+    outer_type = float(cfg_dict.get("zone_2_type", 1))
+    if float(cfg_dict.get("zone_1_type", 1)) != 1 or outer_type not in (1, 2):
+        raise ValueError("2ZONE_CONT_LHC requires zone 1 type=1 and zone 2 type=1 or 2.")
+
+    # M_i = 2*pi*Sigma_mid*Rmid**2 * integral(x**(s_i+1), dx).
+    # expm1 avoids cancellation near s_i == -2, whose integral is logarithmic.
+    def radial_integral(lower, upper, exponent):
+        power = exponent + 2.0
+        log_span = np.log(upper / lower)
+        if power == 0.0:
+            return log_span
+        return np.exp(power * np.log(lower)) * np.expm1(power * log_span) / power
+
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        integral_in = radial_integral(r_in / r_mid, 1.0, exponent_in)
+        if outer_type == 1:
+            integral_out = radial_integral(1.0, r_out / r_mid, exponent_out)
+        else:
+            r_c = float(cfg_dict["zone_2_Rc"])
+            taper_power = 2.0 + float(cfg_dict["zone_2_-gamma_exp"])
+            if not np.all(np.isfinite([r_c, taper_power])) or r_c <= 0 or taper_power <= 0:
+                raise ValueError("Tapered zone 2 requires finite Rc > 0 and -gamma_exp > -2.")
+            taper_at_boundary = (r_mid / r_c) ** taper_power
+            if not np.isfinite(taper_at_boundary):
+                raise ValueError("Tapered zone 2 boundary normalisation overflowed.")
+
+            def tapered_integrand(log_x):
+                # x=r/Rmid, t=log(x): x**(s+1) dx = exp((s+2)*t) dt.
+                # Subtract the boundary taper so Sigma_2(Rmid)=Sigma_mid.
+                taper = taper_at_boundary * np.expm1(taper_power * log_x)
+                return np.exp((exponent_out + 2.0) * log_x - taper)
+
+            result = quad(tapered_integrand, 0.0, np.log(r_out / r_mid),
+                          epsabs=0.0, epsrel=1e-9, limit=200, full_output=1)
+            integral_out, error = result[:2]
+            if len(result) != 3 or not np.isfinite(error) or error > 1e-7 * integral_out:
+                raise ValueError("Tapered zone 2 mass integral did not converge accurately.")
+        integral_total = integral_in + integral_out
+    if (not np.all(np.isfinite([integral_in, integral_out, integral_total]))
+            or integral_in <= 0 or integral_out <= 0):
+        raise ValueError("2ZONE_CONT_LHC mass integrals are invalid or overflowed.")
+    mass_in = total_mass * (integral_in / integral_total)
+    mass_out = total_mass * (integral_out / integral_total)
+    if mass_in <= 0 or mass_out <= 0:
+        raise ValueError("2ZONE_CONT_LHC derived mass underflowed to zero.")
+    cfg_dict.update(zone_1_Rout=r_mid, zone_2_Rin=r_mid,
+                    zone_1_dust_mass=float(mass_in), zone_2_dust_mass=float(mass_out))
+
+
+def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir: Path,
+                          *, two_zone_cont_lhc: bool = False,
+                          tapered_edge_p1_eq_p2: bool = False) -> Path:
     """
     test
     Materialize an MCFOST parameter file in `outdir` from the sampled configuration.
@@ -651,9 +722,6 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
     outdir.mkdir(parents=True, exist_ok=True)
     param_path = outdir / "model.para"
 
-    # Json dump of config + fidelity for record-keeping
-    with open(outdir / "config_used.json", "w") as f:
-        json.dump({"cfg": cfg, "fidelity": fidelity}, f, indent=2)
     # Load a base .para file template from folder that was passed as working root
     print(outdir.parent.name)
     if outdir.parent.name != "trials":
@@ -667,10 +735,48 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
         except:
             raise ValueError("Base MCFOST parameter file not found in the working directory. Please ensure 'simulation.para' exists.")
     
+    if tapered_edge_p1_eq_p2:
+        cfg = dict(cfg)
+        last_zone = int(pf.params["number_of_zones"])
+        slope_key = f"zone_{last_zone}_surface_density_exp"
+        # Resolve before mass splitting so integration and MCFOST use the same p2.
+        cfg[f"zone_{last_zone}_-gamma_exp"] = cfg.get(slope_key, pf.params[slope_key])
+
+    if two_zone_cont_lhc:
+        cfg = dict(cfg)  # Keep the sampled configuration separate from derived values.
+        for key in ("disk_Rmid", "disk_total_dust_mass"):
+            if key not in cfg:
+                raise ValueError(f"2ZONE_CONT_LHC requires configuration parameter {key}.")
+        derived_keys = {"zone_1_Rout", "zone_2_Rin", "zone_1_dust_mass", "zone_2_dust_mass"}
+        if derived_keys.intersection(cfg):
+            raise ValueError("2ZONE_CONT_LHC derives these parameters; remove them from the config: "
+                             + ", ".join(sorted(derived_keys.intersection(cfg))))
+        if int(pf.params["number_of_zones"]) != 2:
+            raise ValueError("2ZONE_CONT_LHC requires a template containing exactly two zones.")
+        for zone in (1, 2):
+            for suffix in ("type", "edge", "surface_density_exp"):
+                key = f"zone_{zone}_{suffix}"
+                cfg.setdefault(key, pf.params[key])
+            allowed_types = (1,) if zone == 1 else (1, 2)
+            if float(cfg[f"zone_{zone}_type"]) not in allowed_types or float(cfg[f"zone_{zone}_edge"]) != 0:
+                raise ValueError("2ZONE_CONT_LHC requires zone 1 type=1, zone 2 type=1 or 2, and edge=0 in both zones.")
+        if float(cfg["zone_2_type"]) == 2:
+            for key in ("zone_2_Rc", "zone_2_-gamma_exp"):
+                cfg.setdefault(key, pf.params[key])
+        for key in ("zone_1_Rin", "zone_2_Rout"):
+            cfg.setdefault(key, pf.params[key])
+        _2zone_cont_calc_dmass(cfg)
+
+    # Record the effective configuration, including derived boundaries and masses.
+    with open(outdir / "config_used.json", "w") as f:
+        json.dump({"cfg": cfg, "fidelity": fidelity}, f, indent=2)
+
     rref_key = "zone_1_Rref"
     rin_key = "zone_1_Rin"
     rref_tracks_rin = cfg.get(rref_key) == rin_key
     for key in cfg.keys():
+        if two_zone_cont_lhc and key in ("disk_Rmid", "disk_total_dust_mass"):
+            continue
         if key == rref_key and rref_tracks_rin:
             # Resolve this symbolic configuration value after the full trial
             # configuration has been applied, rather than writing text to .para.

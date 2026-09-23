@@ -836,11 +836,12 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
 
     if args.puffed_up_rim:
         cfg["puffed_r_rim"] = (float(cfg["zone_1_Rin"]) + float(cfg["puffed_r_offset"]))  # Add puffed-up rim radius to config for MCFOST
-    if args.tapered_edge_p1_eq_p2:
-        cfg["zone_1_-gamma_exp"] = cfg['zone_1_surface_density_exp']
 
     # Write param file and run MCFOST
-    par_path = obm.write_mcfost_paramfile(cfg, fidelity, trial_dir)
+    par_path = obm.write_mcfost_paramfile(
+        cfg, fidelity, trial_dir,
+        two_zone_cont_lhc=getattr(args, "two_zone_cont_lhc", False),
+        tapered_edge_p1_eq_p2=args.tapered_edge_p1_eq_p2)
     try:
         obm.run_mcfost(fidelity,par_path, trial_dir, args.puffed_up_rim, cfg, alma_spec=(data_arg[8]["image_spec"] if "alma" in fidelity["products"] else None))
     except Exception as error:
@@ -851,8 +852,7 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
             "reason": str(error),
             "exception_type": type(error).__name__,
             "traceback": traceback.format_exc(),
-            "trial_dir": str(trial_dir),
-        }
+            "trial_dir": str(trial_dir)}
         failure.update(getattr(error, "mcfost_details", {}))
         print(f"[objective] Trial failed for cfg={cfg}, dir={trial_dir}: "
               f"{type(error).__name__}: {error}")
@@ -981,7 +981,9 @@ def main():
     p.add_argument("--warmstart", type=str, default=None, help="Path to previous SMAC run directory to warmstart from")
     p.add_argument("--plot-intermediate", action="store_true", help="Plot intermediate results during scoring")
     p.add_argument("--puffed-up-rim", action="store_true", help="Enable puffed up rim feature")
-    p.add_argument("--tapered-edge-p1-eq-p2", action="store_true", help="Enable tapered edge with p1=p2")
+    p.add_argument("--2ZONE_CONT_LHC", dest="two_zone_cont_lhc", action="store_true",
+                   help="Two contiguous zones (zone 1 power law; zone 2 power law or tapered): derive boundaries and dust masses from disk_Rmid [au] and disk_total_dust_mass [solar masses]")
+    p.add_argument("--tapered-edge-p1-eq-p2", action="store_true", help="Tie p2 to p1 in the last zone of the MCFOST template")
     p.add_argument("--overresolved_flux_fit_for_interferometry", type=float, default=None, help="Optional: fit overresolved flux to interferometry at the supplied wavelength [micron]. Disabled by default.")
     p.add_argument("--unresolved-correction-radius-px", type=float, default=None, help="Unresolved-polarisation aperture radius in instrument pixels; required when correction is enabled")
     p.add_argument("--pdi-constraint-tolerances", type=float, nargs=3, default=(0.05, 0.05, 0.05), metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Deprecated: ignored; PDI uses raw squared differences")
@@ -1081,7 +1083,10 @@ def main():
     assert template_para.exists(), f"Missing template .para at {template_para}"
 
     # Write param file and run MCFOST
-    par_path = obm.write_mcfost_paramfile(incumbent, fidelity_result, results_dir)
+    par_path = obm.write_mcfost_paramfile(
+        incumbent, fidelity_result, results_dir,
+        two_zone_cont_lhc=args.two_zone_cont_lhc,
+        tapered_edge_p1_eq_p2=args.tapered_edge_p1_eq_p2)
     obm.run_mcfost(fidelity_result,par_path, results_dir, args.puffed_up_rim, incumbent, alma_spec=(data_arg[8]["image_spec"] if "alma" in fidelity_result["products"] else None))
     # Score outputs
     args.plot_intermediate=True #to plot final results
