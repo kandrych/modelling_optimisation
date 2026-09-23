@@ -1,5 +1,30 @@
 # Two contiguous zones
 
+## Optional shared dust population
+
+Use `--share-zone-composition` to copy zone 1's entire dust population into
+zone 2. It defaults to off and works independently of `--2ZONE_CONT_LHC`
+and alongside `--tapered-edge-p1-eq-p2`. Exactly two template zones are required.
+
+Zone 1 is the source after sampled grain parameters and conditional material
+fractions have been applied. The copy includes species and component counts,
+optical-index files, material volume fractions, species mass fractions,
+grain type, mixing rule, porosity, Vmax, grain-size distributions and grids,
+and heating methods. The generated file replaces zone 2's whole grain block,
+even if its original species/component counts differ. The input template is
+not modified. For example, a zone-2-only PAH species is removed when absent
+from zone 1.
+
+Remove `zone_2_number_of_species` and all `zone_2_species_*` entries from the
+sampled configuration and associated conditions/forbiddens; the writer rejects
+them when sharing is enabled. Sample dust properties only for zone 1.
+The generated `config_used.json` records the effective dust parameters in both
+zones. Zone dust masses, gas-to-dust ratios, radial geometry and scale-height
+parameters are not copied. This changes the assumed dust populations; costs
+and observational weights are unchanged.
+
+## Continuous surface density
+
 Enable with `python SMAC3.py ... --2ZONE_CONT_LHC`. The flag defaults to false.
 The mode changes the physical parameter mapping; it does not change the SMAC
 sampler or cost function. In particular, the name does not enable Latin

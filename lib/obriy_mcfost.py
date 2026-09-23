@@ -293,9 +293,20 @@ class ParaFile:
             if location == (line_no, col_no):
                 self.params[name] = new_value
 
-    def save(self, out_path):
+    def save(self, out_path, *, share_zone_composition=False):
+        lines = self.lines
+        if share_zone_composition:
+            if int(self.params["number_of_zones"]) != 2:
+                raise ValueError("Shared composition requires exactly two zones.")
+            # Copy complete records, not just counts: zones may have different
+            # numbers of species and material components in the input template.
+            start_1 = self._param_map["zone_1_number_of_species"][0]
+            start_2 = self._param_map["zone_2_number_of_species"][0]
+            last_species = int(self.params["zone_2_number_of_species"])
+            end_2 = self._param_map[f"zone_2_species_{last_species}_n_grains"][0] + 1
+            lines = lines[:start_2] + lines[start_1:start_2] + lines[end_2:]
         with open(out_path, "w") as f:
-            f.writelines(self.lines)
+            f.writelines(lines)
 
     def print_params(self):
         for k, v in self.params.items():
@@ -713,7 +724,8 @@ def _2zone_cont_calc_dmass(cfg_dict) -> None:
 
 def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir: Path,
                           *, two_zone_cont_lhc: bool = False,
-                          tapered_edge_p1_eq_p2: bool = False) -> Path:
+                          tapered_edge_p1_eq_p2: bool = False,
+                          share_zone_composition: bool = False) -> Path:
     """
     test
     Materialize an MCFOST parameter file in `outdir` from the sampled configuration.
@@ -735,6 +747,15 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
         except:
             raise ValueError("Base MCFOST parameter file not found in the working directory. Please ensure 'simulation.para' exists.")
     
+    if share_zone_composition:
+        if int(pf.params["number_of_zones"]) != 2:
+            raise ValueError("--share-zone-composition requires exactly two template zones.")
+        conflicting = [key for key in cfg if key.startswith("zone_2_species_")
+                       or key == "zone_2_number_of_species"]
+        if conflicting:
+            raise ValueError("Shared composition derives zone 2 dust properties; remove from config: "
+                             + ", ".join(sorted(conflicting)))
+
     if tapered_edge_p1_eq_p2:
         cfg = dict(cfg)
         last_zone = int(pf.params["number_of_zones"])
@@ -766,10 +787,6 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
         for key in ("zone_1_Rin", "zone_2_Rout"):
             cfg.setdefault(key, pf.params[key])
         _2zone_cont_calc_dmass(cfg)
-
-    # Record the effective configuration, including derived boundaries and masses.
-    with open(outdir / "config_used.json", "w") as f:
-        json.dump({"cfg": cfg, "fidelity": fidelity}, f, indent=2)
 
     rref_key = "zone_1_Rref"
     rin_key = "zone_1_Rin"
@@ -809,7 +826,18 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
     # pf.set_param("nbr_photons_image", fidelity["nbr_photons_image"])
     
     # Save the modified file
-    pf.save(param_path)
+    if share_zone_composition:
+        pf.save(param_path, share_zone_composition=True)
+        # Record effective dust properties after conditional mixtures resolve.
+        cfg = dict(cfg)
+        for key, value in pf.params.items():
+            if key.startswith("zone_1_species_") or key == "zone_1_number_of_species":
+                cfg[key] = value
+                cfg[key.replace("zone_1_", "zone_2_", 1)] = value
+    else:
+        pf.save(param_path)
+    with open(outdir / "config_used.json", "w") as f:
+        json.dump({"cfg": cfg, "fidelity": fidelity}, f, indent=2)
     
     return param_path
 

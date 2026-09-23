@@ -48,7 +48,7 @@ class TwoZoneTests(unittest.TestCase):
         arg_nodes = [n for n in ast.walk(main) if isinstance(n, ast.Expr)
                      and isinstance(n.value, ast.Call) and n.value.args
                      and isinstance(n.value.args[0], ast.Constant)
-                     and n.value.args[0].value in ('--2ZONE_CONT_LHC', '--tapered-edge-p1-eq-p2')]
+                     and n.value.args[0].value in ('--2ZONE_CONT_LHC', '--tapered-edge-p1-eq-p2', '--share-zone-composition')]
         arg_parser = argparse.ArgumentParser()
         exec(compile(ast.Module(body=arg_nodes, type_ignores=[]), '<flags>', 'exec'), {'p': arg_parser})
 
@@ -75,8 +75,11 @@ class TwoZoneTests(unittest.TestCase):
                                           '10 0 100 40\n', '1.1\n', '-1 -0.3\n', '\n'])
                         lines.append('#Grain properties\n')
                         for zone in range(count):
-                            lines.extend(['1\n', 'Mie 1 1 0 1 0.7\n', 'silicate.lnk 1\n',
+                            lines.extend([f'{zone+1}\n', 'Mie 1 1 0 1 0.7\n', 'silicate.lnk 1\n',
                                           '1\n', '0.1 1000 3.5 100\n'])
+                            if zone == 1:
+                                lines.extend(['Mie 2 1 0 0.1 0.7\n', 'carbon.lnk 0.8\n',
+                                              'ice.lnk 0.2\n', '3\n', '0.001 1 3.5 10\n'])
                         lines.extend(['#Star properties\n', '1\n', '6000 1 1 0 0 0 T\n',
                                       'star.fits\n', '0 0\n'])
                         with tempfile.TemporaryDirectory() as directory:
@@ -117,6 +120,36 @@ class TwoZoneTests(unittest.TestCase):
                                 np.testing.assert_allclose(sigma1, sigma2, rtol=1e-9, atol=0)
                             else:
                                 self.assertEqual(float(trial['zone_1_dust_mass']), 0.004)
+                            if count == 2:
+                                self.assertEqual(trial['zone_2_number_of_species'], '2')
+                                args.share_zone_composition = arg_parser.parse_args(
+                                    ['--share-zone-composition']).share_zone_composition
+                                cfg['zone_1_species_1_amin'] = 0.2
+                                cfg['zone_1_species_1_component_1_optical_indices_file'] = 'new_material.lnk'
+                                ns['objective'](cfg, 1, 0.1, [], str(root/'trials'), args)
+                                shared_path = obm.run_mcfost.call_args.args[1]
+                                shared = real_ns['ParaFile'](shared_path).params
+                                ns['incumbent'] = dict(cfg)
+                                exec(compile(ast.Module(body=[final_write], type_ignores=[]), '<shared final>', 'exec'), ns)
+                                self.assertEqual(shared, real_ns['ParaFile'](ns['par_path']).params)
+                                recorded = json.loads((shared_path.parent/'config_used.json').read_text())['cfg']
+                                for key in shared:
+                                    if key.startswith('zone_1_species_') or key == 'zone_1_number_of_species':
+                                        target = key.replace('zone_1_', 'zone_2_', 1)
+                                        self.assertEqual(shared[key], shared[target])
+                                        self.assertEqual(str(recorded[target]), shared[target])
+                                    elif not key.startswith('zone_2_species_') and key != 'zone_2_number_of_species':
+                                        self.assertEqual(shared[key], trial[key])
+                                self.assertNotIn('zone_2_species_2_grain_type', shared)
+                                self.assertNotIn('zone_2_species_1_amin', cfg)
+                                with self.assertRaisesRegex(ValueError, 'remove from config'):
+                                    real_ns['write_mcfost_paramfile'](
+                                        dict(cfg, zone_2_species_1_amin=0.5), {}, root/'invalid_shared',
+                                        share_zone_composition=True)
+                            else:
+                                with self.assertRaisesRegex(ValueError, 'exactly two'):
+                                    real_ns['write_mcfost_paramfile'](
+                                        cfg, {}, root/'invalid_shared', share_zone_composition=True)
 
     def config(self, inner=-1.0, outer=-1.0):
         return dict(disk_Rmid=20.0, disk_total_dust_mass=0.009,
