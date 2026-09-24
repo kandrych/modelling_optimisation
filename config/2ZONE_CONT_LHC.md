@@ -16,8 +16,7 @@ resolves the tie before writing each trial or final model, records the numeric
 result in config_used.json, and leaves the sampled configuration unchanged.
 No additional CLI flag is required. This ties only the heights at their
 reference radii; identical vertical profiles also require matching reference
-radii and flaring exponents. The reverse tie remains supported, but tying
-both heights to each other is rejected as circular.
+radii and flaring exponents. Only zone 2 may reference zone 1; the reverse tie is rejected.
 
 ## Optional shared dust population
 

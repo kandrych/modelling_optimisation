@@ -143,29 +143,9 @@ class TwoZoneTests(unittest.TestCase):
                                         self.assertEqual(shared[key], trial[key])
                                 self.assertNotIn('zone_2_species_2_grain_type', shared)
                                 self.assertNotIn('zone_2_species_1_amin', cfg)
-                                # Exercise the symbolic height tie through both
-                                # actual objective and final writer call paths.
-                                cfg['zone_1_scale_height'] = 'zone_2_scale_height'
-                                for sampled_height in (None, 1.4):
-                                    if sampled_height is not None:
-                                        cfg['zone_2_scale_height'] = sampled_height
-                                    ns['objective'](cfg, 1, 0.1, [], str(root/'trials'), args)
-                                    tied_path = obm.run_mcfost.call_args.args[1]
-                                    heights = real_ns['ParaFile'](tied_path).params
-                                    expected_height = 1.0 if sampled_height is None else sampled_height
-                                    self.assertEqual(float(heights['zone_1_scale_height']), expected_height)
-                                    self.assertEqual(float(heights['zone_2_scale_height']), expected_height)
-                                    metadata = json.loads((tied_path.parent/'config_used.json').read_text())['cfg']
-                                    self.assertEqual(metadata['zone_1_scale_height'], expected_height)
-                                    ns['incumbent'] = dict(cfg)
-                                    exec(compile(ast.Module(body=[final_write], type_ignores=[]), '<tied final>', 'exec'), ns)
-                                    self.assertEqual(heights, real_ns['ParaFile'](ns['par_path']).params)
-                                    self.assertEqual(cfg['zone_1_scale_height'], 'zone_2_scale_height')
-                                for invalid_height in ('zone_1_scale_height', 0, -1, float('nan')):
-                                    with self.assertRaises(ValueError):
-                                        real_ns['write_mcfost_paramfile'](
-                                            dict(cfg, zone_2_scale_height=invalid_height), {}, root/'invalid_height')
-                                cfg.pop('zone_1_scale_height')
+                                with self.assertRaisesRegex(ValueError, 'not the reverse'):
+                                    real_ns['write_mcfost_paramfile'](
+                                        dict(cfg, zone_1_scale_height='zone_2_scale_height'), {}, root/'invalid_height')
                                 cfg['zone_2_scale_height'] = 'zone_1_scale_height'
                                 for source_height in (None, 2.5):
                                     if source_height is not None:
@@ -182,6 +162,32 @@ class TwoZoneTests(unittest.TestCase):
                                     exec(compile(ast.Module(body=[final_write], type_ignores=[]), '<reverse tie>', 'exec'), ns)
                                     self.assertEqual(actual, real_ns['ParaFile'](ns['par_path']).params)
                                     self.assertEqual(cfg['zone_2_scale_height'], 'zone_1_scale_height')
+                                for target, source_key in (('zone_2_flaring_exp', 'zone_1_flaring_exp'),
+                                                           ('zone_1_flaring_exp', 'zone_2_flaring_exp')):
+                                    cfg.pop(source_key, None)
+                                    cfg[target] = source_key
+                                    for source_flaring in (None, 1.8523873855714):
+                                        if source_flaring is not None:
+                                            cfg[source_key] = source_flaring
+                                        ns['objective'](cfg, 1, 0.1, [], str(root/'trials'), args)
+                                        path = obm.run_mcfost.call_args.args[1]
+                                        actual = real_ns['ParaFile'](path).params
+                                        expected = float(actual[source_key])
+                                        self.assertEqual(float(actual[target]), expected)
+                                        metadata = json.loads((path.parent/'config_used.json').read_text())['cfg']
+                                        self.assertEqual(metadata[target], expected)
+                                        ns['incumbent'] = dict(cfg)
+                                        exec(compile(ast.Module(body=[final_write], type_ignores=[]), '<flaring tie>', 'exec'), ns)
+                                        self.assertEqual(actual, real_ns['ParaFile'](ns['par_path']).params)
+                                        self.assertEqual(cfg[target], source_key)
+                                    for invalid in ('bad', float('nan'), float('inf')):
+                                        with self.assertRaisesRegex(ValueError, 'numeric|finite'):
+                                            real_ns['write_mcfost_paramfile'](
+                                                dict(cfg, **{source_key: invalid}), {}, root/'invalid_flaring')
+                                with self.assertRaisesRegex(ValueError, 'Circular'):
+                                    real_ns['write_mcfost_paramfile'](
+                                        dict(cfg, zone_1_flaring_exp='zone_2_flaring_exp',
+                                             zone_2_flaring_exp='zone_1_flaring_exp'), {}, root/'invalid_flaring')
                                 with self.assertRaisesRegex(ValueError, 'remove from config'):
                                     real_ns['write_mcfost_paramfile'](
                                         dict(cfg, zone_2_species_1_amin=0.5), {}, root/'invalid_shared',
@@ -189,7 +195,10 @@ class TwoZoneTests(unittest.TestCase):
                             else:
                                 with self.assertRaisesRegex(ValueError, 'requires a zone 2'):
                                     real_ns['write_mcfost_paramfile'](
-                                        dict(cfg, zone_1_scale_height='zone_2_scale_height'), {}, root/'invalid_height')
+                                        dict(cfg, zone_2_flaring_exp='zone_1_flaring_exp'), {}, root/'invalid_flaring')
+                                with self.assertRaisesRegex(ValueError, 'requires a zone 2'):
+                                    real_ns['write_mcfost_paramfile'](
+                                        dict(cfg, zone_2_scale_height='zone_1_scale_height'), {}, root/'invalid_height')
                                 with self.assertRaisesRegex(ValueError, 'exactly two'):
                                     real_ns['write_mcfost_paramfile'](
                                         cfg, {}, root/'invalid_shared', share_zone_composition=True)

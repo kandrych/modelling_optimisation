@@ -758,9 +758,9 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
 
     height_1 = "zone_1_scale_height"
     height_2 = "zone_2_scale_height"
-    if cfg.get(height_1) == height_2 and cfg.get(height_2) == height_1:
-        raise ValueError("Circular scale-height tie: one zone must supply a numeric height.")
-    for target, source in ((height_1, height_2), (height_2, height_1)):
+    if cfg.get(height_1) == height_2:
+        raise ValueError("Only zone_2_scale_height may reference zone_1_scale_height, not the reverse.")
+    for target, source in ((height_2, height_1),):
         if cfg.get(target) != source:
             continue
         if "zone_2_scale_height" not in pf.params:
@@ -774,6 +774,26 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
             raise ValueError(f"{source} must be finite and positive for the scale-height tie.")
         cfg = dict(cfg)
         cfg[target] = shared_height
+
+    flaring_1 = "zone_1_flaring_exp"
+    flaring_2 = "zone_2_flaring_exp"
+    if cfg.get(flaring_1) == flaring_2 and cfg.get(flaring_2) == flaring_1:
+        raise ValueError("Circular flaring-exponent tie: one zone must supply a numeric exponent.")
+    for target, source in ((flaring_2, flaring_1), (flaring_1, flaring_2)):
+        if cfg.get(target) != source:
+            continue
+        if flaring_2 not in pf.params:
+            raise ValueError("The flaring-exponent tie requires a zone 2 in the template.")
+        try:
+            shared_flaring = float(cfg.get(source, pf.params[source]))
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{source} must be numeric for the flaring-exponent tie.") from error
+        if not np.isfinite(shared_flaring):
+            raise ValueError(f"{source} must be finite for the flaring-exponent tie.")
+        # With equal reference heights and radii, equal flaring exponents
+        # give the same H(r) on either side of the zone boundary.
+        cfg = dict(cfg)
+        cfg[target] = shared_flaring
 
     if tapered_edge_p1_eq_p2:
         cfg = dict(cfg)
