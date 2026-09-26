@@ -58,6 +58,7 @@ sys.path.append(os.path.abspath(".."))  # parent of current working dir
 #import lib.Katya_func as kf
 
 from lib.obriy_fidelity import load_fidelity_config, map_budget_to_fidelity, fidelity_products
+from lib.obriy_interferometry_data import load_interferometry_data
 
 import lib.obriy_general as obg
 import lib.obriy_sed as obs
@@ -324,6 +325,13 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
     figdir = Path(work_root)/"data_figures"
     figdir.mkdir(parents=True, exist_ok=True)
     figdir=str(figdir)
+    # Absent observables still have a well-defined payload (including SED-only runs).
+    data_wave, data_flux, data_err = [], [], []
+    psf_v = psf_i = psf_h = None
+    pdi_v = pdi_i = pdi_h = None
+    alma_cont = ps_alma = data_size_alma = alma_wavelength = None
+    interferometry_data = load_interferometry_data(
+        data_root, fidelity_products, distroi.read_oi_container_from_oifits)
     alma_spec = None
     alma_header = None
     alma_aperture_radius_mas = None
@@ -333,40 +341,6 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         if  "sed" in fidelity_products: 
             data_filename = '/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
             data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
-
-        if  "vis2_1perband" in fidelity_products:
-            # PIONIER data
-            data_dir_pionier, data_file_pionier = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
-            container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier, wave_lims=(1.63, 1.64))
-
-            # GRAVITY data
-            data_dir_gravity, data_file_gravity = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
-            container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity, wave_lims=(2.199, 2.201))
-
-            # VLTI/MATISSE L-band data
-            data_dir_matisse_l, data_file_matisse_l = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
-            container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(3.48, 3.52))
-
-            # VLTI/MATISSE N-band data
-            data_dir_matisse_n, data_file_matisse_n = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
-            container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(9.9, 10.10), fcorr=True)
-        
-        if  "vis2_chromatic" in fidelity_products:
-            # PIONIER data
-            data_dir_pionier, data_file_pionier = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
-            container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier)
-
-            # GRAVITY data
-            data_dir_gravity, data_file_gravity = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
-            container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity)
-
-            # VLTI/MATISSE L-band data
-            data_dir_matisse_l, data_file_matisse_l = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
-            container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(2.95, 3.95), v2lim=1e-8)
-
-            # VLTI/MATISSE N-band data
-            data_dir_matisse_n, data_file_matisse_n = "/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
-            container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, fcorr=True, wave_lims=(8.0, 13.0), v2lim=1e-8)
 
         if  "pdi_V" in fidelity_products or "pdi_I" in fidelity_products or "pdi_H" in fidelity_products:
             #real PSF from observations
@@ -433,84 +407,6 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
                 data_wave, data_flux, data_err=[],[],[]
         else:
             data_wave, data_flux, data_err=[],[],[]
-
-        if  "vis2_1perband" in fidelity_products:
-            # PIONIER data
-            try:        
-                data_dir_pionier, data_file_pionier = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
-                container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier, wave_lims=(1.63, 1.64))
-                print('PIONIER data loaded')
-            except:
-                print("[main] PIONIER data files not found. Please check the path if your budget expects PIONIER data.")
-                container_data_pionier=None
-
-            # GRAVITY data
-            try:    
-                data_dir_gravity, data_file_gravity = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
-                container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity, wave_lims=(2.199, 2.201))
-                print('GRAVITY data loaded')
-            except:
-                print("[main] GRAVITY data files not found. Please check the path if your budget expects GRAVITY data.")
-                container_data_gravity=None
-
-            # VLTI/MATISSE L-band data
-            try:
-                data_dir_matisse_l, data_file_matisse_l = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
-                container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(3.48, 3.52))
-                print('MATISSE L-band data loaded')
-            except:
-                print("[main] MATISSE L-band data files not found. Please check the path if your budget expects MATISSE L-band data.")
-                container_data_matisse_l=None
-
-            # VLTI/MATISSE N-band data
-            try:    
-                data_dir_matisse_n, data_file_matisse_n = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
-                container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(9.9, 10.10), fcorr=True)
-                print('MATISSE N-band data loaded')
-            except:
-                print("[main] MATISSE N-band data files not found. Please check the path if your budget expects MATISSE N-band data.")
-                container_data_matisse_n=None
-        elif  ("vis2_chromatic" in fidelity_products):
-            # PIONIER data
-            try:        
-                data_dir_pionier, data_file_pionier = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/PIONIER/", "*.fits"
-                container_data_pionier = distroi.read_oi_container_from_oifits(data_dir_pionier, data_file_pionier)
-                print('PIONIER data loaded')
-            except:
-                print("[main] PIONIER data files not found. Please check the path if your budget expects PIONIER data.")
-                container_data_pionier=None
-
-            # GRAVITY data
-            try:    
-                data_dir_gravity, data_file_gravity = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/GRAVITY/", "*1.fits"
-                container_data_gravity = distroi.read_oi_container_from_oifits(data_dir_gravity, data_file_gravity)
-                print('GRAVITY data loaded')
-            except:
-                print("[main] GRAVITY data files not found. Please check the path if your budget expects GRAVITY data.")
-                container_data_gravity=None
-
-            # VLTI/MATISSE L-band data
-            try:
-                data_dir_matisse_l, data_file_matisse_l = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_L/", "*.fits"
-                container_data_matisse_l = distroi.read_oi_container_from_oifits(data_dir_matisse_l, data_file_matisse_l, wave_lims=(2.95, 3.95), v2lim=1e-8)
-                print('MATISSE L-band data loaded')
-            except:
-                print("[main] MATISSE L-band data files not found. Please check the path if your budget expects MATISSE L-band data.")
-                container_data_matisse_l=None
-
-            # VLTI/MATISSE N-band data
-            try:    
-                data_dir_matisse_n, data_file_matisse_n = "/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/MATISSE_N/", "*.fits"
-                container_data_matisse_n = distroi.read_oi_container_from_oifits(data_dir_matisse_n, data_file_matisse_n, wave_lims=(8.0, 13.0), v2lim=1e-8, fcorr=True)
-                print('MATISSE N-band data loaded')
-            except:
-                print("[main] MATISSE N-band data files not found. Please check the path if your budget expects MATISSE N-band data.")
-                container_data_matisse_n=None
-        else:
-            container_data_pionier=None
-            container_data_gravity=None
-            container_data_matisse_l=None
-            container_data_matisse_n=None
 
         if  "pdi_V" in fidelity_products or "pdi_I" in fidelity_products or "pdi_H" in fidelity_products:
             
@@ -641,10 +537,6 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             
         pdi_h=None
         psf_h=None
-        container_data_pionier=None
-        container_data_gravity=None
-        container_data_matisse_l=None
-        container_data_matisse_n=None
         data_wave, data_flux, data_err=[],[],[]
 
 
@@ -769,15 +661,21 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
 
     data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma,'image_size': data_size_alma, 'alma_wavelength': alma_wavelength, 'image_spec': alma_spec, 'header': alma_header,
                'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma, 'mask_alma': mask_alma, 'noise_level_alma': noise_level_alma, 'aperture_radius_mas': alma_aperture_radius_mas}
-    if "vis2_1perband" in fidelity_products or "vis2_chromatic" in fidelity_products:
-        for container in (container_data_pionier, container_data_gravity,
-                          container_data_matisse_l, container_data_matisse_n):
+    for mode, instruments in interferometry_data.items():
+        for instrument, container in instruments.items():
             obi.validate_interferometric_data(
                 container, 'vis' if container.vis_in_fcorr else 'vis2')
+            print(f"[data] Validated {mode}: {instrument}")
     data_sed = [data_wave, data_flux, data_err]
-    data_arrays = [data_sed, container_data_pionier, container_data_gravity, container_data_matisse_l, container_data_matisse_n,pdi_data_v, pdi_data_i, pdi_data_h, data_alma]
+    data_arrays = {
+        "sed": data_sed,
+        "interferometry": interferometry_data,
+        "pdi_V": pdi_data_v,
+        "pdi_I": pdi_data_i,
+        "pdi_H": pdi_data_h,
+        "alma": data_alma,
+    }
     print('data loaded')
-
     return data_arrays
 
 
@@ -848,7 +746,7 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
         tapered_edge_p1_eq_p2=args.tapered_edge_p1_eq_p2,
         share_zone_composition=getattr(args, "share_zone_composition", False))
     try:
-        obm.run_mcfost(fidelity,par_path, trial_dir, args.puffed_up_rim, cfg, alma_spec=(data_arg[8]["image_spec"] if "alma" in fidelity["products"] else None))
+        obm.run_mcfost(fidelity,par_path, trial_dir, args.puffed_up_rim, cfg, alma_spec=(data_arg["alma"]["image_spec"] if "alma" in fidelity["products"] else None))
     except Exception as error:
         # Trial failed; return a high loss
         failure = {
@@ -1132,7 +1030,7 @@ def main():
         two_zone_cont_lhc=args.two_zone_cont_lhc,
         tapered_edge_p1_eq_p2=args.tapered_edge_p1_eq_p2,
         share_zone_composition=getattr(args, "share_zone_composition", False))
-    obm.run_mcfost(fidelity_result,par_path, results_dir, args.puffed_up_rim, incumbent, alma_spec=(data_arg[8]["image_spec"] if "alma" in fidelity_result["products"] else None))
+    obm.run_mcfost(fidelity_result,par_path, results_dir, args.puffed_up_rim, incumbent, alma_spec=(data_arg["alma"]["image_spec"] if "alma" in fidelity_result["products"] else None))
     # Score outputs
     args.plot_intermediate=True #to plot final results
     loss = obm.load_and_score_outputs(fidelity_result, results_dir, data_arg, args, incumbent)

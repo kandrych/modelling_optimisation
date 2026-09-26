@@ -995,22 +995,25 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 os.makedirs(str(workdir)+'/figures/')
 
     if "sed" in fidelity["products"]:
-       data_sed = data_arg[0]
+       data_sed = data_arg["sed"]
 
     if ("vis2_1perband" in fidelity["products"]) or  ("vis2_chromatic" in fidelity["products"]):
-        container_data_pionier = data_arg[1]
-        container_data_gravity = data_arg[2]
-        container_data_matisse_l = data_arg[3]
-        container_data_matisse_n = data_arg[4]
+        # Select observations for this trial, not the union of all fidelity stages.
+        mode = "vis2_chromatic" if "vis2_chromatic" in fidelity["products"] else "vis2_1perband"
+        selected_data = data_arg["interferometry"][mode]
+        container_data_pionier = selected_data["pionier"]
+        container_data_gravity = selected_data["gravity"]
+        container_data_matisse_l = selected_data["matisse_l"]
+        container_data_matisse_n = selected_data["matisse_n"]
 
     if "pdi_V" in fidelity["products"]:
-        pdi_data_v = data_arg[5] #each disc with data not deconvolved q_phi, u_phi, pi, and psf
+        pdi_data_v = data_arg["pdi_V"] #each disc with data not deconvolved q_phi, u_phi, pi, and psf
     if "pdi_I" in fidelity["products"]:
-        pdi_data_i = data_arg[6] 
+        pdi_data_i = data_arg["pdi_I"]
     if "pdi_H" in fidelity["products"]:
-        pdi_data_h = data_arg[7]
+        pdi_data_h = data_arg["pdi_H"]
     if "alma" in fidelity["products"]:
-        data_alma = data_arg[8]
+        data_alma = data_arg["alma"]
     
     print('[obriy_mcfost] Data for scoring loaded successfully')
 
