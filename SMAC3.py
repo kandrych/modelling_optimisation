@@ -48,6 +48,7 @@ from ConfigSpace import ConfigurationSpace, Float, Integer, Categorical, Configu
 from ConfigSpace.conditions import InCondition, EqualsCondition
 
 from smac.runhistory.dataclasses import TrialInfo, TrialValue
+from smac.initial_design.sobol_design import SobolInitialDesign
 
 
 
@@ -911,6 +912,7 @@ def main():
     p.add_argument("--pdi-absolute-error-floors", type=float, nargs=3, default=(0., 0., 0.),
                    metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Deprecated: ignored; PDI uses raw squared differences")
     p.add_argument("--pdi-radial-bin-mas", type=float, default=25.0, help="Non-overlapping PDI radial bins [mas]")
+    p.add_argument("--initial-design-seed", type=int, default=None, help="Seed for the initial design")
     args = p.parse_args()
     
     WORK_ROOT = Path(args.working_root).resolve()
@@ -975,13 +977,18 @@ def main():
                          scratch_root=trial_folder, args=args)
     
 
-    
+    initial_design = SobolInitialDesign(
+        scenario,
+        n_configs=256,
+        max_ratio=0.30,   # Allows 256 within a 1,000-trial run.
+        seed=args.initial_design_seed,         # Initial-design seed, separate from optimiser seed.
+    )
     
     smac_kwargs = dict(
         scenario=scenario,
         target_function=smac_objective,
         overwrite=False,
-        initial_design=None
+        initial_design=initial_design
         #dask_client=client,   
     )
 
