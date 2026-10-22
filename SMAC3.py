@@ -11,6 +11,7 @@ SMAC3 + Dask(SLURM) + Multi‑Fidelity skeleton
 from __future__ import annotations
 
 import argparse
+from functools import partial
 import json
 import math
 import os
@@ -700,7 +701,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
 
 
 def make_unique_config_trial_dir(scratch_root: Path, config_id: int, budget: float) -> Path:
-    """Create ``config_<id>_budget_<budget>`` folders with an atomic suffix.
+    """Create trial folders atomically, adding ``_retrial1``, ``_retrial2``, etc.
 
     A SMAC configuration may be evaluated repeatedly, including at several
     budgets.  The suffix preserves every evaluation while the shared config ID
@@ -715,7 +716,7 @@ def make_unique_config_trial_dir(scratch_root: Path, config_id: int, budget: flo
             return trial_dir
         except FileExistsError:
             suffix += 1
-            trial_dir = base.with_name(f"{base.name}_{suffix:03d}")
+            trial_dir = base.with_name(f"{base.name}_retrial{suffix}")
 
 
 def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str, Any],
@@ -731,7 +732,9 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
     config_id = getattr(cfg, "config_id", None)
     if config_id is None:
         raise RuntimeError("SMAC Configuration has no config_id before objective evaluation.")
-    trial_dir = make_unique_config_trial_dir(Path(scratch_root), config_id, budget)
+    reserved_trial_dir = getattr(cfg, "_obriy_trial_dir", None)
+    trial_dir = (Path(reserved_trial_dir) if reserved_trial_dir is not None else
+                 make_unique_config_trial_dir(Path(scratch_root), config_id, budget))
 
     # Convert cfg (ConfigSpace.Configuration) to dict
     if hasattr(cfg, "get_dictionary"):
@@ -884,7 +887,23 @@ def warmstart_from_runhistory_json(
 # Main orchestration
 # -----------------------------------------------------------------------------
 
+def final_model(cfg, seed, budget, *, fidelity_result, par_path, results_dir,
+                data_arg, args, incumbent):
+    """Module-level target so pynisher can serialize it with spawn."""
+    obm.run_mcfost(
+        fidelity_result, par_path, results_dir, args.puffed_up_rim, incumbent,
+        alma_spec=(data_arg["alma"]["image_spec"]
+                   if "alma" in fidelity_result["products"] else None))
+    args.plot_intermediate = True
+    return obm.load_and_score_outputs(fidelity_result, results_dir, data_arg, args, incumbent)
+
+
 def main():
+    from lib.obriy_trial_timeout import (
+        positive_seconds, timeout_cost, TrialTimeoutRunner,
+        TimeoutAwareEncoder, TimeoutAwareHyperband,
+    )
+
     p = argparse.ArgumentParser(description="SMAC3 + Dask(SLURM) + Multi-fidelity for MCFOST")
     p.add_argument("--data-root", type=str, required=True, help="Path to observed-data root (for scoring) or 'demo'.")
     p.add_argument("--working-root", type=str, required=True, help="Working directory for trial runs")
@@ -896,6 +915,10 @@ def main():
     p.add_argument("--fidelity-config", type=str, default=None, help="Stage file; defaults to WORK_ROOT/fidelity.txt")
     p.add_argument("--config-space", type=str, default=None, help="Explicit ConfigSpace YAML path")
     p.add_argument("--n-trials", type=int, default=80)
+    p.add_argument("--trial-walltime-limit", type=positive_seconds, default=None, metavar="SECONDS",
+                   help="Optional whole-trial walltime limit in seconds, including MCFOST and scoring. Default: unlimited.")
+    p.add_argument("--timeout-cost", type=timeout_cost, default=None, metavar="NUMBER|none",
+                   help="Timeout policy: a finite positive penalty, or 'none' to exclude timeouts from surrogate training (default).")
     p.add_argument("--seed", type=int, default=-1)# Random seed for SMAC
     p.add_argument("--correct-unresolved-polarimetry", action="store_true", help="Use unresolved-corrected model images and profiles for polarimetry comparisons; requires --unresolved-correction-radius-px")
     p.add_argument("--warmstart", type=str, default=None, help="Path to previous SMAC run directory to warmstart from")
@@ -914,6 +937,8 @@ def main():
     p.add_argument("--pdi-radial-bin-mas", type=float, default=25.0, help="Non-overlapping PDI radial bins [mas]")
     p.add_argument("--initial-design-seed", type=int, default=None, help="Seed for the initial design")
     args = p.parse_args()
+    if args.timeout_cost is not None and args.trial_walltime_limit is None:
+        p.error("--timeout-cost requires --trial-walltime-limit.")
     
     WORK_ROOT = Path(args.working_root).resolve()
     os.environ["SMAC_WORK_ROOT"] = str(WORK_ROOT)
@@ -963,6 +988,7 @@ def main():
         seed=args.seed,
         min_budget=args.min_budget,
         max_budget=args.max_budget,
+        trial_walltime_limit=args.trial_walltime_limit,
         # You can also set output directories, logging, etc.
     )
     work_root = Path(args.working_root)
@@ -971,10 +997,10 @@ def main():
     trial_folder= work_root/"trials/"
     trial_folder.mkdir(exist_ok=True)
 
-    # SMAC Objective wrapper with extra kwargs via lambda/closure
-    def smac_objective(cfg, seed: int, budget: float) -> float:
-        return objective(cfg, seed, budget, data_arg=data_arg,
-                         scratch_root=trial_folder, args=args)
+    # Bind fixed inputs; SMAC supplies cfg, seed and budget on each call.
+    # Unlike a nested function, this can be pickled by pynisher under spawn.
+    smac_objective = partial(objective, data_arg=data_arg,
+                             scratch_root=trial_folder, args=args)
     
 
     initial_design = SobolInitialDesign(
@@ -994,6 +1020,17 @@ def main():
 
     smac_kwargs["intensifier"] = MultiFidelityFacade.get_intensifier(
         scenario, eta=args.fidelity_settings["eta"])
+    if args.trial_walltime_limit is not None:
+        smac_kwargs["target_function"] = TrialTimeoutRunner(
+            scenario, smac_objective, trial_root=trial_folder,
+            directory_factory=make_unique_config_trial_dir,
+            timeout_penalty=args.timeout_cost, fidelity_settings=args.fidelity_settings)
+        smac_kwargs["runhistory_encoder"] = TimeoutAwareEncoder(scenario)
+        smac_kwargs["intensifier"] = TimeoutAwareHyperband(
+            scenario, eta=args.fidelity_settings["eta"],
+            incumbent_selection="highest_observed_budget")
+        print(f"[main] Whole-trial walltime limit: {args.trial_walltime_limit} s; "
+              f"timeout cost: {args.timeout_cost} (None means no fit score).")
     smac = MultiFidelityFacade(**smac_kwargs)
 
     if args.warmstart is not None:
@@ -1014,9 +1051,13 @@ def main():
     print("\n=== Optimization finished ===")
     print("Incumbent config:")
     print(incumbent)
+    if incumbent is None:
+        print("No eligible completed model. Trial statuses are saved under trials/; "
+              "increase the walltime limit to evaluate timed-out configurations.")
+        return
 
     # Save results
-    results_dir = Path(args.working_root +"smac_results")
+    results_dir = WORK_ROOT / "smac_results"
     results_dir.mkdir(exist_ok=True)
     with open(results_dir / "incumbent.json", "w") as f:
         json.dump(dict(incumbent) if hasattr(incumbent, "get_dictionary") else dict(incumbent), f, indent=2)
@@ -1037,10 +1078,25 @@ def main():
         two_zone_cont_lhc=args.two_zone_cont_lhc,
         tapered_edge_p1_eq_p2=args.tapered_edge_p1_eq_p2,
         share_zone_composition=getattr(args, "share_zone_composition", False))
-    obm.run_mcfost(fidelity_result,par_path, results_dir, args.puffed_up_rim, incumbent, alma_spec=(data_arg["alma"]["image_spec"] if "alma" in fidelity_result["products"] else None))
-    # Score outputs
-    args.plot_intermediate=True #to plot final results
-    loss = obm.load_and_score_outputs(fidelity_result, results_dir, data_arg, args, incumbent)
+    final_target = partial(
+        final_model, fidelity_result=fidelity_result, par_path=par_path,
+        results_dir=results_dir, data_arg=data_arg, args=args, incumbent=incumbent)
+
+    if args.trial_walltime_limit is not None:
+        # Final regeneration can be slower (e.g. at the highest fidelity). Bound
+        # it too, without replacing the incumbent's already measured trial cost.
+        final_config = Configuration(cs, values=dict(incumbent))
+        final_config.config_id = smac.runhistory.get_config_id(final_config)
+        final_runner = TrialTimeoutRunner(
+            scenario, final_target, trial_root=results_dir,
+            directory_factory=lambda root, config_id, budget: root,
+            timeout_penalty=args.timeout_cost, fidelity_settings=args.fidelity_settings)
+        _, final_value = final_runner.run_wrapper(TrialInfo(final_config, seed=args.seed, budget=args.max_budget))
+        if final_value.status.name != "SUCCESS":
+            print(f"[main] Final regeneration ended with {final_value.status.name}; "
+                  "preserving the optimisation history and original incumbent score.")
+    else:
+        final_target(incumbent, args.seed, args.max_budget)
 
 
 
@@ -1063,4 +1119,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Dask serializes __main__ functions by value. Pynisher subsequently uses
+    # standard pickle under spawn, which cannot resolve that copied function.
+    # Execute through the canonical import so all targets are module references.
+    from SMAC3 import main as run_main
+    run_main()
