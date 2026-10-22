@@ -65,6 +65,17 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(frame.usable.sum(), 1)
         self.assertEqual(set(frame.exclusion), {"usable", "penalty_cost", "recorded_failure", "non_finite_cost", "unfinished"})
 
+    def test_readable_objective_labels_preserve_product_distinctions(self):
+        self.assertEqual(summary.objective_label(["alma", "sed"]), "SED+ALMA")
+        self.assertEqual(summary.objective_label(["sed", "pdi_I", "pdi_V", "pdi_H"]), "SED+PDI(V,I,H)")
+        self.assertNotEqual(summary.objective_label(["vis2_chromatic"]),
+                            summary.objective_label(["vis2_1perband"]))
+        self.assertNotEqual(summary.objective_label(["pdi_V"]), summary.objective_label(["pdi_I"]))
+        self.assertNotEqual(summary.objective_label(["x+y"]), summary.objective_label(["x", "y"]))
+        run, _ = self.make_run()
+        frame, *_ = summary.load_runs({"test": run})
+        self.assertEqual(frame.iloc[0].objective_key, "SED+INT(band)+PDI(V,I,H)+ALMA")
+
     def test_cost_audit_checks_completeness_not_just_numeric_sum(self):
         info = full_info()
         self.assertEqual(summary.audit_cost(info, 18)["cost_audit_status"], "match")
@@ -102,16 +113,15 @@ class SummaryTests(unittest.TestCase):
         sed = {"sed": {"chi2_reduced": 2}, "fidelity": {"stage": "sed", "products": ["sed"]}}
         run, _ = self.make_run(rows=[trial(budget=1, cost=2, info=sed), trial(cost=1e99)])
         frame, *_ = summary.load_runs({"test": run})
-        best, top, competitive = summary.select_solutions(frame)
-        self.assertTrue(best.empty and top.empty and competitive.empty)
+        best, competitive = summary.select_solutions(frame)
+        self.assertTrue(best.empty and competitive.empty)
 
     def test_distinct_model_selection_keeps_repeats_in_evaluation_table(self):
         run, _ = self.make_run(rows=[trial(cost=18), trial(cost=19), trial(config_id=2, cost=20)])
         frame, *_ = summary.load_runs({"test": run})
-        best, top, competitive = summary.select_solutions(frame, relative_tolerance=.1)
+        best, competitive = summary.select_solutions(frame, relative_tolerance=.1)
         self.assertEqual(len(frame), 3)
         self.assertEqual(best.iloc[0].cost, 18)
-        self.assertEqual(len(top), 2)
         self.assertEqual(len(competitive), 1)
 
     def test_discovery_deduplicates_overlapping_inputs_and_accepts_json(self):
@@ -171,6 +181,58 @@ class SummaryTests(unittest.TestCase):
                              "usable": True, "budget": 1., "configured_max_budget": 1.,
                              "cost": x, "parameter_hash": [f"{history}_{i}" for i in range(count)],
                              "param__x": x, "param__y": sign*x*x})
+
+    def test_competitive_comparison_uses_nested_distinct_final_models(self):
+        full = self.pair_samples()
+        full["param__y"] = np.r_[np.arange(10)[::-1], np.arange(10, 30)]
+        _, competitive = summary.select_solutions(full, relative_tolerance=9)
+        pairs = summary.parameter_pair_analysis(full, competitive, {}, min_models=3)
+        counts, parameters, comparison = summary.competitive_comparison(
+            pd.concat([full, full.iloc[:2]], ignore_index=True), competitive, pairs)
+        self.assertEqual(counts.iloc[0].n_all_final, 30)
+        self.assertEqual(counts.iloc[0].n_competitive, 10)
+        self.assertAlmostEqual(counts.iloc[0].retained_fraction, 1/3)
+        row = comparison.iloc[0]
+        self.assertTrue(row.both_eligible)
+        self.assertTrue(row.sign_flip_rho)
+        self.assertAlmostEqual(row.delta_rho, row.rho_competitive-row.rho_all_final)
+        self.assertEqual(parameters.set_index("parameter").loc["x", "max_competitive"], 10)
+        sparse = summary.parameter_pair_analysis(full, competitive, {}, min_models=20)
+        _, _, audit = summary.competitive_comparison(full, competitive, sparse)
+        self.assertTrue(audit.delta_rho.isna().all())
+
+    def test_threshold_sensitivity_preserves_absolute_floor_and_eligibility(self):
+        full = self.pair_samples()
+        counts, pairs = summary.threshold_sensitivity(full, {}, [0, 1, 9, 29],
+                                                     absolute_allowance=4, min_models=6)
+        self.assertEqual(counts.n_competitive.tolist(), [5, 5, 10, 30])
+        self.assertEqual(counts.cost_threshold.tolist(), [5, 5, 10, 30])
+        self.assertFalse(pairs.iloc[0].eligible_competitive)
+        self.assertTrue(pairs.iloc[-1].eligible_competitive)
+        self.assertAlmostEqual(pairs.iloc[-1].rho_competitive, pairs.iloc[-1].rho_all_final)
+        with self.assertRaises(ValueError):
+            summary.threshold_sensitivity(full, {}, [float("nan")])
+
+    def test_comparison_plots_and_empty_final_pool(self):
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        full = self.pair_samples()
+        _, competitive = summary.select_solutions(full, relative_tolerance=19)
+        pairs = summary.parameter_pair_analysis(full, competitive, {})
+        _, sensitivity = summary.threshold_sensitivity(full, {}, [.1, 19, 29])
+        fig = summary.plot_threshold_sensitivity(pairs, sensitivity)
+        self.assertTrue(np.isnan(fig.axes[0].lines[0].get_ydata()[0]))
+        plt.close(fig)
+        fig = summary.plot_parameter_distributions(full, competitive, "sample", "sed", ["x", "y"])
+        self.assertEqual(len(fig.axes[0].lines), 2)
+        self.assertEqual(fig.axes[0].lines[0].get_ydata()[-1], 1)
+        plt.close(fig)
+        full["configured_max_budget"] = 3
+        pairs = summary.parameter_pair_analysis(full, competitive.iloc[:0], {})
+        counts, parameters, comparison = summary.competitive_comparison(full, competitive.iloc[:0], pairs)
+        self.assertTrue(counts.empty and parameters.empty and comparison.empty)
+        self.assertIn("history", parameters)
 
     def test_pair_associations_are_within_history_with_full_sample_control(self):
         frame = pd.concat([self.pair_samples(history="positive"), self.pair_samples(history="negative", sign=-1)], ignore_index=True)
