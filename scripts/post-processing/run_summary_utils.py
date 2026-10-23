@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 from scipy.stats import kendalltau
 
+from parameter_labels import parameter_label
+
 SCORE_COLUMNS = {
     "SED": "score_sed", "PIONIER": "score_pionier", "GRAVITY": "score_gravity",
     "MATISSE L": "score_matisse_l", "MATISSE N": "score_matisse_n",
@@ -166,6 +168,28 @@ def products_for(info):
     return tuple(sorted(products))
 
 
+def objective_label(products):
+    """Readable identifier retaining interferometry mode and individual PDI bands."""
+    products = set(products)
+    parts = []
+    if "sed" in products:
+        parts.append("SED")
+    for product, label in (("vis2_1perband", "INT(band)"), ("vis2_chromatic", "INT(chrom)")):
+        if product in products:
+            parts.append(label)
+    bands = [b for b in "VIH" if "pdi_"+b in products]
+    if bands:
+        parts.append("PDI("+",".join(bands)+")")
+    if "alma" in products:
+        parts.append("ALMA")
+    known = {"sed", "vis2_1perband", "vis2_chromatic", "alma", *["pdi_"+b for b in "VIH"]}
+    unknown = sorted(products-known)
+    if unknown:
+        # JSON escaping preserves distinctions even for unusual future product names.
+        parts.append("other="+json.dumps(unknown, separators=(",", ":")))
+    return "+".join(parts) if parts else "No products"
+
+
 def scoring_fingerprint(info):
     """Known scoring/data descriptors for a common fully-scored pool.
 
@@ -261,7 +285,7 @@ def load_runs(folders, penalty_limit=1e90):
                    "config_id": trial.get("config_id"), "seed": trial.get("seed"),
                    "instance": json.dumps(trial.get("instance"), sort_keys=True),
                    "budget": budget, "stage": stage, "products": ", ".join(products),
-                   "objective_key": digest(products), "configured_max_budget": declared_max,
+                   "objective_key": objective_label(products), "configured_max_budget": declared_max,
                    "status": trial.get("status"), "usable": reason == "usable", "exclusion": reason,
                    "failure_reason": failure.get("reason", ""), "cost": cost,
                    "time_seconds": number(trial.get("time")), "endtime": number(trial.get("endtime")),
@@ -297,27 +321,27 @@ def coverage_table(evaluations):
     return pd.DataFrame(rows)
 
 
-def select_solutions(evaluations, top_n=20, relative_tolerance=0.10, absolute_tolerance=0.0):
+def select_solutions(evaluations, relative_tolerance=0.10, absolute_tolerance=0.0):
     """Use configured final budget, not merely the highest successful budget.
 
     Competitive selection is descriptive; it is not a likelihood threshold.
     Repeated evaluations remain visible in the source table; representative
     model tables keep the lowest observed score per parameter hash and objective.
     """
-    if top_n < 1 or relative_tolerance < 0 or absolute_tolerance < 0:
-        raise ValueError("top_n >= 1 and nonnegative competitive tolerances are required.")
+    if relative_tolerance < 0 or absolute_tolerance < 0:
+        raise ValueError("Nonnegative competitive tolerances are required.")
     final = evaluations[evaluations.usable & np.isclose(evaluations.budget, evaluations.configured_max_budget)].copy()
     keys = ["history", "objective_key"]
     unique = final.sort_values("cost").drop_duplicates([*keys, "parameter_hash"])
-    best, top, competitive = [], [], []
+    best, competitive = [], []
     for _, group in unique.groupby(keys, sort=False):
         group = group.sort_values("cost")
         winner = group.iloc[0]
         threshold = winner.cost + max(absolute_tolerance, abs(winner.cost)*relative_tolerance)
-        best.append(group.iloc[:1]); top.append(group.head(top_n))
+        best.append(group.iloc[:1])
         competitive.append(group[group.cost <= threshold])
     empty = evaluations.iloc[:0].copy()
-    return tuple(pd.concat(parts, ignore_index=True) if parts else empty.copy() for parts in (best, top, competitive))
+    return tuple(pd.concat(parts, ignore_index=True) if parts else empty.copy() for parts in (best, competitive))
 
 
 def parameter_summary(competitive, spaces):
@@ -540,8 +564,8 @@ def plot_parameter_correlation_heatmap(pair_analysis, scope="competitive", metri
     norm = BoundaryNorm(np.arange(-.5, 9.5), 9)
     fig, ax = plt.subplots(figsize=(max(11, .58*len(names)+4), max(9, .58*len(names)+3)))
     im = ax.imshow(np.ma.masked_invalid(bins), cmap=cmap, norm=norm, interpolation="nearest")
-    ax.set_xticks(range(len(names)), names, rotation=65, ha="right", fontsize=8)
-    ax.set_yticks(range(len(names)), names, fontsize=8)
+    ax.set_xticks(range(len(names)), [parameter_label(name) for name in names], rotation=65, ha="right", fontsize=8)
+    ax.set_yticks(range(len(names)), [parameter_label(name) for name in names], fontsize=8)
     ax.set_xticks(np.arange(-.5, len(names), 1), minor=True)
     ax.set_yticks(np.arange(-.5, len(names), 1), minor=True)
     ax.grid(which="minor", color="white", linewidth=.7)
@@ -570,10 +594,7 @@ def plot_parameter_correlation_heatmap(pair_analysis, scope="competitive", metri
     count_text = str(int(counts.iloc[0])) if counts.nunique() == 1 else f"{int(counts.min())}–{int(counts.max())}"
     ax.set_title(f"{history}\n{metric_label} correlation: {scope}; paired n={count_text}", pad=15, fontsize=11)
     fig.text(.02, .015,
-             f"|{symbol}|: negligible <0.2; weak 0.2–<0.4; moderate 0.4–<0.6; strong 0.6–<0.8; very strong ≥0.8.\n"
-             "NA = ineligible/undefined (see pair audit); — = diagonal omitted; † = directly linked by ConfigSpace.\n"
-             "Numeric colour bands are for display; Spearman and Kendall coefficients are not interchangeable.\n"
-             "Strength labels are descriptive, not statistical significance or posterior evidence.", fontsize=8)
+             f" — = diagonal omitted; † = directly linked by ConfigSpace.\n", fontsize=font_size)
     fig.tight_layout(rect=(0, .085, 1, 1))
     return fig
 
@@ -599,18 +620,14 @@ def plot_selected_parameter_pairs(selected, evaluations, competitive, log_parame
         band = correlation_band(coefficient)
         color = CORRELATION_COLORS[band] if band is not None else "grey"
         level = correlation_strength(coefficient)
-        if scope == "all_final":
-            ax.scatter(pd.to_numeric(full[x], errors="coerce"), pd.to_numeric(full[y], errors="coerce"),
-                       s=15, alpha=.4, color=color, label="All final-stage models (analysed)")
-            ax.scatter(pd.to_numeric(subset[x], errors="coerce"), pd.to_numeric(subset[y], errors="coerce"),
-                       s=28, alpha=.65, facecolors="none", edgecolors="#222222", linewidths=.6,
-                       label="Competitive models")
-        else:
-            ax.scatter(pd.to_numeric(full[x], errors="coerce"), pd.to_numeric(full[y], errors="coerce"),
-                       s=12, alpha=.18, color="grey", label="All usable final-stage models")
-            ax.scatter(pd.to_numeric(subset[x], errors="coerce"), pd.to_numeric(subset[y], errors="coerce"),
-                       s=27, alpha=.85, color=color, edgecolors="#555555", linewidths=.3, label="Competitive models")
-        ax.set(xlabel=row.parameter_x, ylabel=row.parameter_y)
+        # Point appearance identifies sample membership; only the border encodes correlation.
+        ax.scatter(pd.to_numeric(full[x], errors="coerce"), pd.to_numeric(full[y], errors="coerce"),
+                   marker="o", s=24, alpha=0.4, color="black", linewidths=0,
+                   label="All usable final-stage models", zorder=1)
+        ax.scatter(pd.to_numeric(subset[x], errors="coerce"), pd.to_numeric(subset[y], errors="coerce"),
+                   marker="o", s=27, alpha=.85, color="#2166ac", linewidths=0,
+                   label="Competitive models", zorder=2)
+        ax.set(xlabel=parameter_label(row.parameter_x), ylabel=parameter_label(row.parameter_y))
         sign = "positive" if coefficient > 0 else "negative" if coefficient < 0 else "zero"
         history_title = f"{row.history}\n" if selected.history.nunique() > 1 else ""
         ax.set_title(f"{history_title}{level} {sign} association ({metric_label}, {scope})\n"
@@ -785,7 +802,7 @@ def plot_parameters(competitive, best, names, log_parameters=()):
             winner = pd.to_numeric(best.loc[best.history == history, "param__"+name], errors="coerce").dropna()
             ax.scatter(np.repeat(i, len(winner)), winner, marker="*", s=100, color="black", zorder=4)
         ax.set_xticks(range(len(histories)), histories, rotation=75, ha="right", fontsize=7)
-        ax.set_title(name)
+        ax.set_title(parameter_label(name))
         all_values = pd.to_numeric(competitive["param__"+name], errors="coerce").dropna()
         if name in log_parameters and len(all_values) and all_values.gt(0).all():
             ax.set_yscale("log")
@@ -879,3 +896,151 @@ def plot_tradeoffs(pool):
     fig.suptitle("Already scored common-pool evaluations (one compatibility group)")
     fig.tight_layout()
     return fig
+
+
+def final_configurations(evaluations):
+    """One best observed realisation per configuration/history/final objective."""
+    return (evaluations.loc[evaluations.usable & np.isclose(
+        evaluations.budget, evaluations.configured_max_budget)]
+        .sort_values("cost").drop_duplicates(["history", "objective_key", "parameter_hash"]))
+
+
+def competitive_comparison(evaluations, competitive, pair_analysis, parameters=None):
+    """Descriptive retained fractions, numeric distributions and paired correlations.
+
+    Competitive rows are a nested subset, not an independent statistical sample.
+    Quantiles describe the optimiser's sampled models, not posterior uncertainty.
+    """
+    final = final_configurations(evaluations)
+    counts, distributions = [], []
+    for (history, objective), full in final.groupby(["history", "objective_key"], sort=False):
+        subset = competitive[(competitive.history == history) & (competitive.objective_key == objective)]
+        subset = full[full.parameter_hash.isin(subset.parameter_hash)]
+        counts.append({"history": history, "objective_key": objective, "products": full.products.iloc[0],
+                       "n_all_final": len(full), "n_competitive": len(subset),
+                       "retained_fraction": len(subset)/len(full), "best_cost": full.cost.min(),
+                       "max_competitive_cost": subset.cost.max()})
+        names = parameters if parameters is not None else [c[7:] for c in full if c.startswith("param__")]
+        for name in names:
+            column = "param__"+name
+            if column not in full:
+                continue
+            row = {"history": history, "objective_key": objective, "parameter": name}
+            for scope, sample in (("all_final", full), ("competitive", subset)):
+                original = sample[column].dropna()
+                values = pd.to_numeric(original, errors="coerce").replace([np.inf, -np.inf], np.nan)
+                # Do not partially summarise nominal categories as numbers.
+                values = values.dropna() if values.notna().all() else pd.Series(dtype=float)
+                row[f"n_{scope}"] = len(values)
+                for label, q in (("min", 0), ("q10", .1), ("median", .5), ("q90", .9), ("max", 1)):
+                    row[f"{label}_{scope}"] = values.quantile(q) if len(values) else np.nan
+            distributions.append(row)
+    pairs = pair_analysis.copy()
+    pairs["both_eligible"] = pairs.eligible_all_final & pairs.eligible_competitive
+    for prefix in ("rho", "tau_b"):
+        delta = pairs[f"{prefix}_competitive"]-pairs[f"{prefix}_all_final"]
+        pairs[f"delta_{prefix}"] = delta.where(pairs.both_eligible)
+        pairs[f"abs_delta_{prefix}"] = pairs[f"delta_{prefix}"].abs()
+        pairs[f"sign_flip_{prefix}"] = ((pairs[f"{prefix}_competitive"] *
+                                           pairs[f"{prefix}_all_final"]) < 0).where(pairs.both_eligible)
+    pairs["max_abs_delta"] = pairs[["abs_delta_rho", "abs_delta_tau_b"]].max(axis=1)
+    return (pd.DataFrame(counts, columns=["history", "objective_key", "products", "n_all_final",
+                "n_competitive", "retained_fraction", "best_cost", "max_competitive_cost"]),
+            pd.DataFrame(distributions, columns=["history", "objective_key", "parameter",
+                *[f"{name}_{scope}" for scope in ("all_final", "competitive")
+                  for name in ("n", "min", "q10", "median", "q90", "max")]]), pairs)
+
+
+def threshold_sensitivity(evaluations, spaces, relative_allowances, absolute_allowance=0., **pair_options):
+    """Hold absolute allowance fixed; recompute nested sets on one final pool.
+
+    The absolute floor can make different relative allowances select identical
+    sets. Effective thresholds and retained counts are returned explicitly.
+    """
+    allowances = sorted(set(float(v) for v in relative_allowances))
+    if not allowances or not all(np.isfinite(v) and v >= 0 for v in allowances):
+        raise ValueError("Supply finite, nonnegative relative allowances.")
+    if not np.isfinite(absolute_allowance) or absolute_allowance < 0:
+        raise ValueError("Absolute allowance must be finite and nonnegative.")
+    final = final_configurations(evaluations)
+    count_rows, pair_tables = [], []
+    for allowance in allowances:
+        _, competitive = select_solutions(final, allowance, absolute_allowance)
+        for (history, objective), full in final.groupby(["history", "objective_key"], sort=False):
+            subset = competitive[(competitive.history == history) & (competitive.objective_key == objective)]
+            best = full.cost.min()
+            count_rows.append({"history": history, "objective_key": objective,
+                               "relative_allowance": allowance, "absolute_allowance": absolute_allowance,
+                               "cost_threshold": best+max(abs(best)*allowance, absolute_allowance),
+                               "n_all_final": len(full), "n_competitive": len(subset),
+                               "retained_fraction": len(subset)/len(full)})
+        pairs = parameter_pair_analysis(final, competitive, spaces, **pair_options)
+        pairs["relative_allowance"] = allowance
+        pairs["absolute_allowance"] = absolute_allowance
+        pair_tables.append(pairs)
+    return pd.DataFrame(count_rows), pd.concat(pair_tables, ignore_index=True)
+
+
+def plot_parameter_distributions(evaluations, competitive, history, objective, parameters, log_parameters=()):
+    """ECDFs compare distributions without making the larger sample look denser."""
+    import matplotlib.pyplot as plt
+    full = final_configurations(evaluations)
+    full = full[(full.history == history) & (full.objective_key == objective)]
+    subset = competitive[(competitive.history == history) & (competitive.objective_key == objective)]
+    subset = full[full.parameter_hash.isin(subset.parameter_hash)]
+    if full.empty or not parameters:
+        return None
+    fig, axes = plt.subplots(math.ceil(len(parameters)/2), 2,
+                             figsize=(12, 3.5*math.ceil(len(parameters)/2)), squeeze=False)
+    for ax, name in zip(axes.flat, parameters):
+        column = "param__"+name
+        for label, sample, color in (("All final", full, "#888888"), ("Competitive", subset, "#2166ac")):
+            raw = sample[column].dropna()
+            values = pd.to_numeric(raw, errors="coerce").replace([np.inf, -np.inf], np.nan)
+            if values.empty or not values.notna().all():
+                continue
+            values = np.sort(values.to_numpy())
+            ax.step(values, np.arange(1, len(values)+1)/len(values), where="post", color=color,
+                    label=f"{label} (n={len(values)})")
+        if name in log_parameters:
+            values = pd.to_numeric(full[column], errors="coerce").dropna()
+            if len(values) and values.gt(0).all():
+                ax.set_xscale("log")
+        ax.set(xlabel=parameter_label(name), ylabel="Empirical cumulative fraction", ylim=(0, 1.02))
+        if ax.lines:
+            ax.legend(fontsize=7)
+    for ax in axes.flat[len(parameters):]:
+        ax.set_visible(False)
+    fig.suptitle(f"Sampled parameter distributions: {history}\nObjective {objective}")
+    fig.tight_layout()
+    return fig
+
+
+def plot_threshold_sensitivity(selected, sensitivity):
+    """Use fixed selected pairs; mask coefficients failing eligibility at each threshold."""
+    import matplotlib.pyplot as plt
+    if selected.empty:
+        return None
+    fig, axes = plt.subplots(len(selected), 2, figsize=(12, 3.2*len(selected)), squeeze=False)
+    for (left, right), (_, pair) in zip(axes, selected.iterrows()):
+        rows = sensitivity[(sensitivity.history == pair.history) &
+                           (sensitivity.objective_key == pair.objective_key) &
+                           (sensitivity.parameter_x == pair.parameter_x) &
+                           (sensitivity.parameter_y == pair.parameter_y)].sort_values("relative_allowance")
+        for prefix, label, color in (("rho", "Spearman", "#2166ac"), ("tau_b", "Kendall tau-b", "#b2182b")):
+            values = rows[f"{prefix}_competitive"].where(rows.eligible_competitive)
+            left.plot(rows.relative_allowance, values, 'o-', color=color, label=label)
+            baseline = rows[f"{prefix}_all_final"].where(rows.eligible_all_final).dropna()
+            if len(baseline):
+                left.axhline(baseline.iloc[0], color=color, linestyle='--', alpha=.6)
+        left.set(xlabel="Relative cost allowance", ylabel="Rank correlation", ylim=(-1.05, 1.05),
+                 title=f"{parameter_label(pair.parameter_x)} / {parameter_label(pair.parameter_y)}")
+        left.legend(fontsize=7)
+        right.plot(rows.relative_allowance, rows.n_competitive, 'o-', label="Complete paired models")
+        right.set(xlabel="Relative cost allowance", ylabel="Paired sample size")
+        right.legend(fontsize=7)
+    fig.suptitle(f"Threshold sensitivity: {selected.history.iloc[0]}\n"
+                 "Dashed = all-final reference; gaps = ineligible; absolute allowance held fixed")
+    fig.tight_layout()
+    return fig
+

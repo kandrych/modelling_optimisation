@@ -3,12 +3,14 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import sys
 import unittest
 
 import numpy as np
 import pandas as pd
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts/post-processing/run_summary_utils.py"
+sys.path.insert(0, str(MODULE_PATH.parent))
 spec = importlib.util.spec_from_file_location("run_summary_utils", MODULE_PATH)
 summary = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(summary)
