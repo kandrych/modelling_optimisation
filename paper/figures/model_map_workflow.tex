@@ -1,0 +1,54 @@
+\documentclass[10pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\pagestyle{empty}
+% Compile with pdflatex. The page is cropped to the vector artwork.
+\newsavebox{\mapbox}
+\begin{document}
+\begin{lrbox}{\mapbox}
+\begin{tikzpicture}[
+  box/.style={draw=black!70,line width=0.55pt,rounded corners=2pt,
+    align=center,font=\sffamily\small,inner sep=5pt,minimum height=1.5cm},
+  inputbox/.style={box,fill=black!4},
+  searchbox/.style={box,fill=blue!7},
+  arrow/.style={-{Latex[length=2mm]},line width=0.65pt,draw=black!80},
+  wire/.style={line width=0.65pt,draw=black!80}
+]
+
+\node[inputbox,text width=2.7cm] (model) at (0,0)
+  {\textbf{Physical model}\\Trial parameters};
+\node[box,text width=2.7cm] (rt) at (3.5,0)
+  {\textbf{Radiative transfer}\\MCFOST};
+\node[box,text width=2.7cm] (synthetic) at (7,0)
+  {\textbf{Synthetic\\observables}\\SED and images};
+\node[box,text width=2.7cm] (compare) at (10.5,0)
+  {\textbf{Data comparison}\\Observable-specific\\processing};
+\node[box,text width=2.7cm] (score) at (14,0)
+  {\textbf{Model score}\\Combined discrepancy};
+\node[inputbox,text width=3.2cm] (data) at (10.5,2)
+  {\textbf{Selected observations}\\Photometry and\\spatially resolved data};
+\node[searchbox,text width=5.2cm] (search) at (5.25,-2.35)
+  {\textbf{SMAC optimisation}\\Update the search and propose parameters};
+\node[box,text width=3.2cm] (result) at (14,-2.35)
+  {\textbf{Results}\\Preferred model\\and fit diagnostics};
+\draw[arrow] (model) -- (rt);
+\draw[arrow] (rt) -- (synthetic);
+\draw[arrow] (synthetic) -- (compare);
+\draw[arrow] (compare) -- (score);
+\draw[arrow] (data) -- (compare);
+\draw[wire] (score.south) -- (14,-1.15);
+\fill[black!80] (14,-1.15) circle (1.3pt);
+\draw[arrow] (14,-1.15) -| (search.north);
+\draw[arrow] (14,-1.15) -- (result.north);
+\draw[arrow] (search.west) -- (0,-2.35) -- (model.south);
+
+\end{tikzpicture}
+\end{lrbox}
+\pdfpagewidth=\dimexpr\wd\mapbox+12pt\relax
+\pdfpageheight=\dimexpr\ht\mapbox+\dp\mapbox+12pt\relax
+\pdfhorigin=0pt
+\pdfvorigin=0pt
+\shipout\vbox{\offinterlineskip\kern6pt\hbox{\kern6pt\usebox{\mapbox}\kern6pt}\kern6pt}
+\end{document}
