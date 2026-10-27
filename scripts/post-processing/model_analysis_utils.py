@@ -2,6 +2,8 @@
 
 All models retain their unique evaluation IDs. No simulation or observation
 processing code is imported. Units and original score contributions are retained.
+Minima, selected ranges and families describe the current saved candidate pool;
+they do not select a final model or prescribe when an optimiser should stop.
 """
 from itertools import combinations
 import json

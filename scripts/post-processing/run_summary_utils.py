@@ -1,6 +1,8 @@
 """Read-only analysis of saved SMAC/MCFOST histories; never launch simulations.
 
-Used by run_summary.ipynb. Costs and observational uncertainties are not changed.
+Used by run_summary.ipynb. Every result is conditional on the histories read in
+this execution. "Final budget" means a configured fidelity stage, not a finished
+search or a final model choice. Costs and observational uncertainties are unchanged.
 """
 from __future__ import annotations
 
@@ -327,6 +329,8 @@ def select_solutions(evaluations, relative_tolerance=0.10, absolute_tolerance=0.
     Competitive selection is descriptive; it is not a likelihood threshold.
     Repeated evaluations remain visible in the source table; representative
     model tables keep the lowest observed score per parameter hash and objective.
+    The allowance is max(abs(best) * relative_tolerance, absolute_tolerance) in
+    score units. The two returned frames are current minima and competitive rows.
     """
     if relative_tolerance < 0 or absolute_tolerance < 0:
         raise ValueError("Nonnegative competitive tolerances are required.")
@@ -757,7 +761,7 @@ def plot_costs(best):
     ax.invert_yaxis()
     ax.set_xlim(0, max(left.max(), 1)*1.14)
     ax.set_xlabel("Recorded composite objective; missing groups are unscored")
-    ax.set_title("Best recorded final-stage models: observation contributions")
+    ax.set_title("Current lowest-score target-budget candidates: observation contributions")
     ax.legend(ncol=5, fontsize=8, loc="upper center", bbox_to_anchor=(.5, -.13))
     fig.tight_layout()
     return fig

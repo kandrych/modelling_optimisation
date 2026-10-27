@@ -48,6 +48,12 @@ def runhistory_to_df(smac, cs) -> pd.DataFrame:
         row["seed"] = k.seed
         row["budget"] = k.budget
         row["cost"] = v.cost
+        timeout = v.additional_info.get("trial_timeout", {})
+        if timeout:
+            # The numeric SMAC placeholder is not an observed objective value.
+            row["cost"] = timeout.get("cost")
+            row["timeout_policy"] = timeout.get("policy")
+            row["timeout_message"] = timeout.get("message")
         row["time"] = getattr(v, "time", None)
         row["status"] = getattr(v, "status", None)
         row["additional_info"] = v.additional_info if isinstance(v, TrialValue) else None
