@@ -889,8 +889,9 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
 
     
     if puffed_up_rim:
-        run_mcfost_safe(param_path, workdir, options=["-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_temp.log")
-        run_mcfost_safe(param_path, workdir, options=["-disk_struct","-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"], logfile="mcfost_base_struct.log")
+        puffed_options = ["-puffed_up_rim", f"{cfg.get('puffed_h_rim_over_h0', 0)}", f"{cfg.get('puffed_r_rim', 0)}", f"{cfg.get('puffed_delta_r', 0)}"]
+        run_mcfost_safe(param_path, workdir, options=puffed_options, logfile="mcfost_temp.log")
+        run_mcfost_safe(param_path, workdir, options=["-disk_struct"] + puffed_options, logfile="mcfost_base_struct.log")
                 
     else:
         run_mcfost_safe(param_path, workdir, logfile="mcfost_temp.log")
@@ -904,25 +905,25 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
                 continue
     
             print(f"Running MCFOST for vis2_1perband at {w} micron")
-            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
+            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"]+puffed_options if puffed_up_rim else [], logfile=f"mcfost_{w:.2f}.log")
     if "pdi_V" in fidelity["products"]:
         for w in [0.55]:
             if os.path.exists(str(workdir)+"/data_"+str(w)+"/"):   
                 print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
                 continue
-            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
+            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"]+puffed_options if puffed_up_rim else [], logfile=f"mcfost_{w:.2f}.log")
     if "pdi_I" in fidelity["products"]:
         for w in [0.82]:
             if os.path.exists(str(workdir)+"/data_"+str(w)+"/"):   
                 print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
                 continue
-            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
+            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"]+puffed_options if puffed_up_rim else [], logfile=f"mcfost_{w:.2f}.log")
     if "pdi_H" in fidelity["products"]:
         for w in [1.63]:
             if os.path.exists(str(workdir)+"/data_"+str(w)+"/"):   
                 print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
                 continue
-            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
+            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"]+puffed_options if puffed_up_rim else [], logfile=f"mcfost_{w:.2f}.log")
     
     if "alma" in fidelity["products"]:
         if alma_spec is None:
@@ -950,7 +951,7 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
         run_mcfost_safe(
             alma_param_path.resolve(),
             workdir,
-            options=["-img", wavelength_text, "-casa"],
+            options=["-img", wavelength_text, "-casa"]+puffed_options if puffed_up_rim else [],
             logfile="mcfost_alma.log",
         )
 
@@ -972,7 +973,7 @@ def run_mcfost(fidelity: dict, param_path: Path, workdir: Path, puffed_up_rim: b
             if os.path.exists(str(workdir)+"/data_"+str(w)+"/"):   
                 print(f"Image at {w} micron already exists in {str(workdir)+'data_'+str(w)+'/'} folder. Skipping simulation.")
                 continue
-            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"], logfile=f"mcfost_{w:.2f}.log")
+            run_mcfost_safe(param_path, workdir, options=["-img", f"{w}"]+puffed_options if puffed_up_rim else [], logfile=f"mcfost_{w:.2f}.log")
 
 
 
