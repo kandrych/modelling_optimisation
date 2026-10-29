@@ -2,7 +2,7 @@
 from pathlib import Path
 
 
-def load_interferometry_data(data_root, products, reader):
+def load_interferometry_data(data_root, products, reader, validator=None):
     """Return mode -> instrument -> OIContainer; wavelengths are in microns.
 
     ``reader`` is Distroi's OIFITS reader. Separate reads preserve its existing
@@ -41,10 +41,15 @@ def load_interferometry_data(data_root, products, reader):
     for mode in modes:
         result[mode] = {}
         for instrument, (folder, pattern) in instruments.items():
+            source = str(Path(roots[data_root]) / folder) + "/"
             try:
                 result[mode][instrument] = reader(
-                    str(Path(roots[data_root]) / folder) + "/", pattern,
+                    source, pattern,
                     **selections[mode][instrument])
+                if validator is not None:
+                    container = result[mode][instrument]
+                    validator(container, 'vis' if container.vis_in_fcorr else 'vis2')
             except Exception as error:
-                raise RuntimeError(f"Failed to load {mode} observations for {instrument}.") from error
+                raise RuntimeError(f"Failed to load/validate {mode} observations for {instrument} "
+                                   f"at {source}{pattern}: {error}") from error
     return result

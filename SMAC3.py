@@ -323,7 +323,32 @@ def build_configspace(config_file: str) -> ConfigurationSpace:
 
 
 def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[str, Any]:
-    
+    """Load and validate requested products before profiles or worker startup.
+
+    Optimisation passes the union of all configured stages. Unrequested
+    observables remain optional; requested missing or invalid data raise with
+    the observable, source path and original exception as the cause.
+    """
+    from lib.obriy_observations import (
+        load_sed_observation, load_pdi_image, validate_pdi_observation,
+        load_alma_observation,
+    )
+
+    pdi_sources = {band: {} for band in ("V", "I", "H")}
+
+    def read_pdi(folder, filename, band, component):
+        pdi_sources[band][component] = str(Path(folder) / filename)
+        return load_pdi_image(folder, filename, obp.Loadimage, f"PDI {band} {component}")
+
+    def read_alma(folder, filename):
+        return load_alma_observation(folder, filename, oba.Loadimage_alma,
+                                     oba.alma_image_spec)
+
+    if data_root == "ar_pup_ozstar":
+        unsupported = set(fidelity_products) & {"sed", "alma", "pdi_H"}
+        if unsupported:
+            raise ValueError(f"No observation files configured for {sorted(unsupported)} in {data_root}.")
+
     figdir = Path(work_root)/"data_figures"
     figdir.mkdir(parents=True, exist_ok=True)
     figdir=str(figdir)
@@ -333,16 +358,18 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
     pdi_v = pdi_i = pdi_h = None
     alma_cont = ps_alma = data_size_alma = alma_wavelength = None
     interferometry_data = load_interferometry_data(
-        data_root, fidelity_products, distroi.read_oi_container_from_oifits)
+        data_root, fidelity_products, distroi.read_oi_container_from_oifits,
+        validator=obi.validate_interferometric_data)
     alma_spec = None
     alma_header = None
     alma_aperture_radius_mas = None
+    noise_level_alma = None
 
     #filename of SED catalogue data file
     if data_root =='demo_mac':
         if  "sed" in fidelity_products: 
             data_filename = '/Users/katerynaandrych/Work/lin/Postdoc/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
-            data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
+            data_wave, data_flux, data_err = load_sed_observation(data_filename, obs.load_sed_data)
 
         if  "pdi_V" in fidelity_products or "pdi_I" in fidelity_products or "pdi_H" in fidelity_products:
             #real PSF from observations
@@ -351,62 +378,44 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
 
         if  "pdi_V" in fidelity_products:    
             file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
-            psf_v=obp.Loadimage(figfolder_psf,file_psf)
+            psf_v=read_pdi(figfolder_psf,file_psf, "V", "PSF")
             obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=figdir+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
             #polarimetric observations
             pdi_folder_v = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
             pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_PI_corr_tel+unres.fits'
-            pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
+            pdi_v= read_pdi(pdi_folder_v,pdi_file_v, "V", "PI")
             obp.plot_polarimetric_image(pdi_v, 3.6, title='IRAS08544-4431 V-band PI', save=figdir+'/pi_v_band.png', image_scale='asinh', roi_half_size=50)
         
         if  "pdi_I" in fidelity_products:    
             file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
-            psf_i=obp.Loadimage(figfolder_psf,file_psf)
+            psf_i=read_pdi(figfolder_psf,file_psf, "I", "PSF")
             obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=figdir+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
             #polarimetric observations
             pdi_folder_i = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
             pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_PI_corr_tel+unres.fits'
-            pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
+            pdi_i= read_pdi(pdi_folder_i,pdi_file_i, "I", "PI")
             obp.plot_polarimetric_image(pdi_i, 3.6, title='IRAS08544-4431 I-band PI', save=figdir+'/pi_i_band.png', image_scale='asinh', roi_half_size=50)
             
         if  "pdi_H" in fidelity_products: 
-            file_psf='iras08544-4431_calib_H_I_meancombined.fits'
-            psf_h=obp.Loadimage(pdi_folder_h,file_psf)
-            obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=figdir+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
             pdi_folder_h = '/Users/katerynaandrych/Work/lin/Postdoc/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
+            file_psf='iras08544-4431_calib_H_I_meancombined.fits'
+            psf_h=read_pdi(pdi_folder_h,file_psf, "H", "PSF")
+            obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=figdir+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
             pdi_file_h = 'iras08544-4431_calib_H_PI_corr_tel+unres.fits'
-            pdi_h= obp.Loadimage(pdi_folder_h,pdi_file_h)
+            pdi_h= read_pdi(pdi_folder_h,pdi_file_h, "H", "PI")
             obp.plot_polarimetric_image(pdi_h, 12.27, title='IRAS08544-4431 H-band PI', save=figdir+'/pi_h_band.png', image_scale='asinh', roi_half_size=30)
             
         if "alma" in fidelity_products:
-            try:
-                data_dir_alma, data_file_alma = "/Users/katerynaandrych/Work/lin/Postdoc/Data/ALMA/IRAS08544-4431/", "IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits"
-                alma_cont, alma_header,pix_scale_alma, data_size_alma=oba.Loadimage_alma(data_dir_alma, data_file_alma)
-                ps_alma=pix_scale_alma*1.0
-                alma_spec = oba.alma_image_spec(alma_header)
-                alma_wavelength = alma_spec["wavelength_um"]
-                
-                print('ALMA data loaded')
-                
-            except:
-                print("[main] ALMA data files not found. Please check the path if your budget expects ALMA data.")
-                alma_cont=None
-                ps_alma=None
-                alma_wavelength=None
-                data_size_alma=None
-                alma_spec=None
-
-
+            data_dir_alma, data_file_alma = "/Users/katerynaandrych/Work/lin/Postdoc/Data/ALMA/IRAS08544-4431/", "IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits"
+            alma_cont, alma_header, ps_alma, data_size_alma, alma_spec = read_alma(data_dir_alma, data_file_alma)
+            alma_wavelength = alma_spec["wavelength_um"]
+            print('ALMA data loaded')
 
     elif data_root =='demo_ozstar':
         if  "sed" in fidelity_products: 
-            try:
-                data_filename = '/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
-                data_wave, data_flux, data_err = obs.load_sed_data(data_filename)
-                print('SED data loaded')
-            except:
-                print("[main] SED data file not found. Please check the path if your budget expects SED.")
-                data_wave, data_flux, data_err=[],[],[]
+            data_filename = '/fred/oz061/kandrych/Data/interferometry/IRAS08544-4431/SED/IRAS08544-4431.phot'
+            data_wave, data_flux, data_err = load_sed_observation(data_filename, obs.load_sed_data)
+            print('SED data loaded')
         else:
             data_wave, data_flux, data_err=[],[],[]
 
@@ -421,35 +430,35 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             
             if  "pdi_V" in fidelity_products:
                 file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
-                psf_v=obp.Loadimage(figfolder_psf,file_psf)
+                psf_v=read_pdi(figfolder_psf,file_psf, "V", "PSF")
                 obp.plot_polarimetric_image(psf_v, 3.6, title='IRAS08544-4431 V-band PSF', save=figdir+'/psf_v_band.png', image_scale='asinh', roi_half_size=30)
                 #polarimetric observations
                 pdi_folder_v = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/V_band/'
                 file_type=['PI','Q','U', "Q_phi", "U_phi"]
                 for ft in file_type:
                     pdi_file_v = f'IRAS08544-4431_dc_notnorm_V_{ft}_corr_tel+unres.fits'
-                    pdi_v[ft]= obp.Loadimage(pdi_folder_v,pdi_file_v)
+                    pdi_v[ft]= read_pdi(pdi_folder_v,pdi_file_v, "V", ft)
                     obp.plot_polarimetric_image(pdi_v[ft], 3.6, title=f'IRAS08544-4431 V-band {ft}', save=figdir+f'/v_band_{ft}.png', image_scale='asinh', roi_half_size=50)
                 
                 pdi_file_v = 'IRAS08544-4431_dc_notnorm_V_I_meancombined.fits'
-                pdi_v['I']= obp.Loadimage(pdi_folder_v,pdi_file_v)
+                pdi_v["I"]= read_pdi(pdi_folder_v,pdi_file_v, "V", "I")
                 obp.plot_polarimetric_image(pdi_v['I'], 3.6, title='IRAS08544-4431 V-band I', save=figdir+'/v_band_I.png', image_scale='asinh', roi_half_size=50)
 
             
             if  "pdi_I" in fidelity_products:
                 file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
-                psf_i=obp.Loadimage(figfolder_psf,file_psf)
+                psf_i=read_pdi(figfolder_psf,file_psf, "I", "PSF")
                 obp.plot_polarimetric_image(psf_i, 3.6, title='IRAS08544-4431 I-band PSF', save=figdir+'/psf_i_band.png', image_scale='asinh', roi_half_size=30)
                 #polarimetric observations
                 pdi_folder_i = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/I_band/'
                 file_type=['PI','Q','U', "Q_phi", "U_phi"]
                 for ft in file_type:
                     pdi_file_i = f'IRAS08544-4431_dc_notnorm_I_{ft}_corr_tel+unres.fits'
-                    pdi_i[ft]= obp.Loadimage(pdi_folder_i,pdi_file_i)
+                    pdi_i[ft]= read_pdi(pdi_folder_i,pdi_file_i, "I", ft)
                     obp.plot_polarimetric_image(pdi_i[ft], 3.6, title=f'IRAS08544-4431 I-band {ft}', save=figdir+f'/i_band_{ft}.png', image_scale='asinh', roi_half_size=50)
                 
                 pdi_file_i = 'IRAS08544-4431_dc_notnorm_I_I_meancombined.fits'
-                pdi_i['I']= obp.Loadimage(pdi_folder_i,pdi_file_i)
+                pdi_i["I"]= read_pdi(pdi_folder_i,pdi_file_i, "I", "I")
                 obp.plot_polarimetric_image(pdi_i['I'], 3.6, title='IRAS08544-4431 I-band I', save=figdir+'/i_band_I.png', image_scale='asinh', roi_half_size=50)
 
 
@@ -457,20 +466,21 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
                 pdi_folder_h = '/fred/oz061/kandrych/Data/polarimetry/IRAS08544-4431_for_modelling/H_band/'
                 
                 file_psf='iras08544-4431_calib_H_I_meancombined.fits'
-                psf_h=obp.Loadimage(pdi_folder_h,file_psf)
+                psf_h=read_pdi(pdi_folder_h,file_psf, "H", "PSF")
                 obp.plot_polarimetric_image(psf_h, 12.27, title='IRAS08544-4431 H-band PSF', save=figdir+'/psf_h_band.png', image_scale='asinh', roi_half_size=30)
                 pdi_h['I']= psf_h
+                pdi_sources["H"]["I"] = pdi_sources["H"]["PSF"]
                 obp.plot_polarimetric_image(pdi_h['I'], 12.27, title='IRAS08544-4431 H-band I', save=figdir+'/h_band_I.png', image_scale='asinh', roi_half_size=30)
                 #polarimetric observations
                 file_type=['PI', "Q_phi", "U_phi"]
                 for ft in file_type:
                     pdi_file_h = f'iras08544-4431_calib_H_{ft}_corr_tel+unres.fits'
-                    pdi_h[ft]= obp.Loadimage(pdi_folder_h,pdi_file_h)
+                    pdi_h[ft]= read_pdi(pdi_folder_h,pdi_file_h, "H", ft)
                     obp.plot_polarimetric_image(pdi_h[ft], 12.27, title=f'IRAS08544-4431 H-band {ft}', save=figdir+f'/h_band_{ft}.png', image_scale='asinh', roi_half_size=30)
                 file_type=['Q','U']
                 for ft in file_type:
                     pdi_file_h = f'iras08544-4431_calib_H_{ft}_meancombined.fits'
-                    pdi_h[ft]= obp.Loadimage(pdi_folder_h,pdi_file_h)
+                    pdi_h[ft]= read_pdi(pdi_folder_h,pdi_file_h, "H", ft)
                     obp.plot_polarimetric_image(pdi_h[ft], 12.27, title=f'IRAS08544-4431 H-band {ft}', save=figdir+f'/h_band_{ft}.png', image_scale='asinh', roi_half_size=30)
                 
                 
@@ -489,8 +499,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         if  "alma" in fidelity_products:
             alma_folder = '/fred/oz061/kandrych/Data/ALMA/IRAS08544-4431/'
             alma_cont_file='IRAS08_cont_multiscale_robust0_2mas.image.pbcor.fits'
-            alma_cont, alma_header, ps_alma, data_size_alma=oba.Loadimage_alma(alma_folder, alma_cont_file)
-            alma_spec = oba.alma_image_spec(alma_header)
+            alma_cont, alma_header, ps_alma, data_size_alma, alma_spec = read_alma(alma_folder, alma_cont_file)
             alma_wavelength = alma_spec["wavelength_um"]
             obp.plot_polarimetric_image(alma_cont, ps_alma, title='IRAS08544-4431 ALMA continuum', save=figdir+'/alma_cont.png', image_scale='linear')
             print('ALMA continuum loaded')
@@ -513,25 +522,25 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
             star_psf='HD75885'
         if  "pdi_V" in fidelity_products:
             file_psf=star_psf+'_'+'V'+'_'+'I'+'_meancombined.fits'
-            psf_v=obp.Loadimage(figfolder_psf,file_psf)
+            psf_v=read_pdi(figfolder_psf,file_psf, "V", "PSF")
             obp.plot_polarimetric_image(psf_v, 3.6, title='AR_Pup V-band PSF', save=figdir+'/psf_v_band.png', image_scale='asinh', roi_half_size=60)
             #polarimetric observations
             pdi_folder_v = '/fred/oz061/kandrych/Data/polarimetry/AR_Pup_zimpol_2018/V_band/'
             pdi_file_v = 'AR_Pup_dc_notnorm_V_decon.fits'
             #pdi_file_v = 'AR_Pup_dc_notnorm_V_PI_corr_tel+unres.fits'
-            pdi_v= obp.Loadimage(pdi_folder_v,pdi_file_v)
+            pdi_v= read_pdi(pdi_folder_v,pdi_file_v, "V", "PI")
             obp.plot_polarimetric_image(pdi_v, 3.6, title='AR_Pup V-band PI', save=figdir+'/pi_v_band.png', image_scale='asinh', roi_half_size=60)
             # pdi_decon_v= obp.Loadimage(pdi_folder_v,'AR_Pup_dc_notnorm_V_decon.fits')
             pdi_v=obp.center_crop(pdi_v, 150)
 
         if  "pdi_I" in fidelity_products:
             file_psf=star_psf+'_'+'I'+'_'+'I'+'_meancombined.fits'
-            psf_i=obp.Loadimage(figfolder_psf,file_psf)
+            psf_i=read_pdi(figfolder_psf,file_psf, "I", "PSF")
             obp.plot_polarimetric_image(psf_i, 3.6, title='AR_Pup I-band PSF', save=figdir+'/psf_i_band.png', image_scale='asinh', roi_half_size=60)
             pdi_folder_i = '/fred/oz061/kandrych/Data/polarimetry/AR_Pup_zimpol_2018/I_band/'
             #pdi_file_i = 'AR_Pup_dc_notnorm_I_PI_corr_tel+unres.fits'
             pdi_file_i = 'AR_Pup_dc_notnorm_I_decon.fits'
-            pdi_i= obp.Loadimage(pdi_folder_i,pdi_file_i)
+            pdi_i= read_pdi(pdi_folder_i,pdi_file_i, "I", "PI")
             pdi_i=obp.center_crop(pdi_i, 150)
             
             obp.plot_polarimetric_image(pdi_i, 3.6, title='AR Pup I-band PI', save=figdir+'/pi_i_band.png', image_scale='asinh', roi_half_size=60)
@@ -545,6 +554,12 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
     else:
         raise ValueError(f"Unknown data_root: {data_root}")
     
+
+    for band, images, psf, pixel_scale in (
+        ("V", pdi_v, psf_v, 3.6), ("I", pdi_i, psf_i, 3.6), ("H", pdi_h, psf_h, 12.27),
+    ):
+        if f"pdi_{band}" in fidelity_products:
+            validate_pdi_observation(images, psf, pixel_scale, band, pdi_sources[band])
 
     if "pdi_V" in fidelity_products:    
         # Calculate metrics for arcsinh-scaled images to highlight morphology
@@ -624,23 +639,13 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
                                                 azimuthal_r_out_mas=100.0,
                                                 theta0=0.0
                                                 )
-        ny, nx = alma_cont.shape
-        xc = (nx - 1) / 2.0
-        yc = (ny - 1) / 2.0
-        R,_,_,X, Y = obp.compute_grid(alma_cont, xc=xc, yc=yc)
-        noise_level_alma=np.nanstd(alma_cont[R>(150/ps_alma)])#here we take the noise level from the outer part of the image, where there is no emission
-        # Fix the aperture from observations once, before any trial is launched.
-        centre = (float(alma_header["CRPIX1"])-1, float(alma_header["CRPIX2"])-1)
+        # Calculate observation-only scoring quantities once, before trials.
+        R, *_ = obp.compute_grid(alma_cont)
+        noise_level_alma = np.nanstd(alma_cont[R > 150 / ps_alma])
+        centre = (float(alma_header["CRPIX1"]) - 1, float(alma_header["CRPIX2"]) - 1)
         alma_aperture_radius_mas = ps_alma * oba.alma_snr_aperture_radius(
             alma_cont, noise_level_alma, center_xy=centre,
             snr_threshold=3.0, padding_pixels=3.0)
-        available_radius_mas = min(centre[0]+0.5, nx-0.5-centre[0],
-                                   centre[1]+0.5, ny-0.5-centre[1]) * ps_alma
-        if alma_aperture_radius_mas > available_radius_mas:
-            raise ValueError(
-                f"Observed ALMA SNR aperture ({alma_aperture_radius_mas:g} mas) exceeds "
-                f"image coverage ({available_radius_mas:g} mas). Inspect edge detections "
-                "and choose a valid observational aperture before optimisation.")
         # The 3-sigma criterion selects only the radius, not individual scoring pixels.
         # Retained for reference: former individual-pixel scoring mask and plot.
         # mask_alma = (alma_cont >= 3*noise_level_alma)
@@ -655,7 +660,6 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         azimuthal_profile_alma=None
         mask_alma = None
         noise_level_alma = None 
-        noise_level_alma = None
 
     pdi_data_v={'psf': psf_v, 'pol_images': pdi_v, 'radial_profiles': radial_profile_v, 'azimuthal_profiles': azimuthal_profile_v}
     pdi_data_i={'psf': psf_i, 'pol_images': pdi_i, 'radial_profiles': radial_profile_i, 'azimuthal_profiles': azimuthal_profile_i}
@@ -663,11 +667,6 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
 
     data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma,'image_size': data_size_alma, 'alma_wavelength': alma_wavelength, 'image_spec': alma_spec, 'header': alma_header,
                'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma, 'mask_alma': mask_alma, 'noise_level_alma': noise_level_alma, 'aperture_radius_mas': alma_aperture_radius_mas}
-    for mode, instruments in interferometry_data.items():
-        for instrument, container in instruments.items():
-            obi.validate_interferometric_data(
-                container, 'vis' if container.vis_in_fcorr else 'vis2')
-            print(f"[data] Validated {mode}: {instrument}")
     data_sed = [data_wave, data_flux, data_err]
     data_arrays = {
         "sed": data_sed,
@@ -719,6 +718,15 @@ def make_unique_config_trial_dir(scratch_root: Path, config_id: int, budget: flo
             trial_dir = base.with_name(f"{base.name}_retrial{suffix}")
 
 
+def prepare_model_config(cfg, puffed_up_rim: bool) -> Dict[str, Any]:
+    """Derive execution inputs without changing SMAC's sampled configuration."""
+    model_cfg = dict(cfg)
+    if puffed_up_rim:
+        model_cfg["puffed_r_rim"] = (
+            float(model_cfg["zone_1_Rin"]) + float(model_cfg["puffed_r_offset"]))
+    return model_cfg
+
+
 def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str, Any],
               scratch_root: str, args) -> Tuple[float, Dict[str, Any]]:
     fidelity = map_budget_to_fidelity(budget, args.fidelity_settings)
@@ -736,12 +744,7 @@ def objective(cfg: Dict[str, Any], seed: int, budget: float, data_arg: Dict[str,
     trial_dir = (Path(reserved_trial_dir) if reserved_trial_dir is not None else
                  make_unique_config_trial_dir(Path(scratch_root), config_id, budget))
 
-    # Convert cfg (ConfigSpace.Configuration) to dict
-    if hasattr(cfg, "get_dictionary"):
-        cfg = dict(cfg)
-
-    if args.puffed_up_rim:
-        cfg["puffed_r_rim"] = (float(cfg["zone_1_Rin"]) + float(cfg["puffed_r_offset"]))  # Add puffed-up rim radius to config for MCFOST
+    cfg = prepare_model_config(cfg, args.puffed_up_rim)
 
     # Write param file and run MCFOST
     par_path = obm.write_mcfost_paramfile(
@@ -887,15 +890,37 @@ def warmstart_from_runhistory_json(
 # Main orchestration
 # -----------------------------------------------------------------------------
 
+def prepare_final_results_dir(work_root: Path) -> Path:
+    """Preserve the previous final run and return an empty output directory.
+
+    Image-directory existence is used to skip repeated wavelengths within a
+    simulation. No outputs from a previous incumbent may enter that cache.
+    """
+    work_root = Path(work_root)
+    results_dir = work_root / "smac_results"
+    if results_dir.is_symlink() or (results_dir.exists() and not results_dir.is_dir()):
+        raise ValueError(f"Expected a regular results directory: {results_dir}")
+    if results_dir.exists():
+        history_dir = work_root / "smac_results_history"
+        history_dir.mkdir(exist_ok=True)
+        archive_dir = Path(tempfile.mkdtemp(prefix="run_", dir=history_dir))
+        archived_results = archive_dir / "smac_results"
+        results_dir.rename(archived_results)
+        print(f"[main] Previous final results preserved in {archived_results}", flush=True)
+    results_dir.mkdir(exist_ok=False)
+    return results_dir
+
+
 def final_model(cfg, seed, budget, *, fidelity_result, par_path, results_dir,
                 data_arg, args, incumbent):
     """Module-level target so pynisher can serialize it with spawn."""
+    model_cfg = prepare_model_config(incumbent, args.puffed_up_rim)
     obm.run_mcfost(
-        fidelity_result, par_path, results_dir, args.puffed_up_rim, incumbent,
+        fidelity_result, par_path, results_dir, args.puffed_up_rim, model_cfg,
         alma_spec=(data_arg["alma"]["image_spec"]
                    if "alma" in fidelity_result["products"] else None))
     args.plot_intermediate = True
-    return obm.load_and_score_outputs(fidelity_result, results_dir, data_arg, args, incumbent)
+    return obm.load_and_score_outputs(fidelity_result, results_dir, data_arg, args, model_cfg)
 
 
 def main():
@@ -907,11 +932,9 @@ def main():
     p = argparse.ArgumentParser(description="SMAC3 + Dask(SLURM) + Multi-fidelity for MCFOST")
     p.add_argument("--data-root", type=str, required=True, help="Path to observed-data root (for scoring) or 'demo'.")
     p.add_argument("--working-root", type=str, required=True, help="Working directory for trial runs")
-    p.add_argument("--use-slurm", action="store_true", help="Use SLURMCluster instead of LocalCluster")
+    #p.add_argument("--use-slurm", action="store_true", help="Use SLURMCluster instead of LocalCluster")
     p.add_argument("--n-workers", type=int, default=4)
-    p.add_argument("--procs-per-worker", type=int, default=1)
-    p.add_argument("--min-budget", type=float, default=None, help="Deprecated; budgets come from fidelity.txt")
-    p.add_argument("--max-budget", type=float, default=None, help="Deprecated; budgets come from fidelity.txt")
+    #p.add_argument("--procs-per-worker", type=int, default=1)
     p.add_argument("--fidelity-config", type=str, default=None, help="Stage file; defaults to WORK_ROOT/fidelity.txt")
     p.add_argument("--config-space", type=str, default=None, help="Explicit ConfigSpace YAML path")
     p.add_argument("--n-trials", type=int, default=80)
@@ -931,9 +954,9 @@ def main():
                    help="Copy zone 1's entire dust population to zone 2, including species, materials, sizes and heating methods")
     p.add_argument("--overresolved_flux_fit_for_interferometry", type=float, default=None, help="Optional: fit overresolved flux to interferometry at the supplied wavelength [micron]. Disabled by default.")
     p.add_argument("--unresolved-correction-radius-px", type=float, default=None, help="Unresolved-polarisation aperture radius in instrument pixels; required when correction is enabled")
-    p.add_argument("--pdi-constraint-tolerances", type=float, nargs=3, default=(0.05, 0.05, 0.05), metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Deprecated: ignored; PDI uses raw squared differences")
-    p.add_argument("--pdi-absolute-error-floors", type=float, nargs=3, default=(0., 0., 0.),
-                   metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Deprecated: ignored; PDI uses raw squared differences")
+    #p.add_argument("--pdi-constraint-tolerances", type=float, nargs=3, default=(0.05, 0.05, 0.05), metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Deprecated: ignored; PDI uses raw squared differences")
+    #p.add_argument("--pdi-absolute-error-floors", type=float, nargs=3, default=(0., 0., 0.),
+    #               metavar=("FRACTION", "RADIAL", "QUADRANT"), help="Deprecated: ignored; PDI uses raw squared differences")
     p.add_argument("--pdi-radial-bin-mas", type=float, default=25.0, help="Non-overlapping PDI radial bins [mas]")
     p.add_argument("--initial-design-seed", type=int, default=None, help="Seed for the initial design")
     args = p.parse_args()
@@ -950,8 +973,6 @@ def main():
 
     fidelity_path = Path(args.fidelity_config) if args.fidelity_config else WORK_ROOT / "fidelity.txt"
     args.fidelity_settings = load_fidelity_config(fidelity_path)
-    if args.min_budget is not None or args.max_budget is not None:
-        p.error("Remove --min-budget/--max-budget; budgets are assigned from fidelity.txt.")
     args.min_budget = args.fidelity_settings['stages'][0]['budget']
     args.max_budget = args.fidelity_settings['stages'][-1]['budget']
     manifest = WORK_ROOT / "fidelity_resolved.json"
@@ -1056,9 +1077,8 @@ def main():
               "increase the walltime limit to evaluate timed-out configurations.")
         return
 
-    # Save results
-    results_dir = WORK_ROOT / "smac_results"
-    results_dir.mkdir(exist_ok=True)
+    # Start clean before writing the new incumbent or any simulation inputs.
+    results_dir = prepare_final_results_dir(WORK_ROOT)
     with open(results_dir / "incumbent.json", "w") as f:
         json.dump(dict(incumbent) if hasattr(incumbent, "get_dictionary") else dict(incumbent), f, indent=2)
 
@@ -1074,7 +1094,7 @@ def main():
 
     # Write param file and run MCFOST
     par_path = obm.write_mcfost_paramfile(
-        incumbent, fidelity_result, results_dir,
+        prepare_model_config(incumbent, args.puffed_up_rim), fidelity_result, results_dir,
         two_zone_cont_lhc=args.two_zone_cont_lhc,
         tapered_edge_p1_eq_p2=args.tapered_edge_p1_eq_p2,
         share_zone_composition=getattr(args, "share_zone_composition", False))
@@ -1122,5 +1142,9 @@ if __name__ == "__main__":
     # Dask serializes __main__ functions by value. Pynisher subsequently uses
     # standard pickle under spawn, which cannot resolve that copied function.
     # Execute through the canonical import so all targets are module references.
+    import multiprocessing as mp
+
+    mp.set_start_method("spawn")
+
     from SMAC3 import main as run_main
     run_main()

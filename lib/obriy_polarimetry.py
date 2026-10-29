@@ -3688,16 +3688,12 @@ def measure_pdi_constraints(images, pixel_scale_mas, radius_mas=500.0,
                              for k in ('Q_phi', 'I', 'Q', 'U')]
     if any(a.shape != qphi.shape for a in (intensity, q, u)):
         raise ValueError('PDI constraint images must share a pixel grid.')
-    if not all(np.all(np.isfinite(a)) for a in (qphi, intensity, q, u)):
-        raise ValueError('Non-finite PDI constraint pixels; define a common valid region first.')
     if pixel_scale_mas <= 0 or radial_bin_mas <= 0 or radius_mas <= 0:
         raise ValueError('Pixel scale, radius and radial bin width must be positive.')
-    ny, nx = qphi.shape
-    yy, xx = np.indices(qphi.shape)
-    radius = np.hypot(xx-(nx-1)/2, yy-(ny-1)/2)*pixel_scale_mas
-    # Pixel edges are half a pixel beyond the outermost pixel centres.
-    outer = min(float(radius_mas), min(nx, ny)*pixel_scale_mas/2)
-    aperture = radius <= outer
+    from lib.obriy_observations import pdi_scoring_aperture
+    radius, outer, aperture = pdi_scoring_aperture(qphi.shape, pixel_scale_mas, radius_mas)
+    if not all(np.all(np.isfinite(a[aperture])) for a in (qphi, intensity, q, u)):
+        raise ValueError('Non-finite PDI constraint pixels in the scoring aperture.')
     total_i = float(intensity[aperture].sum())
     total_qphi = float(qphi[aperture].sum())
     if total_i <= 0:
