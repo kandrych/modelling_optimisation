@@ -81,7 +81,7 @@ def validate_pdi_observation(images, psf, pixel_scale_mas, band, sources):
                 raise ValueError(f"{key} has no finite samples in the scoring aperture.")
         with np.errstate(over="ignore", invalid="ignore"):
             sum_i = np.nansum(arrays["I"][aperture])
-        if not np.isfinite(sum_i) or sum_i < 0:
+        if not np.isfinite(sum_i) or sum_i <= 0:
             raise ValueError("PDI aperture sum_I must be finite and nonnegative.")
     except Exception as error:
         paths = ", ".join(f"{key}={path}" for key, path in sources.items())
