@@ -1041,12 +1041,18 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             (plot_mcfost_density_temperature_cuts, (workdir,),
              {"reference_radius_au": cfg.get("zone_1_Rc")}),
         ):
+            plot_name = getattr(plot_function, "__name__", type(plot_function).__name__)
+            print(f"[obriy_mcfost] Starting diagnostic plot {plot_name} "
+                  f"in {workdir}", flush=True)
             existing_figures = set(plt.get_fignums())
             try:
                 plot_function(*plot_args, **plot_kwargs)
+                print(f"[obriy_mcfost] Finished diagnostic plot {plot_name} "
+                      f"in {workdir}", flush=True)
             except Exception as error:
-                message = f"{plot_function.__name__}: {type(error).__name__}: {error}"
-                print(f"[obriy_mcfost] Diagnostic plot failed; continuing scoring: {message}")
+                message = f"{plot_name}: {type(error).__name__}: {error}"
+                print(f"[obriy_mcfost] Diagnostic plot failed; continuing scoring: {message}",
+                      flush=True)
                 additional_info.setdefault("diagnostic_plot_errors", []).append(message)
             finally:
                 for figure_number in set(plt.get_fignums()) - existing_figures:
