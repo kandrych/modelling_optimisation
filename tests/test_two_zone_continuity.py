@@ -39,7 +39,7 @@ class TwoZoneTests(unittest.TestCase):
                      flags=__future__.annotations.compiler_flag), real_ns)
         smac_tree = ast.parse((ROOT/'SMAC3.py').read_text())
         functions = [n for n in smac_tree.body if isinstance(n, ast.FunctionDef)
-                     and n.name in ('objective', 'make_unique_config_trial_dir')]
+                     and n.name in ('objective', 'make_unique_config_trial_dir', 'prepare_model_config')]
         main = next(n for n in smac_tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
         final_write = next(n for n in main.body if isinstance(n, ast.Assign)
                            and isinstance(n.value, ast.Call)
