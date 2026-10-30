@@ -49,7 +49,7 @@ from matplotlib.font_manager import FontProperties
 from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.interpolate import interp1d
-from functools import wraps
+from functools import wraps, lru_cache
 import cv2
 
 import shutil
@@ -114,6 +114,25 @@ def load_sed_data(data_filename:str):
 
 
 
+@lru_cache(maxsize=8)
+def load_reddening_law(path, file_version):
+    """Read each law once per process; file_version changes when the file changes."""
+    table = pd.read_csv(path, header=2, names=['WAVE', 'A/E'],
+                        sep=r'\s+', engine='python')
+    wavelength_micron = np.asarray(table['WAVE']) * 1e-4
+    return interp1d(wavelength_micron, np.asarray(table['A/E']), kind='linear',
+                    bounds_error=False, fill_value=0)
+
+
+@lru_cache(maxsize=32)
+def reddening_coefficients(path, file_version, wavelengths):
+    """Reuse A/E(B-V) for identical wavelength grids; never cache model fluxes."""
+    law = load_reddening_law(path, file_version)
+    coefficients = law(np.asarray(wavelengths))
+    coefficients.setflags(write=False)
+    return coefficients
+
+
 #define functions for fitting E(B-V) 
 #'lam'=array of wavelengths 'flux'=flux values 'E'=E(B-V) magnitude 'path'=path to reddening law file
 def redden_flux(lam, flux, path, E):
@@ -137,17 +156,15 @@ def redden_flux(lam, flux, path, E):
     """
     if E == 0:
         return flux
-    else:
-        #read in the ISM reddening law wavelengths in Angström and A/E in magnitude
-        df_law = pd.read_csv(path, header=2, names=['WAVE', 'A/E']\
-                                , sep='\\s+', engine='python')
-        #set wavelength to micrometer
-        lam_law = np.array(df_law['WAVE'])*10**-4
-        ae_law = np.array(df_law['A/E'])
-        #creates a function to linearly interpolate A/E(B-V) values to used wavelengths
-        f = interp1d(lam_law, ae_law, kind='linear', bounds_error=False, fill_value=0)
-        ae = f(lam)
-        return flux*10**(-ae*E/2.5)
+    # A tuple identifies the wavelength values, even when each trial loads a new array.
+    # Include file metadata so replacing a law at the same path cannot reuse stale values.
+    path = Path(path).resolve()
+    file_info = path.stat()
+    file_version = (file_info.st_mtime_ns, file_info.st_size)
+    wavelengths = np.asarray(lam, dtype=float)
+    ae = reddening_coefficients(str(path), file_version, tuple(wavelengths.ravel()))
+    ae = ae.reshape(wavelengths.shape)
+    return flux*10**(-ae*E/2.5)
     
 
 def chi2reddened(lam, flux, lam_model, flux_model, flux_error, path, E, sigma_sys_frac = None):
@@ -207,7 +224,7 @@ def chi2reddened(lam, flux, lam_model, flux_model, flux_error, path, E, sigma_sy
 
 
 def fit_sed_reddening(data_wave, data_flux, data_err, lam, flux_for_fit, reddening_law_path):
-    """Fit the production non-negative foreground E(B-V), without plotting or I/O."""
+    """Fit non-negative foreground E(B-V), reusing the cached reddening law."""
     def reddening_objective(ebv: float) -> float:
         ebv = float(ebv)
         _, chi2_full, _ = chi2reddened(

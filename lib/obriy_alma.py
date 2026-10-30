@@ -456,9 +456,8 @@ def alma_snr_aperture_radius(observed_jybeam, noise_rms_jybeam, *, center_xy,
     return float(np.max(radius_pixels[detected]) + padding_pixels)
 
 
-def compare_alma_images(
+def prepare_alma_observation(
     observed_jybeam,
-    model_jybeam,
     observed_header,
     pixel_scale_mas,
     *,
@@ -468,24 +467,16 @@ def compare_alma_images(
     aperture_padding_pixels=3.0,
     radial_bin_width_mas=None,
     noise_rms_jybeam=None,
-    save_path=None,
 ):
-    """
-    Diagnostics for ALMA images already matched in beam, units and pixel grid.
+    """Prepare fixed observation measurements once, for all models and final plots.
 
-    center_xy uses zero-based array coordinates: (column, row).
-    No amplitude normalisation or positional adjustment is performed.
-    With aperture_radius_mas=None, use max(R[observed > snr_threshold * RMS])
-    plus aperture_padding_pixels. Pass the full observation for this selection.
-    An explicit radius retains the fixed-aperture behaviour.
+    These are scoring quantities, separate from the metadata-only data validator.
+    Keep the observation and its geometry unchanged while reusing this dictionary.
+    The returned arrays and scalars can be sent to workers without recomputation.
     """
     observed = np.asarray(observed_jybeam, dtype=float)
-    model = np.asarray(model_jybeam, dtype=float)
-
-    if observed.ndim != 2 or observed.shape != model.shape:
-        raise ValueError("Expected matching 2D observed and model images.")
-    if not np.all(np.isfinite(model)):
-        raise ValueError("Model contains non-finite pixels.")
+    if observed.ndim != 2:
+        raise ValueError("Expected a 2D observed image.")
     if not np.isfinite(pixel_scale_mas) or pixel_scale_mas <= 0:
         raise ValueError("Pixel scale must be positive and finite.")
     automatic_aperture = aperture_radius_mas is None
@@ -521,21 +512,15 @@ def compare_alma_images(
     y, x = np.indices(observed.shape)
     radius_mas = np.hypot(x - xc, y - yc) * pixel_scale_mas
 
-    # Keep faint and negative data inside the circle. Exclude invalid observation
-    # pixels from both images; invalid model values are rejected above.
+    # Keep faint and negative data inside the circle. This fixed mask excludes
+    # invalid observation pixels from both the observation and every model.
     aperture = (radius_mas < aperture_radius_mas) & np.isfinite(observed)
     if not aperture.any():
         raise ValueError("No finite observed pixels within the aperture.")
 
-    # Positive residual means the model underpredicts the observation.
-    residual = observed - model
     observed_energy = float(np.sum(observed[aperture]**2))
-    residual_energy = float(np.sum(residual[aperture]**2))
     if not np.isfinite(observed_energy) or observed_energy <= 0:
         raise ValueError("Observed aperture energy must be positive and finite.")
-    residual_energy_loss = 100.0 * residual_energy / observed_energy
-    if not np.isfinite(residual_energy_loss):
-        raise ValueError("ALMA aperture residual-energy loss is not finite.")
 
     # Jy/beam → integrated Jy over the same fixed aperture.
     pixel_area = (pixel_scale_mas * u.mas)**2
@@ -544,7 +529,6 @@ def compare_alma_images(
     ).to_value(u.dimensionless_unscaled)
 
     observed_flux = float(observed[aperture].sum() * pixel_to_beam)
-    model_flux = float(model[aperture].sum() * pixel_to_beam)
 
     # Disjoint annuli. Retain absolute Jy/beam brightness.
     edges = np.arange(
@@ -554,7 +538,7 @@ def compare_alma_images(
 
     radii = []
     observed_profile = []
-    model_profile = []
+    annulus_indices = []
     counts = []
 
     for inner, outer in zip(edges[:-1], edges[1:]):
@@ -565,31 +549,126 @@ def compare_alma_images(
 
         radii.append(0.5 * (inner + outer))
         observed_profile.append(float(observed[annulus].mean()))
-        model_profile.append(float(model[annulus].mean()))
+        # Store pixel indices rather than a full image-sized mask for every annulus.
+        annulus_indices.append(np.flatnonzero(annulus))
         counts.append(count)
+
+    return {
+        "observed": observed,
+        "pixel_scale_mas": float(pixel_scale_mas),
+        "center_xy": (xc, yc),
+        "beam_metadata": tuple(float(observed_header[key]) for key in ('BMAJ', 'BMIN', 'BPA')),
+        "radial_bin_width_mas": float(radial_bin_width_mas),
+        "aperture": aperture,
+        "aperture_pixel_count": int(aperture.sum()),
+        "observed_energy": observed_energy,
+        "observed_flux_jy": observed_flux,
+        "pixel_to_beam": float(pixel_to_beam),
+        "radius_mas": np.asarray(radii),
+        "observed_profile_jybeam": np.asarray(observed_profile),
+        "annulus_indices": annulus_indices,
+        "annulus_pixel_counts": np.asarray(counts),
+        "aperture_radius_mas": float(aperture_radius_mas),
+        "aperture_selection": "observed_snr" if automatic_aperture else "explicit_radius",
+    }
+
+
+def compare_alma_images(
+    observed_jybeam,
+    model_jybeam,
+    observed_header,
+    pixel_scale_mas,
+    *,
+    center_xy,
+    aperture_radius_mas=None,
+    snr_threshold=3.0,
+    aperture_padding_pixels=3.0,
+    radial_bin_width_mas=None,
+    noise_rms_jybeam=None,
+    save_path=None,
+    prepared_observation=None,
+    calculate_profiles=True,
+):
+    """Score images already matched in beam, units and pixel grid.
+
+    Reuse prepared observations in optimisation; standalone callers can omit them.
+    center_xy is a zero-based (column, row) position. With no explicit aperture,
+    prepare it from the observed SNR using the existing selection rule.
+
+    Profiles remain available by default for notebook callers. Optimisation sets
+    calculate_profiles=False for trials without plots; their result omits profile
+    arrays. Saving a figure always includes both profiles.
+    """
+    if prepared_observation is None:
+        prepared_observation = prepare_alma_observation(
+            observed_jybeam, observed_header, pixel_scale_mas, center_xy=center_xy,
+            aperture_radius_mas=aperture_radius_mas, snr_threshold=snr_threshold,
+            aperture_padding_pixels=aperture_padding_pixels,
+            radial_bin_width_mas=radial_bin_width_mas, noise_rms_jybeam=noise_rms_jybeam)
+    prepared = prepared_observation
+
+    # Do not silently reuse measurements on a different grid or aperture.
+    beam_metadata = tuple(float(observed_header[key]) for key in ('BMAJ', 'BMIN', 'BPA'))
+    if (np.shape(observed_jybeam) != prepared['observed'].shape
+            or pixel_scale_mas != prepared['pixel_scale_mas']
+            or tuple(center_xy) != prepared['center_xy']
+            or beam_metadata != prepared['beam_metadata']
+            or (aperture_radius_mas is not None
+                and aperture_radius_mas != prepared['aperture_radius_mas'])
+            or (radial_bin_width_mas is not None
+                and radial_bin_width_mas != prepared['radial_bin_width_mas'])):
+        raise ValueError("ALMA observation geometry differs from the prepared measurements.")
+
+    observed = prepared['observed']
+    model = np.asarray(model_jybeam, dtype=float)
+    if model.shape != observed.shape:
+        raise ValueError("Expected matching 2D observed and model images.")
+    if not np.all(np.isfinite(model)):
+        raise ValueError("Model contains non-finite pixels.")
+
+    aperture = prepared['aperture']
+    aperture_radius_mas = prepared['aperture_radius_mas']
+    observed_energy = prepared['observed_energy']
+    observed_flux = prepared['observed_flux_jy']
+    ny, nx = observed.shape
+    xc, yc = prepared['center_xy']
+
+    # Only model-dependent measurements are calculated for each trial.
+    # Positive residual means that the model underpredicts the observation.
+    residual = observed - model
+    residual_energy = float(np.sum(residual[aperture]**2))
+    residual_energy_loss = 100.0 * residual_energy / observed_energy
+    if not np.isfinite(residual_energy_loss):
+        raise ValueError("ALMA aperture residual-energy loss is not finite.")
+    model_flux = float(model[aperture].sum() * prepared['pixel_to_beam'])
 
     result = {
         "residual_energy_loss": residual_energy_loss,
         "observed_energy": observed_energy,
         "residual_energy": residual_energy,
-        "aperture_pixel_count": int(aperture.sum()),
+        "aperture_pixel_count": prepared['aperture_pixel_count'],
         "observed_flux_jy": observed_flux,
         "model_flux_jy": model_flux,
         "flux_difference_jy": model_flux - observed_flux,
         "model_to_observed_flux": (
             model_flux / observed_flux if observed_flux != 0 else None
         ),
-        "radius_mas": np.asarray(radii),
-        "observed_profile_jybeam": np.asarray(observed_profile),
-        "model_profile_jybeam": np.asarray(model_profile),
-        "annulus_pixel_counts": np.asarray(counts),
         "residual_rms_jybeam": float(
             np.sqrt(np.mean(residual[aperture]**2))
         ),
         "aperture_radius_mas": float(aperture_radius_mas),
         "aperture_radius_pixels": float(aperture_radius_mas / pixel_scale_mas),
-        "aperture_selection": "observed_snr" if automatic_aperture else "explicit_radius",
+        "aperture_selection": prepared['aperture_selection'],
     }
+
+    if calculate_profiles or save_path is not None:
+        model_pixels = model.ravel()
+        model_profile = [float(model_pixels[indices].mean())
+                         for indices in prepared['annulus_indices']]
+        result.update(radius_mas=prepared['radius_mas'],
+                      observed_profile_jybeam=prepared['observed_profile_jybeam'],
+                      model_profile_jybeam=np.asarray(model_profile),
+                      annulus_pixel_counts=prepared['annulus_pixel_counts'])
 
     if save_path is not None:
         with obg.diagnostic_plot("ALMA data, model and residual comparison"):

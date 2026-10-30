@@ -1620,6 +1620,8 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             snr_threshold=3.0,
             aperture_padding_pixels=3.0,
             noise_rms_jybeam=data_alma["noise_level_alma"],
+            prepared_observation=data_alma.get('prepared_observation'),
+            calculate_profiles=args.plot_intermediate,
             save_path=(workdir / "figures" / "alma_comparison.png"
                        if args.plot_intermediate else None),
         )

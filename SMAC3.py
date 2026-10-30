@@ -343,6 +343,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list,
     alma_header = None
     alma_aperture_radius_mas = None
     noise_level_alma = None
+    prepared_alma = None
 
     #filename of SED catalogue data file
     if data_root =='demo_mac':
@@ -548,6 +549,9 @@ def load_data(data_root: str, work_root: str, fidelity_products: list,
         alma_aperture_radius_mas = ps_alma * oba.alma_snr_aperture_radius(
             alma_cont, noise_level_alma, center_xy=centre,
             snr_threshold=3.0, padding_pixels=3.0)
+        prepared_alma = oba.prepare_alma_observation(
+            alma_cont, alma_header, ps_alma, center_xy=centre,
+            aperture_radius_mas=alma_aperture_radius_mas)
         # The 3-sigma criterion selects only the radius, not individual scoring pixels.
         # Retained for reference: former individual-pixel scoring mask and plot.
         # mask_alma = (alma_cont >= 3*noise_level_alma)
@@ -561,7 +565,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list,
         mask_alma = None
         noise_level_alma = None 
 
-    # Legacy profile keys remain for compatibility; active comparisons measure their own profiles.
+    # Legacy profile keys remain for compatibility; active scores use prepared observations.
     pdi_data_v={'psf': psf_v, 'pol_images': pdi_v, 'radial_profiles': None, 'azimuthal_profiles': None}
     pdi_data_i={'psf': psf_i, 'pol_images': pdi_i, 'radial_profiles': None, 'azimuthal_profiles': None}
     pdi_data_h={'psf': psf_h, 'pol_images': pdi_h, 'radial_profiles': None, 'azimuthal_profiles': None}
@@ -579,6 +583,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list,
 
     data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma,'image_size': data_size_alma, 'alma_wavelength': alma_wavelength, 'image_spec': alma_spec, 'header': alma_header,
                'radial_profile': None, 'azimuthal_profile': None, 'mask_alma': mask_alma, 'noise_level_alma': noise_level_alma, 'aperture_radius_mas': alma_aperture_radius_mas}
+    data_alma['prepared_observation'] = prepared_alma
     data_sed = [data_wave, data_flux, data_err]
     data_arrays = {
         "sed": data_sed,
