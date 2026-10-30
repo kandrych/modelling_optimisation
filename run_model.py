@@ -176,7 +176,11 @@ def evaluate(args):
             shutil.copy2(para.parent / relative, destination)
         print(f"[run_model] Stage: {fidelity['stage']}; products: {fidelity['products']}", flush=True)
         print(f"[run_model] Output: {output}", flush=True)
-        data = load_data(args.data_root, str(output), fidelity["products"])
+        if any(product.startswith('pdi_') for product in fidelity['products']):
+            data = load_data(args.data_root, str(output), fidelity['products'],
+                             pdi_grid=parameters, pdi_radial_bin_mas=args.pdi_radial_bin_mas)
+        else:
+            data = load_data(args.data_root, str(output), fidelity['products'])
         # The shared loader can return empty SED arrays after a read failure.
         # Refuse to turn missing observations into a zero contribution.
         if "sed" in fidelity["products"] and any(len(column) == 0 for column in data["sed"]):

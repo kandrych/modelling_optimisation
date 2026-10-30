@@ -1,7 +1,14 @@
 # Observable stages
 
-Copy the repository's `fidelity.txt` to your run directory. This text file uses
-YAML syntax, but is read independently of the ConfigSpace YAML.
+Create `fidelity.txt` in your run directory, selecting the observables needed
+for that run. This text file uses YAML syntax, but is read independently of the
+ConfigSpace YAML. For example, a SED-only run can use:
+
+```yaml
+fidelity_stages:
+  - name: sed
+    products: [sed]
+```
 
 ```bash
 python SMAC3.py --data-root demo_ozstar --working-root /path/to/run/ \
