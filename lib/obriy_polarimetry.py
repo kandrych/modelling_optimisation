@@ -1766,17 +1766,11 @@ def polarimetric_analysis(
     image_scale: Literal["linear", "asinh"] = "asinh",
     unresolved_correction_radius_px: float = 3.0,   # radius (in px of rescaled image)
     correct_unresolved: bool = True,  # standalone callers retain corrected convolved outputs
-    background_annulus_mas: Optional[Tuple[float, float]] = (200, 250),
-    radial_limit_mas: float = 1000.0,
-    deprojection: Tuple[float, float]=(0.0,0.0), # whether to deproject image for radial/azimuthal profiles, tuple of (incl_deg, pa_deg)
-    azimuthal_r_in_mas: float = 0.0,
-    azimuthal_r_out_mas: float = 100.0,
-    azimuthal_nbins: int = 18,
-    theta0: float = 0.0,                        # radians; 0 along +X
     plot: bool = True,
     roi_size_half: int = 50,
     fig_dir: Optional[str] = None,
     extra_title: Optional[str] = None,          # if provided, used as prefix for saved figures and title additions
+    **legacy_profile_options,
 ) -> Dict[str, Any]:
     """
     Wrapper to produce polarimetric outputs from MCFOST model.
@@ -1784,10 +1778,36 @@ def polarimetric_analysis(
     Correct convolved images when requested or needed for plots. Correction
     before convolution and deconvolution are diagnostics, computed only with
     plot=True. Optional correction failures do not reject uncorrected scoring.
-    ----------
-    Parameters
+    Profiles are measured separately by compare_pdi_constraints() for scoring
+    or profiles() for standalone diagnostics. Old profile keywords are accepted
+    with a warning for notebook compatibility; they do not affect these images.
 
+    The common output key mcfost_convolved is retained for all modes. With
+    convolution_mode='none', it contains the resampled images without a PSF;
+    its deconvolution fields are None. This output records convolution_mode.
     """
+    # Accept only the seven former profile arguments, not arbitrary misspellings.
+    if legacy_profile_options:
+        obsolete_names = {
+            'background_annulus_mas', 'radial_limit_mas', 'deprojection',
+            'azimuthal_r_in_mas', 'azimuthal_r_out_mas', 'azimuthal_nbins', 'theta0',
+        }
+        unknown = set(legacy_profile_options) - obsolete_names
+        if unknown:
+            raise TypeError('polarimetric_analysis() received unknown keyword(s): '
+                            + ', '.join(sorted(unknown)))
+        import warnings
+        warnings.warn(
+            'polarimetric_analysis() no longer uses these profile arguments: '
+            + ', '.join(sorted(legacy_profile_options))
+            + '. Remove them from this call; use compare_pdi_constraints() for scoring '
+              'or profiles() for standalone profiles.',
+            FutureWarning, stacklevel=2)
+
+    if convolution_mode not in ('synthetic', 'file', 'none'):
+        raise ValueError("convolution_mode must be 'synthetic', 'file' or 'none'.")
+    extra_title = extra_title or ''
+
     ### Safety checks
     wave_strs = str(wavelength)
     # locate RT.fits.gz 
@@ -1804,7 +1824,7 @@ def polarimetric_analysis(
     if plot:
         Path(fig_dir).mkdir(parents=True, exist_ok=True)
 
-    if convolution_mode=='no':
+    if convolution_mode=='none':
             print('No convolution selected')
     elif convolution_mode=='synthetic':
             print('Synthetic PSF convolution selected')
@@ -1817,7 +1837,7 @@ def polarimetric_analysis(
                             psf_fwhm_mas=40
             else:
                     print (f'PSF FWHM is {psf_fwhm_mas} mas')
-    elif convolution_mode=='real':
+    elif convolution_mode=='file':
             print('Real PSF convolution selected')
             if psf_file is None and psf_array is None:
                     raise ValueError('Please provide psf_file or psf_array for real PSF convolution')
@@ -1874,27 +1894,9 @@ def polarimetric_analysis(
                                 }
 
 
-    rad_prof={}
-    az_prof={}
-    # Legacy profiles are plotted only; scoring measures its own profiles.
-    # if plot:
-    #     with obg.diagnostic_plot("Original MCFOST profiles"):
-    #         for ft in ['pi',"q_phi",'img_tot']:
-    #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_original'][ft], native_ps_mas,
-    #                                                 profile_type="both",
-    #                                                 mode="sum",
-    #                                                 radial_limit_mas=radial_limit_mas,
-    #                                                 plot=plot,
-    #                                                 save_prefix=fig_dir + extra_title + "mcfost_original_",
-    #                                                 deprojection_inc_pa_deg=deprojection,
-    #                                                 center=None,
-    #                                                 az_nbins=azimuthal_nbins,
-    #                                                 azimuthal_r_in_mas=azimuthal_r_in_mas,
-    #                                                 azimuthal_r_out_mas=azimuthal_r_out_mas,
-    #                                                 theta0=theta0
-    #                                                 )
-    results['mcfost_original']['radial_profiles']=rad_prof
-    results['mcfost_original']['azimuthal_profiles']=az_prof
+    # Retain the empty legacy keys for notebooks; profile measurements are separate.
+    results['mcfost_original']['radial_profiles'] = {}
+    results['mcfost_original']['azimuthal_profiles'] = {}
           
     
 
@@ -1923,96 +1925,46 @@ def polarimetric_analysis(
                                     # 'metrics':metrics_rescaled,
                                     'pixel_scale_mas':inst_ps_mas
                                     }
-    rad_prof={}
-    az_prof={}
-    # Legacy profiles are plotted only; scoring measures its own profiles.
-    # if plot:
-    #     with obg.diagnostic_plot("Rescaled MCFOST profiles"):
-    #         for ft in ['pi',"q_phi",'img_tot']:
-    #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_rescaled'][ft], inst_ps_mas,
-    #                                                     profile_type="both",
-    #                                                     mode="sum",
-    #                                                     radial_limit_mas=radial_limit_mas,
-    #                                                     plot=plot,
-    #                                                     save_prefix=fig_dir + extra_title + "mcfost_rescaled_",
-    #                                                     deprojection_inc_pa_deg=deprojection,
-    #                                                     center=None,
-    #                                                     az_nbins=azimuthal_nbins,
-    #                                                     azimuthal_r_in_mas=azimuthal_r_in_mas,
-    #                                                     azimuthal_r_out_mas=azimuthal_r_out_mas,
-    #                                                     theta0=theta0
-    #                                                     )
-    results['mcfost_rescaled']['radial_profiles']=rad_prof
-    results['mcfost_rescaled']['azimuthal_profiles']=az_prof
+    results['mcfost_rescaled']['radial_profiles'] = {}
+    results['mcfost_rescaled']['azimuthal_profiles'] = {}
           
 
     
 
-    # Convolving with synthetic PSF
-    if convolution_mode=='synthetic':
-            kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas,psf_source='synthetic', psf_fwhm_mas=psf_fwhm_mas, plot=plot)
-            # Disabled legacy integrated metrics: neither scored nor plotted.
-            # metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
+    # Apply the selected PSF, or pass through the resampled images unchanged.
+    if convolution_mode == 'synthetic':
+        kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv = convolve_polarimetric_images(
+            img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas,
+            psf_source='synthetic', psf_fwhm_mas=psf_fwhm_mas, plot=plot)
+    elif convolution_mode == 'file':
+        kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv = convolve_polarimetric_images(
+            img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas,
+            psf_source='file', psf_file=psf_file, folder_psf=folder_psf,
+            psf_array=psf_array, psf_cut=psf_cut, plot=plot)
+    else:  # convolution_mode == 'none'; invalid modes were rejected above.
+        Q_conv = img_q_rescaled
+        U_conv = img_u_rescaled
+        I_conv = img_total_rescaled
+        PI_conv = pi_rescaled
+        Q_phi_conv = q_phi_rescaled
+        U_phi_conv = u_phi_rescaled
 
-    if convolution_mode=='file':
-            kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas, psf_source='file', psf_file=psf_file, folder_psf=folder_psf,psf_array=psf_array, psf_cut=psf_cut, plot=plot)
-            # Disabled legacy integrated metrics: neither scored nor plotted.
-            # metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
-    if convolution_mode=='none':
-            Q_conv=img_q_rescaled
-            U_conv=img_u_rescaled
-            I_conv=img_total_rescaled
-            PI_conv=pi_rescaled
-            Q_phi_conv=q_phi_rescaled
-            U_phi_conv=u_phi_rescaled
+    # There is no PSF to deconvolve in 'none' mode.
+    pi_conv_decon = q_phi_conv_decon = None
+    if plot and convolution_mode != 'none':
+        with obg.diagnostic_plot("Convolved polarimetric image deconvolution"):
+            pi_conv_decon = deconvolution(PI_conv, kernel, limit_N_decon=50,
+                                         critlim=0.015, image_cut=0, print_steps=False)
+            q_phi_conv_decon = deconvolution(Q_phi_conv, kernel, limit_N_decon=50,
+                                            critlim=0.015, image_cut=0, print_steps=False)
 
-    
-        
-    if convolution_mode!='none':
-            pi_conv_decon = q_phi_conv_decon = None
-            # Deconvolution is diagnostic only; scoring uses the convolved images.
-            if plot:
-                with obg.diagnostic_plot("Convolved polarimetric image deconvolution"):
-                    pi_conv_decon=deconvolution(PI_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
-                    q_phi_conv_decon=deconvolution(Q_phi_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, print_steps=False)
-            
-            results['mcfost_convolved']={'img_q':Q_conv,
-                                            'img_u':U_conv,
-                                            'img_tot':I_conv,
-                                            'q_phi':Q_phi_conv,
-                                            'u_phi':U_phi_conv,
-                                            'pi':PI_conv,
-                                            'pi_deconvolved':pi_conv_decon,
-                                            'q_phi_deconvolved':q_phi_conv_decon,
-                                            # 'metrics':metrics_conv,
-                                            'pixel_scale_mas':inst_ps_mas
-                                            }
-            
-            # rad_prof={}
-            # az_prof={}
-            # # Legacy profiles are plotted only; scoring measures its own profiles.
-            # # if plot:
-            # #     with obg.diagnostic_plot("Convolved MCFOST profiles"):
-            # #         for ft in ['pi',"q_phi",'img_tot']:
-            # #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved'][ft], inst_ps_mas,
-            # #                                             profile_type="both",
-            # #                                             mode="sum",
-            # #                                             radial_limit_mas=radial_limit_mas,
-            # #                                             plot=plot,
-            # #                                             save_prefix=fig_dir + extra_title + "mcfost_convolved_",
-            # #                                             deprojection_inc_pa_deg=deprojection,
-            # #                                             center=None,
-            # #                                             az_nbins=azimuthal_nbins,
-            # #                                             azimuthal_r_in_mas=azimuthal_r_in_mas,
-            # #                                             azimuthal_r_out_mas=azimuthal_r_out_mas,
-            # #                                             theta0=theta0
-            # #                                             )
-            # results['mcfost_convolved']['radial_profiles']=rad_prof
-            # results['mcfost_convolved']['azimuthal_profiles']=az_prof
-            
-
-
-
+    # Keep one output structure for callers, including when no PSF was applied.
+    results['mcfost_convolved'] = {
+        'img_q': Q_conv, 'img_u': U_conv, 'img_tot': I_conv,
+        'q_phi': Q_phi_conv, 'u_phi': U_phi_conv, 'pi': PI_conv,
+        'pi_deconvolved': pi_conv_decon, 'q_phi_deconvolved': q_phi_conv_decon,
+        'pixel_scale_mas': inst_ps_mas, 'convolution_mode': convolution_mode,
+    }
 
     if plot:
             with obg.diagnostic_plot("Rescaled and convolved polarimetric images"):
@@ -2023,7 +1975,8 @@ def polarimetric_analysis(
                 plot_polarimetric_image(img_total_rescaled, inst_ps_mas, title='I tot rescaled', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
                 plot_polarimetric_image(I_conv, inst_ps_mas, title='I tot conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
                 plot_polarimetric_image(PI_conv, inst_ps_mas, title='I pol conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
-                plot_polarimetric_image(pi_conv_decon, inst_ps_mas, title='I pol conv deconvolved', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
+                if pi_conv_decon is not None:
+                    plot_polarimetric_image(pi_conv_decon, inst_ps_mas, title='I pol conv deconvolved', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
 
     def corrected_images(q, u_image, intensity):
         radius, *_ = compute_grid(q)

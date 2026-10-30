@@ -1214,10 +1214,13 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         print('[obriy_mcfost] Polarimetric analysis started')
         if "pdi_I" in fidelity["products"]:
     
-            results_i=obp.polarimetric_analysis(str(workdir), 0.82, unresolved_correction_radius_px=correction_radius_px, correct_unresolved=correct_unresolved, camera='zimpol',convolution_mode='file', psf_array=pdi_data_i['psf'], psf_cut=100,
-                                                                                                        image_scale='asinh', radial_limit_mas=500.0,
-                                                                                                        deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
-                                                                                                        theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Iband')
+            results_i = obp.polarimetric_analysis(
+                str(workdir), 0.82, camera='zimpol', convolution_mode='file',
+                psf_array=pdi_data_i['psf'], psf_cut=100,
+                unresolved_correction_radius_px=correction_radius_px,
+                correct_unresolved=correct_unresolved, image_scale='asinh',
+                plot=args.plot_intermediate, roi_size_half=30,
+                fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Iband')
             if results_i.get('diagnostic_plot_errors'):
                 additional_info.setdefault('diagnostic_plot_errors', []).extend(
                     f'I: {error}' for error in results_i['diagnostic_plot_errors'])
@@ -1332,11 +1335,13 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
 
         if "pdi_V" in fidelity["products"]:
     
-            results_v=obp.polarimetric_analysis(str(workdir), 0.55, unresolved_correction_radius_px=correction_radius_px, correct_unresolved=correct_unresolved, camera='zimpol',convolution_mode='file', psf_array=pdi_data_v['psf'],psf_cut=100,
-                                                                                                        image_scale='asinh', radial_limit_mas=500.0,
-                                                                                                        deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
-             
-                                                                                                        theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Vband')
+            results_v = obp.polarimetric_analysis(
+                str(workdir), 0.55, camera='zimpol', convolution_mode='file',
+                psf_array=pdi_data_v['psf'], psf_cut=100,
+                unresolved_correction_radius_px=correction_radius_px,
+                correct_unresolved=correct_unresolved, image_scale='asinh',
+                plot=args.plot_intermediate, roi_size_half=30,
+                fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Vband')
             if results_v.get('diagnostic_plot_errors'):
                 additional_info.setdefault('diagnostic_plot_errors', []).extend(
                     f'V: {error}' for error in results_v['diagnostic_plot_errors'])
@@ -1446,10 +1451,13 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                         }
 
         if "pdi_H" in fidelity["products"]:
-            results_h=obp.polarimetric_analysis(str(workdir), 1.63, unresolved_correction_radius_px=correction_radius_px, correct_unresolved=correct_unresolved, camera='irdis',convolution_mode='file', psf_array=pdi_data_h['psf'],psf_cut=100,
-                                                                                                        image_scale='asinh', radial_limit_mas=500.0,
-                                                                                                        deprojection=(0, 0), azimuthal_r_in_mas=0.0, azimuthal_r_out_mas=500.0, azimuthal_nbins=18,
-                                                                                                        theta0=0.0, plot=args.plot_intermediate, roi_size_half=30, fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Hband')
+            results_h = obp.polarimetric_analysis(
+                str(workdir), 1.63, camera='irdis', convolution_mode='file',
+                psf_array=pdi_data_h['psf'], psf_cut=100,
+                unresolved_correction_radius_px=correction_radius_px,
+                correct_unresolved=correct_unresolved, image_scale='asinh',
+                plot=args.plot_intermediate, roi_size_half=30,
+                fig_dir=str(workdir)+'/figures/', extra_title=simulation_name+'_Hband')
             if results_h.get('diagnostic_plot_errors'):
                 additional_info.setdefault('diagnostic_plot_errors', []).extend(
                     f'H: {error}' for error in results_h['diagnostic_plot_errors'])
