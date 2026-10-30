@@ -116,6 +116,54 @@ def build_configspace(config_file: str) -> ConfigurationSpace:
 
     return cs
 
+
+def validate_configuration_names(configspace, template_path, *, puffed_up_rim=False,
+                                 two_zone_cont_lhc=False):
+    """Reject unsupported names before loading observations or starting workers.
+
+    Check the whole ConfigSpace, including currently inactive parameters.
+    Physical parameter names come from the actual simulation template.
+    """
+    template = obm.ParaFile(str(template_path)).params
+    names = set(configspace.keys())
+    allowed = set(template)
+
+    # This alias sets both imin and imax in the parameter file.
+    allowed.add('inclination')
+
+    # These inputs are consumed by enabled features rather than written directly.
+    if puffed_up_rim:
+        allowed.update(('puffed_r_offset', 'puffed_h_rim_over_h0', 'puffed_delta_r'))
+    if two_zone_cont_lhc:
+        allowed.update(('disk_Rmid', 'disk_total_dust_mass'))
+
+    # Conditional dust fractions have a user-chosen label after the suffix.
+    # Accept them only for a real mixture and a configured material selector.
+    for name in names:
+        marker = '_component_2_volume_fraction_'
+        if marker not in name:
+            continue
+        species, label = name.split(marker, 1)
+        material = species + '_component_2_optical_indices_file'
+        first_fraction = species + '_component_1_volume_fraction'
+        second_fraction = species + '_component_2_volume_fraction'
+        if (label and material in names and material in template
+                and first_fraction in template and second_fraction in template):
+            allowed.add(name)
+
+    unknown = names - allowed
+    if unknown:
+        message = (f"Unsupported configuration parameter(s): {', '.join(sorted(unknown))}. "
+                   f"Names must match parameters in {template_path} or supported derived inputs.")
+        if any(name.startswith('puffed_') for name in unknown):
+            message += (" Puffed-rim inputs require --puffed-up-rim and must be named "
+                        "puffed_r_offset, puffed_h_rim_over_h0 or puffed_delta_r. "
+                        "puffed_r_rim is calculated from zone_1_Rin + puffed_r_offset; "
+                        "do not put it in ConfigSpace.")
+        if unknown & {'disk_Rmid', 'disk_total_dust_mass'}:
+            message += " disk_Rmid and disk_total_dust_mass require --2ZONE_CONT_LHC."
+        raise ValueError(message)
+
 # -----------------------------------------------------------------------------
 # Multi-fidelity mapping
 # -----------------------------------------------------------------------------
@@ -858,6 +906,10 @@ def main():
 
 
     cs = build_configspace(config_file)
+    validate_configuration_names(
+        cs, WORK_ROOT / 'simulation.para',
+        puffed_up_rim=args.puffed_up_rim,
+        two_zone_cont_lhc=args.two_zone_cont_lhc)
 
     scenario = Scenario(
         configspace=cs,

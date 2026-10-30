@@ -850,7 +850,8 @@ def write_mcfost_paramfile(cfg: Dict[str, Any], fidelity: Dict[str, Any], outdir
             continue
         
         else:
-            print(f"Warning: parameter {key} not found in MCFOST parameter file.")
+            raise ValueError(f"Unsupported configuration parameter: {key}. "
+                             "It is not in the MCFOST template or a supported derived input.")
 
     # The scale-height reference radius may be an independent sampled value,
     # or deliberately tied to the inner rim through the symbolic YAML value
@@ -1197,6 +1198,13 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
         loss_v=np.nan
         loss_h=np.nan
 
+        # Read the PA used by MCFOST, including any value kept from the template.
+        # Use this same angle for all PDI scores and quadrant plots, in degrees.
+        model_parameters = ParaFile(str(workdir / "model.para")).params
+        disk_pa_deg = float(model_parameters["disk_pa"])
+        if not np.isfinite(disk_pa_deg):
+            raise ValueError("PDI requires a finite disk_pa in model.para.")
+
         correct_unresolved = bool(args.correct_unresolved_polarimetry)
         correction_radius_px = obp.unresolved_correction_radius(
             correct_unresolved, getattr(args, 'unresolved_correction_radius_px', None))
@@ -1213,8 +1221,6 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             if results_i.get('diagnostic_plot_errors'):
                 additional_info.setdefault('diagnostic_plot_errors', []).extend(
                     f'I: {error}' for error in results_i['diagnostic_plot_errors'])
-            #CHANGES HERE
-            disk_pa_deg=cfg.get('disk_pa', 0)
             #to avoid machine precision issues due to the small values of Q and U, we can multiply them by representative factor of qphi, because we are interested in normalised values anyway and it is not affecting final differential quadrant results. 
             if args.plot_intermediate:
                 with obg.diagnostic_plot("I-band diagnostic quadrant preparation and comparison"):
@@ -1335,8 +1341,6 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
                 additional_info.setdefault('diagnostic_plot_errors', []).extend(
                     f'V: {error}' for error in results_v['diagnostic_plot_errors'])
 
-            #CHANGES HERE
-            disk_pa_deg=cfg.get('disk_pa', 0)
             #to avoid machine precision issues due to the small values of Q and U, we can multiply them by representative factor of qphi, because we are interested in normalised values anyway and it is not affecting final differential quadrant results. 
             if args.plot_intermediate:
                 with obg.diagnostic_plot("V-band diagnostic quadrant preparation and comparison"):
@@ -1449,8 +1453,6 @@ def load_and_score_outputs(fidelity: Dict[str, Any], workdir: Path, data_arg:Dic
             if results_h.get('diagnostic_plot_errors'):
                 additional_info.setdefault('diagnostic_plot_errors', []).extend(
                     f'H: {error}' for error in results_h['diagnostic_plot_errors'])
-            #CHANGES HERE
-            disk_pa_deg=cfg.get('disk_pa', 0)
             #to avoid machine precision issues due to the small values of Q and U, we can multiply them by representative factor of qphi, because we are interested in normalised values anyway and it is not affecting final differential quadrant results. 
             if args.plot_intermediate:
                 with obg.diagnostic_plot("H-band diagnostic quadrant preparation and comparison"):
