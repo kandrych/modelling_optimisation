@@ -52,3 +52,10 @@ lib/__pycache__/obriy_after_optimisation.cpython-311.pyc
 scripts/post-processing/__pycache__/run_summary_utils.cpython-311.pyc
 tests/__pycache__/
 scripts/post-processing/__pycache__/run_summary_utils.cpython-311.pyc
+__pycache__/SMAC3.cpython-311.pyc
+lib/__pycache__/obriy_alma.cpython-311.pyc
+lib/__pycache__/obriy_after_optimisation.cpython-311.pyc
+lib/__pycache__/obriy_general.cpython-311.pyc
+lib/__pycache__/obriy_interferometry_data.cpython-311.pyc
+lib/__pycache__/obriy_mcfost.cpython-311.pyc
+lib/__pycache__/obriy_polarimetry.cpython-311.pyc

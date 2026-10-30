@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --ntasks=1
-#SBATCH --job-name=budget1_puffed_rim
-#SBATCH --cpus-per-task=58
+#SBATCH --job-name=1all_unres
+#SBATCH --cpus-per-task=60
 #SBATCH --mail-user=kateryna.andrych@mq.edu.au
 #SBATCH --mail-type=BEGIN
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-type=END
-#SBATCH --time=0-20:30:00
-#SBATCH --mem=150G
+#SBATCH --time=0-15:00:00
+#SBATCH --mem=80G
 #SBATCH --output=driver.%j.out
 #SBATCH --error=driver.%j.err
 
@@ -17,7 +17,7 @@ echo "HOSTTYPE = $HOSTTYPE"
 echo Time is `date`
 echo Directory is `pwd`
 
-export OMP_NUM_THREADS=58
+export OMP_NUM_THREADS=12
 export OMP_STACKSIZE=1024m
 export OMP_SCHEDULE=dynamic
 
@@ -42,5 +42,11 @@ base_path=`pwd`
 python /fred/oz061/kandrych/modelling_optimisation/SMAC3.py \
   --data-root demo_ozstar \
   --working-root "$base_path"/ \
-  --min-budget 1.1 --max-budget 1.1 \
-  --n-trials 1000 --n-workers 10 --puffed-up-rim --warmstart "$base_path"/optimization/707771/
+  --n-trials 1000 --n-workers 5 \
+  --seed 358239 \
+  --2ZONE_CONT_LHC --share-zone-composition \
+  --plot-intermediate --tapered-edge-p1-eq-p2 \
+  --correct-unresolved-polarimetry --unresolved-correction-radius-px 3 \
+  --initial-design-seed 101 \
+  --trial-walltime-limit 3600 --timeout-cost none
+  

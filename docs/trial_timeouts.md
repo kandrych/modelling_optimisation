@@ -31,6 +31,15 @@ policy, cost and status. On timeout it contains a message such as
 partial outputs are retained. Final regeneration records its status in
 `smac_results/trial_status.json`.
 
+Each final regeneration starts with an empty `smac_results` directory. Before
+writing the new incumbent, an existing results directory is moved intact to
+`smac_results_history/run_<unique suffix>/smac_results`. This preserves previous
+figures, inputs, logs and partial outputs while preventing old PDI or
+interferometry images from being reused for a new final model. A failed or
+timed-out regeneration leaves its own partial outputs in `smac_results`; the next
+attempt archives those too. The optimisation history and trial directories are
+not moved. Do not run multiple drivers concurrently in the same working root.
+
 ## What each policy means
 
 | Policy | Saved cost | Surrogate training | Scientific interpretation |

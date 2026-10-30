@@ -1,0 +1,5 @@
+fidelity_stages:
+  - name: all
+    products: [sed, vis2_1perband, pdi_V, pdi_I, pdi_H, alma]
+    
+
