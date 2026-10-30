@@ -1765,6 +1765,7 @@ def polarimetric_analysis(
     psf_cut: Optional[int] = 100,               # optional crop for PSF
     image_scale: Literal["linear", "asinh"] = "asinh",
     unresolved_correction_radius_px: float = 3.0,   # radius (in px of rescaled image)
+    correct_unresolved: bool = True,  # standalone callers retain corrected convolved outputs
     background_annulus_mas: Optional[Tuple[float, float]] = (200, 250),
     radial_limit_mas: float = 1000.0,
     deprojection: Tuple[float, float]=(0.0,0.0), # whether to deproject image for radial/azimuthal profiles, tuple of (incl_deg, pa_deg)
@@ -1778,7 +1779,11 @@ def polarimetric_analysis(
     extra_title: Optional[str] = None,          # if provided, used as prefix for saved figures and title additions
 ) -> Dict[str, Any]:
     """
-    Wrapper to produce polarimetric outputs from MCFOST model
+    Wrapper to produce polarimetric outputs from MCFOST model.
+
+    Correct convolved images when requested or needed for plots. Correction
+    before convolution and deconvolution are diagnostics, computed only with
+    plot=True. Optional correction failures do not reject uncorrected scoring.
     ----------
     Parameters
 
@@ -1796,7 +1801,8 @@ def polarimetric_analysis(
     # Output folder
     if fig_dir is None:
             fig_dir = str(simulation_dir +"/polarimetric")
-    Path(fig_dir).mkdir(parents=True, exist_ok=True)
+    if plot:
+        Path(fig_dir).mkdir(parents=True, exist_ok=True)
 
     if convolution_mode=='no':
             print('No convolution selected')
@@ -1944,12 +1950,12 @@ def polarimetric_analysis(
 
     # Convolving with synthetic PSF
     if convolution_mode=='synthetic':
-            kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas,psf_source='synthetic', psf_fwhm_mas=psf_fwhm_mas)
+            kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas,psf_source='synthetic', psf_fwhm_mas=psf_fwhm_mas, plot=plot)
             # Disabled legacy integrated metrics: neither scored nor plotted.
             # metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
 
     if convolution_mode=='file':
-            kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas, psf_source='file', psf_file=psf_file, folder_psf=folder_psf,psf_array=psf_array, psf_cut=psf_cut )
+            kernel, Q_conv, U_conv, I_conv, PI_conv, Q_phi_conv, U_phi_conv=convolve_polarimetric_images(img_q_rescaled, img_u_rescaled, img_total_rescaled, inst_ps_mas, psf_source='file', psf_file=psf_file, folder_psf=folder_psf,psf_array=psf_array, psf_cut=psf_cut, plot=plot)
             # Disabled legacy integrated metrics: neither scored nor plotted.
             # metrics_conv=polarimetric_metrics(I_conv,Q_conv, U_conv, Q_phi_conv, U_phi_conv,PI_conv)
     if convolution_mode=='none':
@@ -1982,27 +1988,27 @@ def polarimetric_analysis(
                                             'pixel_scale_mas':inst_ps_mas
                                             }
             
-            rad_prof={}
-            az_prof={}
-            # Legacy profiles are plotted only; scoring measures its own profiles.
-            # if plot:
-            #     with obg.diagnostic_plot("Convolved MCFOST profiles"):
-            #         for ft in ['pi',"q_phi",'img_tot']:
-            #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved'][ft], inst_ps_mas,
-            #                                             profile_type="both",
-            #                                             mode="sum",
-            #                                             radial_limit_mas=radial_limit_mas,
-            #                                             plot=plot,
-            #                                             save_prefix=fig_dir + extra_title + "mcfost_convolved_",
-            #                                             deprojection_inc_pa_deg=deprojection,
-            #                                             center=None,
-            #                                             az_nbins=azimuthal_nbins,
-            #                                             azimuthal_r_in_mas=azimuthal_r_in_mas,
-            #                                             azimuthal_r_out_mas=azimuthal_r_out_mas,
-            #                                             theta0=theta0
-            #                                             )
-            results['mcfost_convolved']['radial_profiles']=rad_prof
-            results['mcfost_convolved']['azimuthal_profiles']=az_prof
+            # rad_prof={}
+            # az_prof={}
+            # # Legacy profiles are plotted only; scoring measures its own profiles.
+            # # if plot:
+            # #     with obg.diagnostic_plot("Convolved MCFOST profiles"):
+            # #         for ft in ['pi',"q_phi",'img_tot']:
+            # #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved'][ft], inst_ps_mas,
+            # #                                             profile_type="both",
+            # #                                             mode="sum",
+            # #                                             radial_limit_mas=radial_limit_mas,
+            # #                                             plot=plot,
+            # #                                             save_prefix=fig_dir + extra_title + "mcfost_convolved_",
+            # #                                             deprojection_inc_pa_deg=deprojection,
+            # #                                             center=None,
+            # #                                             az_nbins=azimuthal_nbins,
+            # #                                             azimuthal_r_in_mas=azimuthal_r_in_mas,
+            # #                                             azimuthal_r_out_mas=azimuthal_r_out_mas,
+            # #                                             theta0=theta0
+            # #                                             )
+            # results['mcfost_convolved']['radial_profiles']=rad_prof
+            # results['mcfost_convolved']['azimuthal_profiles']=az_prof
             
 
 
@@ -2019,142 +2025,60 @@ def polarimetric_analysis(
                 plot_polarimetric_image(PI_conv, inst_ps_mas, title='I pol conv', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
                 plot_polarimetric_image(pi_conv_decon, inst_ps_mas, title='I pol conv deconvolved', roi_half_size=roi_size_half, image_scale=image_scale, save=fig_dir, show=False)
 
-    # Unresolved correction
-    R_rescaled,_,_,_,_=compute_grid(img_q_rescaled)
+    def corrected_images(q, u_image, intensity):
+        radius, *_ = compute_grid(q)
+        dolp, aolp, q_corr, u_corr = calculate_unresolved(
+            unresolved_correction_radius_px, q, u_image, intensity,
+            inst_ps_mas, radius, 100)
+        qphi, uphi, pi, phi = compute_qphi_uphi_pi(q_corr, u_corr)
+        return dict(img_q=q_corr, img_u=u_corr, img_tot=intensity,
+                    q_phi=qphi, u_phi=uphi, pi=pi, phi=phi,
+                    aolp_corr=.5 * np.arctan2(u_corr, q_corr),
+                    dolp_unres=dolp, aolp_unres=aolp,
+                    pixel_scale_mas=inst_ps_mas,
+                    radial_profiles={}, azimuthal_profiles={},
+                    q_phi_deconvolved=None)
 
-    dolp_unres, aolp_unres,q_corr,u_corr=calculate_unresolved(unresolved_correction_radius_px, img_q_rescaled, img_u_rescaled,img_total_rescaled,inst_ps_mas,R_rescaled,100)
-    q_phi_corr, u_phi_corr, pi_corr, phi =compute_qphi_uphi_pi(q_corr, u_corr)
-    aolp_corr=0.5*np.arctan2(u_corr, q_corr)
-
-    results['mcfost_not_convolved_unresolved_corrected']={'img_q':q_corr,
-                                            'img_u':u_corr,
-                                            'q_phi':q_phi_corr,
-                                            'u_phi':u_phi_corr,
-                                            'pi':pi_corr,
-                                            'aolp_corr':aolp_corr,
-                                            'dolp_unres':dolp_unres,
-                                            'aolp_unres':aolp_unres,
-                                            'phi':phi,
-                                            'pixel_scale_mas':inst_ps_mas
-                                            }
-
-    rad_prof={}
-    az_prof={}
-    # Legacy profiles are plotted only; scoring measures its own profiles.
-    # if plot:
-    #     with obg.diagnostic_plot("Unresolved-corrected profiles before convolution"):
-    #         for ft in ['pi',"q_phi"]:
-    #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_not_convolved_unresolved_corrected'][ft], inst_ps_mas,
-    #                                                     profile_type="both",
-    #                                                     mode="sum",
-    #                                                     radial_limit_mas=radial_limit_mas,
-    #                                                     plot=plot,
-    #                                                     save_prefix=fig_dir + extra_title + "mcfost_not_convolved_unresolved_corrected_",
-    #                                                     deprojection_inc_pa_deg=deprojection,
-    #                                                     center=None,
-    #                                                     az_nbins=azimuthal_nbins,
-    #                                                     azimuthal_r_in_mas=azimuthal_r_in_mas,
-    #                                                     azimuthal_r_out_mas=azimuthal_r_out_mas,
-    #                                                     theta0=theta0
-    #                                                     )
-    results['mcfost_not_convolved_unresolved_corrected']['radial_profiles']=rad_prof
-    results['mcfost_not_convolved_unresolved_corrected']['azimuthal_profiles']=az_prof
-    
-
-    
-    # unresolved polarisation correction after convolution
-    dolp_unres_conv, aolp_unres_conv,q_corr_conv,u_corr_conv=calculate_unresolved(unresolved_correction_radius_px, Q_conv, U_conv,I_conv,inst_ps_mas,R_rescaled,100)
-    q_phi_corr_conv, u_phi_corr_conv, pi_corr_conv, phi =compute_qphi_uphi_pi(q_corr_conv, u_corr_conv)
-
-    aolp_corr_conv=0.5*np.arctan2(u_corr_conv, q_corr_conv)
-
-    # Disabled legacy integrated metrics: neither scored nor plotted.
-    # metrics_corr_conv=polarimetric_metrics(I_conv,q_corr_conv, u_corr_conv, q_phi_corr_conv, u_phi_corr_conv,pi_corr_conv)
-    # metrics_corr_conv['dolp_unres']=dolp_unres_conv
-    # metrics_corr_conv['aolp_unres']=aolp_unres_conv
-
-
-
-    # Deconvolution of corrected images (Qphi is used only in optional plots).
-    q_phi_corr_conv_decon = None
-    if convolution_mode=='none':
-        print('No convolution, skipping deconvolution')
+    diagnostic_errors = []
+    corrected_key = 'mcfost_convolved_unresolved_corrected'
+    if correct_unresolved:
+        # Required for the score: failures must propagate.
+        results[corrected_key] = corrected_images(Q_conv, U_conv, I_conv)
     elif plot:
-        with obg.diagnostic_plot("Unresolved-corrected Qphi deconvolution"):
-            print('Deconvolution of unresolved corrected images')
-            # Create PSF for deconvolution
-            # Disabled: corrected PI deconvolution is neither scored nor plotted.
-            # pi_corr_conv_decon=deconvolution(pi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
-            q_phi_corr_conv_decon=deconvolution(q_phi_corr_conv, kernel, limit_N_decon=50, critlim=0.015, image_cut=0, plot_lim=100, print_steps=False)
-    
-    results['mcfost_convolved_unresolved_corrected']={'img_q':q_corr_conv,
-                                            'img_tot':I_conv,  # Q/U correction leaves total intensity unchanged.
-                                            'img_u':u_corr_conv,
-                                            'q_phi':q_phi_corr_conv,
-                                            'u_phi':u_phi_corr_conv,
-                                            'pi':pi_corr_conv,
-                                            'aolp_corr':aolp_corr_conv,
-                                            'phi':phi,
-                                            # 'pi_deconvolved':pi_corr_conv_decon,  # Unused diagnostic disabled above.
-                                            'q_phi_deconvolved':q_phi_corr_conv_decon,
-                                            # 'metrics':metrics_corr_conv,
-                                            'pixel_scale_mas':inst_ps_mas
-                                            }
-    rad_prof={}
-    az_prof={}
-    # Legacy profiles are plotted only; scoring measures its own profiles.
-    # if plot:
-    #     with obg.diagnostic_plot("Unresolved-corrected profiles after convolution"):
-    #         for ft in ['pi',"q_phi"]:
-    #             rad_prof[ft], az_prof[ft] = profiles(results['mcfost_convolved_unresolved_corrected'][ft], inst_ps_mas,
-    #                                                 profile_type="both",
-    #                                                 mode="sum",
-    #                                                 radial_limit_mas=radial_limit_mas,
-    #                                                 plot=plot,
-    #                                                 save_prefix=fig_dir + extra_title + "mcfost_convolved_unresolved_corrected_",
-    #                                                 deprojection_inc_pa_deg=deprojection,
-    #                                                 center=None,
-    #                                                 az_nbins=azimuthal_nbins,
-    #                                                 azimuthal_r_in_mas=azimuthal_r_in_mas,
-    #                                                 azimuthal_r_out_mas=azimuthal_r_out_mas,
-    #                                                 theta0=theta0
-    #                                                 )
-    results['mcfost_convolved_unresolved_corrected']['radial_profiles']=rad_prof
-    results['mcfost_convolved_unresolved_corrected']['azimuthal_profiles']=az_prof
-    
+        with obg.diagnostic_plot('Optional correction after convolution', errors=diagnostic_errors):
+            results[corrected_key] = corrected_images(Q_conv, U_conv, I_conv)
 
-
-    # print(f'Unresolved pol: {dolp_unres*100} %, angle: {aolp_unres} deg')
-
-    # print(f'Unresolved pol after conv: {dolp_unres_conv*100} %, angle: {aolp_unres_conv} deg')
     if plot:
-        with obg.diagnostic_plot("Polarimetric correction comparison"):
-            images_list = [q_phi_rescaled, pi_rescaled, q_phi_corr, pi_corr,
-                    Q_phi_conv, PI_conv, q_phi_corr_conv, pi_corr_conv
-                    ]
-        
-            titles = ['Q$_\\phi$', 'I$_{\\mathrm{pol}}$', 'Q$_\\phi$', 'I$_{\\mathrm{pol}}$',
-                    'Q$_\\phi$', 'I$_{\\mathrm{pol}}$', 'Q$_\\phi$', 'I$_{\\mathrm{pol}}$']
+        with obg.diagnostic_plot('Optional correction before convolution', errors=diagnostic_errors):
+            results['mcfost_not_convolved_unresolved_corrected'] = corrected_images(
+                img_q_rescaled, img_u_rescaled, img_total_rescaled)
 
+        if corrected_key in results and convolution_mode != 'none':
+            with obg.diagnostic_plot('Unresolved-corrected Qphi deconvolution', errors=diagnostic_errors):
+                results[corrected_key]['q_phi_deconvolved'] = deconvolution(
+                    results[corrected_key]['q_phi'], kernel,
+                    limit_N_decon=50, critlim=0.015, image_cut=0,
+                    plot_lim=100, print_steps=False)
 
+        if corrected_key in results and 'mcfost_not_convolved_unresolved_corrected' in results:
+            with obg.diagnostic_plot('Polarimetric correction comparison', errors=diagnostic_errors):
+                before = results['mcfost_not_convolved_unresolved_corrected']
+                after = results[corrected_key]
+                images_list = [q_phi_rescaled, pi_rescaled, before['q_phi'], before['pi'],
+                               Q_phi_conv, PI_conv, after['q_phi'], after['pi']]
+                titles = [r'Q$_\phi$', r'I$_{\mathrm{pol}}$'] * 4
+                fig, axs = plot_image_grid(
+                    images=images_list, ps_mas=inst_ps_mas, nrows=2, ncols=4,
+                    titles=titles,
+                    group_headers=[(0.31, 'With unresolved'), (0.72, 'Without unresolved')],
+                    scale="asinh", roi_half_size=roi_size_half,
+                    per_panel_autoscale=True, colorbar="individual",
+                    figsize=(12, 6), show=False)
+                fig.savefig(fig_dir+extra_title+"mcfost_model_comparison.png", dpi=150, bbox_inches='tight')
+                plt.close(fig)
 
-            fig, axs = plot_image_grid(
-                            images=images_list,
-                            ps_mas=inst_ps_mas,
-                            nrows=2,
-                            ncols=4,
-                            titles=titles,
-                            group_headers=[(0.31, 'With unresolved'), (0.72, 'Without unresolved')],
-                            scale="asinh",
-                            roi_half_size=roi_size_half,
-                            per_panel_autoscale=True,
-                            colorbar="individual",
-                            figsize=(12, 6),
-                            show=False
-                            )
-            fig.savefig(fig_dir+extra_title+"mcfost_model_comparison.png", dpi=150, bbox_inches='tight')
-            plt.close(fig)
-    
+    if diagnostic_errors:
+        results['diagnostic_plot_errors'] = diagnostic_errors
     return results
 
 
@@ -3675,8 +3599,8 @@ PDI_QUADRANT_KEYS = ('dQ000_norm', 'dQ090_norm', 'dQ180_norm', 'dQ270_norm',
                      'dUplus_norm', 'dUminus_norm')
 
 
-def measure_pdi_constraints(images, pixel_scale_mas, radius_mas=500.0,
-                            radial_bin_mas=25.0, disk_pa_deg=0.0):
+def measure_pdi_profiles(images, pixel_scale_mas, radius_mas=500.0,
+                         radial_bin_mas=25.0):
     """Measure linear images on a fixed grid. Only the light fraction clips Qphi.
 
     Use a circle limited by the requested radius and the image pixel edges.
@@ -3704,16 +3628,69 @@ def measure_pdi_constraints(images, pixel_scale_mas, radius_mas=500.0,
     edges = np.append(edges, outer)
     q_profile = np.histogram(radius[aperture], bins=edges, weights=qphi[aperture])[0]/total_qphi
     i_profile = np.histogram(radius[aperture], bins=edges, weights=intensity[aperture])[0]/total_i
-    quadrants = differential_quadrants(q, u, pixel_scale_mas, disk_pa_deg,
-                                       0., outer, plot=False)
-    values = np.array([quadrants[k] for k in PDI_QUADRANT_KEYS], dtype=float)
-    if not np.all(np.isfinite(values)):
-        raise ValueError('Invalid normalised differential quadrants.')
     return dict(positive_qphi_over_i=fraction, qphi_profile=q_profile,
                 intensity_profile=i_profile, radial_edges_mas=edges,
-                quadrants=values, full_image_aperture=False,
+                full_image_aperture=False,
                 aperture_radius_mas=outer,
                 sum_I=total_i, sum_signed_Qphi=total_qphi)
+
+
+def measure_pdi_quadrants(images, pixel_scale_mas, radius_mas, disk_pa_deg):
+    """Quadrants depend on trial PA, so calculate them for every comparison."""
+    quadrants = differential_quadrants(
+        images['Q'], images['U'], pixel_scale_mas, disk_pa_deg,
+        0., radius_mas, plot=False)
+    values = np.array([quadrants[key] for key in PDI_QUADRANT_KEYS], dtype=float)
+    if not np.all(np.isfinite(values)):
+        raise ValueError('Invalid normalised differential quadrants.')
+    return values
+
+
+def measure_pdi_constraints(images, pixel_scale_mas, radius_mas=500.0,
+                            radial_bin_mas=25.0, disk_pa_deg=0.0):
+    """Combine profiles and PA-dependent quadrants for a model or standalone use."""
+    measurements = measure_pdi_profiles(images, pixel_scale_mas, radius_mas, radial_bin_mas)
+    measurements['quadrants'] = measure_pdi_quadrants(
+        images, pixel_scale_mas, measurements['aperture_radius_mas'], disk_pa_deg)
+    return measurements
+
+
+def prepare_pdi_observation(observation, pixel_scale_mas, model_grid, radial_bin_mas=25.0):
+    """Prepare observation profiles once using the fixed MCFOST image grid.
+
+    model_grid contains the effective .para values, including fixed overrides
+    from the optimisation configuration. The image size is in au, distance in pc.
+    """
+    nx = float(model_grid['grid_nx'])
+    ny = float(model_grid['grid_ny'])
+    size_au = float(model_grid['grid_size'])
+    distance_pc = float(model_grid['distance_pc'])
+    if not np.all(np.isfinite([nx, ny, size_au, distance_pc, pixel_scale_mas])):
+        raise ValueError('PDI image grid and distance must be finite.')
+    if min(nx, ny, size_au, distance_pc, pixel_scale_mas) <= 0 or nx != int(nx) or ny != int(ny):
+        raise ValueError('PDI image dimensions must be positive integers; size, distance and pixel scale must be positive.')
+
+    # MCFOST map size applies to the longest image axis.
+    native_pixel_mas = 1000.0 * size_au / distance_pc / max(nx, ny)
+    scale = native_pixel_mas / pixel_scale_mas
+    # Match skimage.rescale in rescale_and_recalculate_all_polarim_img.
+    model_shape = tuple(np.maximum(np.round(np.array([ny, nx]) * scale), 1).astype(int))
+
+    qphi = np.asarray(observation['Q_phi'], dtype=float)
+    uphi = np.asarray(observation['U_phi'], dtype=float)
+    intensity = np.asarray(observation['I'], dtype=float)
+    radius_mas = min(500.0, min(qphi.shape) * pixel_scale_mas / 2,
+                     min(model_shape) * pixel_scale_mas / 2)
+
+    # Use the scored correction state, including for H-band observations.
+    _, _, _, phi = compute_qphi_uphi_pi(qphi, uphi)
+    c, s = np.cos(2 * phi), np.sin(2 * phi)
+    images = dict(Q_phi=qphi, I=intensity, Q=-qphi*c+uphi*s, U=-qphi*s-uphi*c)
+    profiles = measure_pdi_profiles(images, pixel_scale_mas, radius_mas, radial_bin_mas)
+    azimuthal_profile = measure_pdi_azimuthal_profile(qphi, pixel_scale_mas, radius_mas)
+    return dict(images=images, profiles=profiles, azimuthal_profile=azimuthal_profile,
+                model_shape=model_shape, pixel_scale_mas=pixel_scale_mas,
+                radial_bin_mas=radial_bin_mas)
 
 
 def pdi_constraint_loss(observed, model, tolerances=None, absolute_floors=None, weights=None):
@@ -3780,9 +3757,59 @@ def plot_pdi_constraints(observed, model, output_path, band=''):
     plt.close(fig)
 
 
+def measure_pdi_azimuthal_profile(qphi, pixel_scale_mas, radius_mas, nbins=18):
+    """Signed Qphi flux per angular sector, normalised within the scoring circle.
+
+    Angles follow array coordinates: zero along +x (columns), increasing
+    towards +y (rows). They are not celestial position angles.
+    This diagnostic is not part of the PDI loss.
+    """
+    from lib.obriy_observations import pdi_scoring_aperture
+
+    qphi = np.asarray(qphi, dtype=float)
+    _, outer, aperture = pdi_scoring_aperture(qphi.shape, pixel_scale_mas, radius_mas)
+    if not np.all(np.isfinite(qphi[aperture])):
+        raise ValueError('Non-finite Qphi in the azimuthal diagnostic aperture.')
+    total = float(qphi[aperture].sum())
+    if not np.isfinite(total) or total == 0:
+        raise ValueError('Finite nonzero integrated Qphi required for azimuthal normalisation.')
+    yy, xx = np.indices(qphi.shape, dtype=float)
+    angles = np.degrees(np.arctan2(yy - (qphi.shape[0] - 1) / 2,
+                                   xx - (qphi.shape[1] - 1) / 2)) % 360.
+    edges = np.linspace(0., 360., nbins + 1)
+    values = np.histogram(angles[aperture], bins=edges, weights=qphi[aperture])[0] / total
+    return dict(theta_deg_centers=(edges[:-1] + edges[1:]) / 2,
+                value=values, aperture_radius_mas=outer)
+
+
+def plot_pdi_azimuthal_comparison(observed_qphi, model_qphi, pixel_scale_mas,
+                                 radius_mas, output_path, band='', observed_profile=None):
+    """Prepare and plot both profiles on the same aperture and angular bins."""
+    observed = observed_profile
+    if observed is None:
+        observed = measure_pdi_azimuthal_profile(observed_qphi, pixel_scale_mas, radius_mas)
+    predicted = measure_pdi_azimuthal_profile(model_qphi, pixel_scale_mas, radius_mas)
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for label, profile, color in (('Data', observed, 'royalblue'), ('Model', predicted, 'red')):
+        ax.plot(profile['theta_deg_centers'], profile['value'], 'o-',
+                color=color, mfc='white', label=label)
+    ax.set(xlim=(0, 360), xticks=np.arange(0, 361, 60))
+    ax.set_xlabel('Image-plane angle [deg] (+x towards +y)', fontsize=12)
+    ax.set_ylabel('Signed Qphi flux per sector\n/ signed Qphi flux in aperture', fontsize=12)
+    ax.set_title(f'{band}: azimuthal Qphi — diagnostic; not included in loss\n'
+                 f'Shared {radius_mas:g} mas circle; 18 angular bins', fontsize=13)
+    ax.tick_params(labelsize=11)
+    ax.legend(fontsize=11)
+    ax.grid(alpha=.2)
+    fig.tight_layout()
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+
+
 def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=None,
                             radial_bin_mas=25.0, disk_pa_deg=0.0, output_path=None, band='',
-                            absolute_floors=None):
+                            absolute_floors=None, prepared_observation=None):
     """Measure separate grids within a shared circle, then score and plot.
 
     The model must already have the observation's pixel scale. Each image keeps
@@ -3791,6 +3818,9 @@ def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=None
 
     Recompute both observed and model quadrants at the supplied simulation PA
     on every call; observed quadrant values must not be cached across trial PAs.
+
+    Prepared observation profiles are reused; quadrants still use this trial's PA.
+    Without prepared observations, measure directly for standalone callers.
 
     Reconstruct observed Q/U from the scored Qphi/Uphi pair so H-band raw Q/U
     cannot silently mix correction states. This assumes the same azimuthal
@@ -3809,25 +3839,46 @@ def compare_pdi_constraints(observation, model, pixel_scale_mas, tolerances=None
     # centres for even arrays. Coverage is measured to the outer pixel edges.
     shared_radius_mas = min(500.0, min(qp.shape)*pixel_scale_mas/2,
                            min(model_qp.shape)*pixel_scale_mas/2)
-    _, _, _, phi = compute_qphi_uphi_pi(qp, up)
-    c, s = np.cos(2*phi), np.sin(2*phi)
-    observed_images = dict(Q_phi=qp, I=intensity, Q=-qp*c+up*s, U=-qp*s-up*c)
+    observed_azimuthal_profile = None
+    if prepared_observation is None:
+        _, _, _, phi = compute_qphi_uphi_pi(qp, up)
+        c, s = np.cos(2*phi), np.sin(2*phi)
+        observed_images = dict(Q_phi=qp, I=intensity, Q=-qp*c+up*s, U=-qp*s-up*c)
+        observed = measure_pdi_constraints(
+            observed_images, pixel_scale_mas, shared_radius_mas, radial_bin_mas, disk_pa_deg)
+    else:
+        if (model_qp.shape != tuple(prepared_observation['model_shape'])
+                or pixel_scale_mas != prepared_observation['pixel_scale_mas']
+                or radial_bin_mas != prepared_observation['radial_bin_mas']
+                or shared_radius_mas != prepared_observation['profiles']['aperture_radius_mas']):
+            raise ValueError('PDI image grid or profile bins differ from the prepared observations.')
+        # Copy the dictionary so trial quadrants never modify the shared input.
+        observed = dict(prepared_observation['profiles'])
+        observed['quadrants'] = measure_pdi_quadrants(
+            prepared_observation['images'], pixel_scale_mas, shared_radius_mas, disk_pa_deg)
+        observed_azimuthal_profile = prepared_observation['azimuthal_profile']
     model_images = dict(Q_phi=model_qp, I=model_i, Q=model_q, U=model_u)
-    observed = measure_pdi_constraints(observed_images, pixel_scale_mas,
-                                       radius_mas=shared_radius_mas, radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
     predicted = measure_pdi_constraints(model_images, pixel_scale_mas,
                                         radius_mas=shared_radius_mas, radial_bin_mas=radial_bin_mas, disk_pa_deg=disk_pa_deg)
     terms = pdi_constraint_loss(observed, predicted, tolerances, absolute_floors, weights={'fraction': 1e5, 'radial': 1e4, 'quadrant': 5e3}) #here weights based on empirical values for model to level up the field
+    plot_errors = []
     if output_path is not None:
-        with obg.diagnostic_plot("PDI light fraction, profiles and quadrant comparison"):
+        output_path = Path(output_path)
+        with obg.diagnostic_plot(str(output_path), errors=plot_errors):
             plot_pdi_constraints(observed, predicted, output_path, band)
-        with obg.diagnostic_plot(f'{band}: model quadrant slides'):
-            slide_path = Path(output_path).with_name(Path(output_path).stem + '_model_quadrants_slides.png')
+        azimuthal_path = output_path.with_name(output_path.stem + '_azimuthal.png')
+        with obg.diagnostic_plot(str(azimuthal_path), errors=plot_errors):
+            plot_pdi_azimuthal_comparison(qp, model_qp, pixel_scale_mas,
+                                          shared_radius_mas, azimuthal_path, band,
+                                          observed_profile=observed_azimuthal_profile)
+        slide_path = output_path.with_name(output_path.stem + '_model_quadrants_slides.png')
+        with obg.diagnostic_plot(str(slide_path), errors=plot_errors):
             plot_differential_quadrants_slides(
                 model_q, model_u, pixel_scale_mas, disk_pa_deg, 0., shared_radius_mas,
                 slide_path, title=f'{band}: model used for PDI scoring')
     # JSON-compatible diagnostics, including the exact measurement definition.
-    return dict(observed=_to_py(observed), model=_to_py(predicted), **terms,
+    diagnostics = {'diagnostic_plot_errors': plot_errors} if plot_errors else {}
+    return dict(observed=_to_py(observed), model=_to_py(predicted), **terms, **diagnostics,
                 positive_qphi_only_in_fraction=True, radial_bin_mas=radial_bin_mas,
                 disk_pa_deg=disk_pa_deg, aperture_radius_mas=shared_radius_mas,
                 observed_image_shape=list(qp.shape), model_image_shape=list(model_qp.shape))

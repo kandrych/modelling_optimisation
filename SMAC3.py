@@ -1,12 +1,8 @@
-"""
-SMAC3 + Dask(SLURM) + Multi‑Fidelity skeleton 
+"""Optimise MCFOST models against the configured observable stages.
 
-- Cluster launcher (Dask + dask_jobqueue.SLURMCluster)
-- ConfigSpace with conditional ("flexible") hyperparameters
-- Multi-fidelity mapping (budget -> photon packets / resolution / stage F0→F3)
-- Objective wrapper that shells out to MCFOST and returns a scalar loss
-- SMAC3 MultiFidelityFacade orchestration (parallel, async-friendly)
-
+SMAC manages local workers inside the current allocation. Fidelity stages
+select observables; they do not change image resolution or photon counts.
+The old experimental SLURM cluster launcher is archived in legacy/.
 """
 from __future__ import annotations
 
@@ -32,11 +28,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-
-# --- Cluster imports ---
-# pip install dask distributed dask-jobqueue
-from distributed import Client
-from dask_jobqueue import SLURMCluster
 
 # --- SMAC3 / ConfigSpace ---
 # pip install smac configspace
@@ -80,81 +71,6 @@ matplotlib.rcParams["font.serif"] = [
     "Times",                # generic fallback
 ]
 
-
-# -----------------------------------------------------------------------------
-# Cluster setup
-# -----------------------------------------------------------------------------
-
-def start_cluster(n_workers: int, processes_per_worker: int, use_slurm: bool) -> Client:
-    """
-    NOT REALLY WORKING
-    
-    Start a Dask cluster. For quick local testing, set use_slurm=False and
-    rely on default LocalCluster via `Client()`.
-
-    Start a Dask cluster. For SLURM, we:
-      - load the same modules on the worker nodes
-      - activate the same venv
-      - export all runtime env vars (MCFOST, PATH, OMP, PYTHONPATH)
-      - write logs per-job so you can debug startup
-
-    
-    """
-    if not use_slurm:
-        client = Client(n_workers=n_workers, threads_per_worker=processes_per_worker)  # LocalCluster default
-        print("[cluster] Local Dask cluster started:", client)
-        return client
-
-    work_root = Path(os.environ.get("SMAC_WORK_ROOT", ".")).resolve()
-    log_dir   = work_root / "dask-logs"
-    tmp_dir   = work_root / "dask-tmp"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-
-    # Bind scheduler to a host/interface visible to workers on the compute node
-    # (when driver runs under SLURM, hostname is the compute node)
-    scheduler_host = socket.gethostname()
-
-    cluster = SLURMCluster(
-        queue="normal",               # partition
-        processes=1,
-        cores=processes_per_worker,   # cpu per worker process
-        memory="10GB",
-        walltime="02:00:00",
-        local_directory=str(tmp_dir),
-        job_extra_directives=[
-            "--account=oz061",
-            f"--output={log_dir}/dask.%x.%j.out",
-            f"--error={log_dir}/dask.%x.%j.err",
-            "--ntasks=1",
-            f"--cpus-per-task={processes_per_worker}",
-            "--mem=10G",
-            "--time=02:00:00",
-        ],
-        job_script_prologue=[
-            "set -euo pipefail",
-            "module --force purge",
-            "module load python-scientific/3.11.5-foss-2023b",
-            "source /home/kandrych/venvs/obriy311/bin/activate",
-            "export OMP_NUM_THREADS=1",
-            'echo "PYTHON = $(which python)"',
-        ],
-        python=sys.executable,
-        scheduler_options={
-            "host": scheduler_host,        # avoid binding to an external/unroutable IP
-            "dashboard_address": ":0",     # disable dashboard port hard-coding
-        },
-    )
-
-    # Persist the exact worker script we’re submitting
-    (log_dir / "dask_worker_template.sh").write_text(cluster.job_script())
-
-    cluster.scale(n_workers)
-    client = Client(cluster)
-    client.wait_for_workers(n_workers, timeout="180s")
-    print("[cluster] up:", client)
-    
-    return client
 
 # -----------------------------------------------------------------------------
 # ConfigSpace (flexible / conditional hyperparameters)
@@ -322,7 +238,22 @@ def build_configspace(config_file: str) -> ConfigurationSpace:
 # -----------------------------------------------------------------------------
 
 
-def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[str, Any]:
+def fixed_pdi_grid(para_path, configspace):
+    """Read the image grid from .para and apply fixed configuration overrides."""
+    parameters = obm.ParaFile(str(para_path)).params
+    grid = {}
+    for name in ('grid_nx', 'grid_ny', 'grid_size', 'distance_pc'):
+        grid[name] = parameters[name]
+        if name in configspace:
+            parameter = configspace[name]
+            if parameter.size != 1 or configspace.parents_of[name]:
+                raise ValueError(f'{name} must be fixed to prepare PDI observation profiles once.')
+            grid[name] = parameter.default_value
+    return grid
+
+
+def load_data(data_root: str, work_root: str, fidelity_products: list,
+              *, pdi_grid=None, pdi_radial_bin_mas=25.0) -> Dict[str, Any]:
     """Load and validate requested products before profiles or worker startup.
 
     Optimisation passes the union of all configured stages. Unrequested
@@ -561,84 +492,7 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         if f"pdi_{band}" in fidelity_products:
             validate_pdi_observation(images, psf, pixel_scale, band, pdi_sources[band])
 
-    if "pdi_V" in fidelity_products:    
-        # Calculate metrics for arcsinh-scaled images to highlight morphology
-        radial_profile_v={}
-        azimuthal_profile_v={}
-        for ft in ['PI',"Q_phi",'I']:
-            radial_profile_v[ft], azimuthal_profile_v[ft] = obp.profiles(pdi_v[ft], 3.6, 
-                                                    profile_type="both",
-                                                    mode="sum",
-                                                    radial_limit_mas=500,
-                                                    plot=False,
-                                                    deprojection_inc_pa_deg=(0.0, 0.0),
-                                                    center=None,
-                                                    az_nbins=18,
-                                                    azimuthal_r_in_mas=0.0,
-                                                    azimuthal_r_out_mas=500.0,
-                                                    theta0=0.0
-                                                    ) 
-    else:
-        radial_profile_v=None
-        azimuthal_profile_v=None
-
-    if "pdi_I" in fidelity_products:    
-        radial_profile_i={}
-        azimuthal_profile_i={}
-        # Calculate metrics for arcsinh-scaled images to highlight morphology
-        for ft in ['PI',"Q_phi",'I']:
-            radial_profile_i[ft], azimuthal_profile_i[ft] = obp.profiles(pdi_i[ft], 3.6, 
-                                                    profile_type="both",
-                                                    mode="sum",
-                                                    radial_limit_mas=500,
-                                                plot=False,
-                                                deprojection_inc_pa_deg=(0.0, 0.0),
-                                                center=None,
-                                                az_nbins=18,
-                                                azimuthal_r_in_mas=0.0,
-                                                azimuthal_r_out_mas=500.0,
-                                                theta0=0.0
-                                                ) 
-    else:
-        radial_profile_i=None
-        azimuthal_profile_i=None
-
-    if "pdi_H" in fidelity_products:
-        radial_profile_h={}
-        azimuthal_profile_h={}
-        # Calculate metrics for arcsinh-scaled images to highlight morphology
-        for ft in ['PI',"Q_phi",'I']:
-            radial_profile_h[ft], azimuthal_profile_h[ft] = obp.profiles(pdi_h[ft], 12.27, 
-                                                    profile_type="both",
-                                                    mode="sum",
-                                                    radial_limit_mas=500,
-                                                    plot=False,
-                                                    deprojection_inc_pa_deg=(0.0, 0.0),
-                                                    center=None,
-                                                    az_nbins=18,
-                                                    azimuthal_r_in_mas=0.0,
-                                                    azimuthal_r_out_mas=500.0,
-                                                theta0=0.0
-                                                )
-    else:
-        radial_profile_h=None
-        azimuthal_profile_h=None    
-
     if "alma" in fidelity_products:
-        # Calculate metrics for arcsinh-scaled images to highlight morphology
-        
-        radial_profile_alma, azimuthal_profile_alma = obp.profiles(alma_cont, 2.0, 
-                                                profile_type="both",
-                                                mode="mean",
-                                                radial_limit_mas=100,
-                                                plot=False,
-                                                deprojection_inc_pa_deg=(0.0, 0.0),
-                                                center=None,
-                                                az_nbins=18,
-                                                azimuthal_r_in_mas=0.0,
-                                                azimuthal_r_out_mas=100.0,
-                                                theta0=0.0
-                                                )
         # Calculate observation-only scoring quantities once, before trials.
         R, *_ = obp.compute_grid(alma_cont)
         noise_level_alma = np.nanstd(alma_cont[R > 150 / ps_alma])
@@ -656,17 +510,27 @@ def load_data(data_root: str, work_root: str, fidelity_products: list) -> Dict[s
         mask_alma = None  # Retained dictionary key for compatibility; not used for scoring.
         
     else:
-        radial_profile_alma=None
-        azimuthal_profile_alma=None
         mask_alma = None
         noise_level_alma = None 
 
-    pdi_data_v={'psf': psf_v, 'pol_images': pdi_v, 'radial_profiles': radial_profile_v, 'azimuthal_profiles': azimuthal_profile_v}
-    pdi_data_i={'psf': psf_i, 'pol_images': pdi_i, 'radial_profiles': radial_profile_i, 'azimuthal_profiles': azimuthal_profile_i}
-    pdi_data_h={'psf': psf_h, 'pol_images': pdi_h, 'radial_profiles': radial_profile_h, 'azimuthal_profiles': azimuthal_profile_h}
+    # Legacy profile keys remain for compatibility; active comparisons measure their own profiles.
+    pdi_data_v={'psf': psf_v, 'pol_images': pdi_v, 'radial_profiles': None, 'azimuthal_profiles': None}
+    pdi_data_i={'psf': psf_i, 'pol_images': pdi_i, 'radial_profiles': None, 'azimuthal_profiles': None}
+    pdi_data_h={'psf': psf_h, 'pol_images': pdi_h, 'radial_profiles': None, 'azimuthal_profiles': None}
+
+    # Prepare the scored profiles once, before distributing observations to workers.
+    if pdi_grid is not None:
+        for band, data, pixel_scale in (
+            ('V', pdi_data_v, 3.6), ('I', pdi_data_i, 3.6), ('H', pdi_data_h, 12.27),
+        ):
+            if f'pdi_{band}' in fidelity_products:
+                data['prepared_observation'] = obp.prepare_pdi_observation(
+                    data['pol_images'], pixel_scale, pdi_grid, pdi_radial_bin_mas)
+                radius = data['prepared_observation']['profiles']['aperture_radius_mas']
+                print(f'[load_data] PDI {band}: observation profiles prepared within {radius:g} mas')
 
     data_alma={'alma_cont': alma_cont, 'ps_alma': ps_alma,'image_size': data_size_alma, 'alma_wavelength': alma_wavelength, 'image_spec': alma_spec, 'header': alma_header,
-               'radial_profile': radial_profile_alma, 'azimuthal_profile': azimuthal_profile_alma, 'mask_alma': mask_alma, 'noise_level_alma': noise_level_alma, 'aperture_radius_mas': alma_aperture_radius_mas}
+               'radial_profile': None, 'azimuthal_profile': None, 'mask_alma': mask_alma, 'noise_level_alma': noise_level_alma, 'aperture_radius_mas': alma_aperture_radius_mas}
     data_sed = [data_wave, data_flux, data_err]
     data_arrays = {
         "sed": data_sed,
@@ -929,12 +793,10 @@ def main():
         TimeoutAwareEncoder, TimeoutAwareHyperband,
     )
 
-    p = argparse.ArgumentParser(description="SMAC3 + Dask(SLURM) + Multi-fidelity for MCFOST")
+    p = argparse.ArgumentParser(description="SMAC3 observable-stage optimisation for MCFOST, with local workers")
     p.add_argument("--data-root", type=str, required=True, help="Path to observed-data root (for scoring) or 'demo'.")
     p.add_argument("--working-root", type=str, required=True, help="Working directory for trial runs")
-    #p.add_argument("--use-slurm", action="store_true", help="Use SLURMCluster instead of LocalCluster")
     p.add_argument("--n-workers", type=int, default=4)
-    #p.add_argument("--procs-per-worker", type=int, default=1)
     p.add_argument("--fidelity-config", type=str, default=None, help="Stage file; defaults to WORK_ROOT/fidelity.txt")
     p.add_argument("--config-space", type=str, default=None, help="Explicit ConfigSpace YAML path")
     p.add_argument("--n-trials", type=int, default=80)
@@ -965,7 +827,6 @@ def main():
     
     WORK_ROOT = Path(args.working_root).resolve()
     os.environ["SMAC_WORK_ROOT"] = str(WORK_ROOT)
-    # (WORK_ROOT / "dask-logs").mkdir(parents=True, exist_ok=True)
     # (WORK_ROOT / "dask-tmp").mkdir(parents=True, exist_ok=True)
 
     print(f"[main] Working root: {WORK_ROOT}")
@@ -995,7 +856,6 @@ def main():
 
     print(f"[main] Using config space file: {config_file}")
 
-    #client = start_cluster(args.n_workers, args.procs_per_worker, args.use_slurm)
 
     cs = build_configspace(config_file)
 
@@ -1013,7 +873,12 @@ def main():
         # You can also set output directories, logging, etc.
     )
     work_root = Path(args.working_root)
-    data_arg = load_data(args.data_root, str(work_root), fidelity_products(args.fidelity_settings))
+    products = fidelity_products(args.fidelity_settings)
+    pdi_grid = None
+    if any(product.startswith('pdi_') for product in products):
+        pdi_grid = fixed_pdi_grid(work_root / 'simulation.para', cs)
+    data_arg = load_data(args.data_root, str(work_root), products,
+                         pdi_grid=pdi_grid, pdi_radial_bin_mas=args.pdi_radial_bin_mas)
 
     trial_folder= work_root/"trials/"
     trial_folder.mkdir(exist_ok=True)
@@ -1036,7 +901,6 @@ def main():
         target_function=smac_objective,
         overwrite=False,
         initial_design=initial_design
-        #dask_client=client,   
     )
 
     smac_kwargs["intensifier"] = MultiFidelityFacade.get_intensifier(

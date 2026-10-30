@@ -128,15 +128,20 @@ def record(
 
 
 @contextmanager
-def diagnostic_plot(label):
-    """Keep plot-only failures from rejecting a scored model; never wrap scoring."""
+def diagnostic_plot(label, errors=None):
+    """Keep plot-only failures from rejecting a scored model; never wrap scoring.
+
+    If supplied, append failure messages to errors for returned diagnostics.
+    """
     import matplotlib.pyplot as plt
 
     existing_figures = set(plt.get_fignums())
     try:
         yield
     except Exception as error:
-        print(f"[diagnostic plot] {label} failed; continuing: "
-              f"{type(error).__name__}: {error}")
+        message = f"{label}: {type(error).__name__}: {error}"
+        print(f"[diagnostic plot] {message}; continuing")
+        if errors is not None:
+            errors.append(message)
         for number in set(plt.get_fignums()) - existing_figures:
             plt.close(number)
