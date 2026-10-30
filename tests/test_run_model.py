@@ -83,6 +83,14 @@ class RunModelTests(unittest.TestCase):
         self.assertEqual(sentinel.read_text(), "keep me")
         self.pipeline.run_mcfost.assert_not_called()
 
+    def test_pdi_profiles_use_the_supplied_parameter_file_grid(self):
+        (self.root / 'fidelity.txt').write_text('fidelity_stages:\n- name: pdi\n  products: [pdi_V]\n')
+        self.parameters.update(grid_nx='1000', grid_ny='1000', grid_size='800.', distance_pc='1220.')
+        run_model.evaluate(self.args('--pdi-radial-bin-mas', '30'))
+        self.loader.assert_called_once_with(
+            'demo_ozstar', str(self.root / 'model_results'), ['pdi_V'],
+            pdi_grid=self.parameters, pdi_radial_bin_mas=30.)
+
     def test_ambiguous_para_and_unknown_stage_fail_before_execution(self):
         (self.root / "another.para").write_text("different model")
         with self.assertRaisesRegex(ValueError, "--para-file"):

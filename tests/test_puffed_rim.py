@@ -112,6 +112,33 @@ class PuffedRimTests(unittest.TestCase):
                                   data_arg={}, args=self.args, incumbent=dict(config))
             command.assert_not_called()
 
+    def test_all_image_products_keep_image_options_with_rim_enabled_or_disabled(self):
+        products = ('vis2_1perband', 'vis2_chromatic', 'pdi_V', 'pdi_I', 'pdi_H', 'alma')
+        cfg = dict(puffed_h_rim_over_h0=1.2, puffed_r_rim=7.5, puffed_delta_r=0.1)
+        rim_options = ['-puffed_up_rim', '1.2', '7.5', '0.1']
+        for enabled in (False, True):
+            for product in products:
+                with self.subTest(enabled=enabled, product=product), \
+                        patch.object(SMAC3.obm, 'run_mcfost_safe') as command, \
+                        redirect_stdout(io.StringIO()):
+                    workdir = self.root / f'{product}_{enabled}'
+                    workdir.mkdir()
+                    SMAC3.obm.run_mcfost(
+                        {'products': [product]}, self.root / 'simulation.para', workdir,
+                        enabled, cfg if enabled else {},
+                        alma_spec={'npix': 64, 'fov_mas': 500., 'wavelength_um': 870.})
+                    image_calls = command.call_args_list[2:]
+                    self.assertTrue(image_calls)
+                    for call in image_calls:
+                        options = call.kwargs['options']
+                        self.assertEqual(options[0], '-img')
+                        self.assertGreater(float(options[1]), 0)
+                        image_options = options[:2]
+                        if product == 'alma':
+                            self.assertEqual(options[1], '870.000')
+                            image_options += ['-casa']
+                        self.assertEqual(options, image_options + (rim_options if enabled else []))
+
 
 if __name__ == "__main__":
     unittest.main()

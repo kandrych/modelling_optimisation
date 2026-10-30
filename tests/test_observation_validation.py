@@ -217,22 +217,20 @@ class ObservationValidationTests(unittest.TestCase):
             aperture_radius_mas=expected_aperture, noise_rms_jybeam=expected_noise)
         compare = alma.compare_alma_images
 
-        def compare_without_plot(*args, **kwargs):
-            kwargs['save_path'] = None
-            return compare(*args, **kwargs)
-
         with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()), \
                 patch.object(alma, 'load_mcfost_image_alma_casa', return_value=(None, header, model, None)), \
                 patch.object(alma, 'convolve_alma_to_jybeam', return_value=(model, 10.)), \
                 patch.object(alma, 'align_alma_to_observation', return_value=(model, {'observed_center_xy': (31.5, 31.5)})), \
                 patch.object(alma, 'alma_snr_aperture_radius', side_effect=AssertionError('Aperture recalculated during scoring')), \
-                patch.object(alma, 'compare_alma_images', side_effect=compare_without_plot) as comparison:
+                patch.object(alma, 'compare_alma_images', wraps=compare) as comparison:
             work = Path(directory)
             (work / 'data_th').mkdir()
             (work / 'data_th/sed_rt.fits.gz').touch()
             loss, info = mcfost.load_and_score_outputs(
                 {'stage': 'alma', 'products': ['alma']}, work, {'alma': data},
                 SimpleNamespace(plot_intermediate=False), {})
+            self.assertEqual(list(work.rglob('*.png')), [])
+        self.assertIsNone(comparison.call_args.kwargs['save_path'])
         self.assertEqual(comparison.call_args.kwargs['noise_rms_jybeam'], expected_noise)
         self.assertEqual(comparison.call_args.kwargs['aperture_radius_mas'], expected_aperture)
         self.assertEqual(loss, expected['residual_energy_loss'])
@@ -256,12 +254,13 @@ class ObservationValidationTests(unittest.TestCase):
         self.assertIs(caught.exception.__cause__, original)
         self.assertEqual(reader.call_count, 1)
 
-    def test_shared_loader_validates_only_requested_products_before_profiles(self):
+    def test_shared_loader_validates_requested_products_without_legacy_profiles(self):
         tree = ast.parse((Path(__file__).resolve().parents[1] / 'SMAC3.py').read_text())
         function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'load_data')
         obs = SimpleNamespace(load_sed_data=Mock(return_value=([1, 2], [3, 4], [.1, .1])))
         polarimetry = SimpleNamespace(Loadimage=Mock(side_effect=OSError('missing PDI')),
                                      profiles=Mock(), plot_polarimetric_image=Mock(),
+                                     prepare_pdi_observation=Mock(wraps=pdi.prepare_pdi_observation),
                                      compute_grid=pdi.compute_grid)
         alma_module = SimpleNamespace(Loadimage_alma=Mock(side_effect=OSError('missing ALMA')),
                                      alma_image_spec=alma.alma_image_spec,
@@ -291,7 +290,18 @@ class ObservationValidationTests(unittest.TestCase):
             # The legacy preset has only PI, so cannot supply the requested score.
             with self.assertRaisesRegex(ValueError, 'PDI V.*components'):
                 loader('demo_mac', directory, ['pdi_V'])
+            data = loader('demo_ozstar', directory, ['pdi_V', 'pdi_I', 'pdi_H'])
+            for band in ('V', 'I', 'H'):
+                self.assertIsNone(data[f'pdi_{band}']['radial_profiles'])
+                self.assertIsNone(data[f'pdi_{band}']['azimuthal_profiles'])
             polarimetry.profiles.assert_not_called()
+            grid = dict(grid_nx=1000, grid_ny=1000, grid_size=800., distance_pc=1220.)
+            data = loader('demo_ozstar', directory, ['pdi_V', 'pdi_H'], pdi_grid=grid,
+                          pdi_radial_bin_mas=30.)
+            self.assertEqual(polarimetry.prepare_pdi_observation.call_count, 2)
+            self.assertNotIn('prepared_observation', data['pdi_I'])
+            for band in ('V', 'H'):
+                self.assertEqual(data[f'pdi_{band}']['prepared_observation']['radial_bin_mas'], 30.)
             image, header = self.alma_fixture()
             alma_module.Loadimage_alma.side_effect = None
             alma_module.Loadimage_alma.return_value = (image, header, 10., 64)
@@ -305,6 +315,7 @@ class ObservationValidationTests(unittest.TestCase):
             self.assertEqual(data['alma']['noise_level_alma'], noise)
             self.assertEqual(data['alma']['aperture_radius_mas'], expected_aperture)
             self.assertEqual(alma_module.alma_snr_aperture_radius.call_count, 1)
+            polarimetry.profiles.assert_not_called()
 
 
 if __name__ == '__main__':
