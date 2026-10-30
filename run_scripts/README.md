@@ -10,6 +10,7 @@ your run before submitting.
 | `run_smac.q` | Optimisation using `SMAC3.py` |
 | `run_smac_warmstart.q` | Optimisation with a supplied warm-start run and puffed-rim options |
 | `run_model.q` | Evaluate one supplied `.para` through `run_model.py` |
+| `score_model.q` | Score existing MCFOST outputs and regenerate plots through `score_model.py` |
 
 `setup_environment.sh` is sourced by these scripts. It sets up the Python
 environment and assigns `allocated CPUs / workers` OpenMP threads to each
@@ -48,6 +49,28 @@ rim parameters. Review observation, template and scoring compatibility before
 reusing previous results; see [warm starts](../manual/warmstart_and_continuation.md).
 
 ## One supplied model
+
+For a model that has already been calculated, submit the scoring-only job:
+
+```bash
+cd /path/to/run
+sbatch /fred/oz061/kandrych/modelling_optimisation/run_scripts/score_model.q
+```
+
+This reads `smac_results/model.para`, the existing model outputs and `fidelity.txt`
+from the submission directory. It uses the last fidelity stage and enables plots.
+It writes `smac_results/scoring.json` and comparison figures without running MCFOST.
+Override `MODEL_DIR`, `FIDELITY_CONFIG`, `DATA_ROOT` or `WORK_ROOT` as needed.
+Additional arguments go directly to `score_model.py`, for example:
+
+```bash
+MODEL_DIR=/path/to/another/model \
+  sbatch /fred/oz061/kandrych/modelling_optimisation/run_scripts/score_model.q \
+  --stage NAME --correct-unresolved-polarimetry --unresolved-correction-radius-px 3
+```
+
+Choose the stage and correction settings used by the original run. The job
+requests one CPU, 32 GB of memory and one hour; adjust these for your image sizes.
 
 `run_model.q` reads `model.para` and `fidelity.txt` from the working directory
 and writes to a new `model_results` directory. Override these with `PARA_FILE`,

@@ -1,5 +1,36 @@
 # Evaluate one existing MCFOST model
 
+To score a model whose MCFOST calculation has **already finished**, use
+`score_model.py` (the script equivalent of `scripts/score_model.ipynb`):
+
+```bash
+python /fred/oz061/kandrych/modelling_optimisation/score_model.py \
+  --model-dir /path/to/run/smac_results \
+  --fidelity-config /path/to/run/fidelity.txt \
+  --data-root demo_ozstar
+```
+
+The model folder must contain its generated `model.para` and the `data_*`
+outputs required by the selected stage. This script does not run MCFOST.
+Both paths above are relative to the current directory unless absolute.
+The last fidelity stage is selected by default; use `--stage NAME` to select
+an earlier stage for a trial that generated fewer observables.
+
+Scores are saved to `scoring.json` in the model folder, including the total
+cost, individual contributions, settings and success/failure status. Repeated
+scoring replaces this report and regenerates comparison plots in their usual
+locations. The original `evaluation.json` is preserved. Plots are enabled by
+default; use `--no-plot-intermediate` to disable model diagnostic plots.
+The shared observation loader still writes `data_figures/`.
+
+Use the same observation preset and comparison options as the original run:
+`--correct-unresolved-polarimetry`, `--unresolved-correction-radius-px`,
+`--pdi-radial-bin-mas` and `--overresolved_flux_fit_for_interferometry`.
+The scoring code and weights are shared with SMAC3. Simulation flags such as
+`--puffed-up-rim` are unnecessary when reading already generated outputs.
+
+## Run MCFOST before scoring
+
 `run_model.py` reads a supplied `.para` and `fidelity.txt`, runs MCFOST, and
 compares the selected products with observations using `SMAC3.load_data` and
 `obriy_mcfost.load_and_score_outputs`. It does not launch an optimiser or need
